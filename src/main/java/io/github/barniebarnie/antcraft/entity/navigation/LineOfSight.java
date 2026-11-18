@@ -35,6 +35,11 @@ public final class LineOfSight {
 	 * {@code broken} tests true for as air, such as those a path breaks on its way there.
 	 */
 	public static boolean sees(BlockGetter world, BlockPos feet, BlockPos target, Predicate<BlockPos> broken) {
+		return sees(world, feet, target, null, broken);
+	}
+
+	/** As {@link #sees(BlockGetter, BlockPos, BlockPos, Predicate)}, seeing {@code face} of the block as {@link #aim} does. */
+	public static boolean sees(BlockGetter world, BlockPos feet, BlockPos target, @Nullable Direction face, Predicate<BlockPos> broken) {
 		BlockGetter level = new BlockGetter() {
 			@Override
 			public BlockEntity getBlockEntity(BlockPos pos) {
@@ -61,7 +66,7 @@ public final class LineOfSight {
 				return world.getMinY();
 			}
 		};
-		return aim(level, eyes(feet), target, null) != null;
+		return aim(level, eyes(feet), target, face) != null;
 	}
 
 	/**
@@ -76,16 +81,21 @@ public final class LineOfSight {
 	 * Where the first ray from {@code eyes} to one of the points of {@code target} a bot aims at ({@link #aims}) meets it, no
 	 * other block's outline in the way; null if every ray hits another block first. A target with no outline (air, a fluid)
 	 * is met at the point, on its face turned to the eyes. With a {@code face}, only the point just inside its middle is
-	 * aimed at, so an item that casts its own ray along the look, such as a bucket, meets the block beyond that face (#877).
+	 * aimed at, so an item that casts its own ray along the look, such as a bucket, meets the block beyond that face (#877);
+	 * and the face must be seen (#893): a block's outline met on that face, or where the look meets no outline (air, a
+	 * fluid), from inside, the look going on through that face, not back out of the block's other side.
 	 */
 	public static @Nullable BlockHitResult aim(BlockGetter level, Vec3 eyes, BlockPos target, @Nullable Direction face) {
 		List<Vec3> points = face == null ? aims(target) : List.of(Vec3.atCenterOf(target).add(face.getUnitVec3().scale(INSET)));
 		for (Vec3 point : points) {
 			BlockHitResult hit = level.clip(new ClipContext(eyes, point, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, CollisionContext.empty()));
 			if (hit.getType() == HitResult.Type.BLOCK) {
-				if (hit.getBlockPos().equals(target)) {
+				if (hit.getBlockPos().equals(target) && (face == null || hit.getDirection() == face)) {
 					return hit;
 				}
+				continue;
+			}
+			if (face != null && point.subtract(eyes).dot(face.getUnitVec3()) <= 0) {
 				continue;
 			}
 			Vec3 toEyes = eyes.subtract(Vec3.atCenterOf(target));

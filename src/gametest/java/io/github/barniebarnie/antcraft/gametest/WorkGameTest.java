@@ -1002,6 +1002,28 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * use with a face walks to where it sees that face (#893): a bot north of a hole over a slab, which a bucket aimed at the
+	 * hole would waterlog, pours aimed at the hole's north face from the south, its look meeting the wall beyond.
+	 */
+	// Measured: passes at tick 25 (red: out_of_reach on tick 3, aimed from where it stood).
+	@GameTest(maxTicks = 60)
+	public void useWithAFaceWalksToWhereItSeesThatFace(GameTestHelper helper) {
+		for (int x = 1; x <= 6; x++) {
+			for (int z = 1; z <= 6; z++) {
+				helper.setBlock(x, 1, z, x == 3 && z == 3 ? Blocks.AIR : Blocks.DIRT);
+			}
+		}
+		helper.setBlock(3, 0, 3, Blocks.STONE_SLAB);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.5, 2, 1.5));
+		bot.getInventory().addItem(new ItemStack(Items.WATER_BUCKET));
+		expect(helper, bot, "r = use(" + at(helper, 3, 1, 3) + ", 'water_bucket', face='north')\nprint(r.ok, r.reason)\n",
+			List.of("True None"), () -> {
+				helper.assertTrue(helper.getBlockState(new BlockPos(3, 1, 3)).getFluidState().isSource(), "no water in the hole");
+				helper.assertTrue(!helper.getBlockState(new BlockPos(3, 0, 3)).getValue(BlockStateProperties.WATERLOGGED), "the slab is waterlogged");
+			});
+	}
+
 	@GameTest(maxTicks = 20)
 	public void useGrowsWheatWithBoneMeal(GameTestHelper helper) {
 		helper.setBlock(3, 0, 3, Blocks.FARMLAND);

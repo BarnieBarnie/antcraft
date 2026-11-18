@@ -10,11 +10,14 @@ import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.Pos;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -33,6 +36,8 @@ final class BotBody implements MoveApi.Body {
 	private final PathFollower follower;
 	/** One per bot: goals compare by value (see {@link Goal.InSight}). */
 	private final Goal.Sight sight;
+	/** As {@link #sight}, seeing one face of the target, for {@code use(face=)} (#893). */
+	private final Map<Direction, Goal.Sight> faceSights = new EnumMap<>(Direction.class);
 
 	/** What {@link #setBuildScaffold} keeps, and {@link #setKeptBlocks}: walks break neither. */
 	private Predicate<BlockPos> buildKeep = pos -> false;
@@ -44,9 +49,16 @@ final class BotBody implements MoveApi.Body {
 		this.follower.setKeep(pos -> this.kept.contains(pos) || this.buildKeep.test(pos));
 		// Where the bot is now, over the edge of the only block it rests on, its feet count as beside it (#668): that spot
 		// is no stand to break the block from either, so the walk drops off rather than arrive there and get nowhere (#753).
-		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken)
+		this.sight = this.sight(null);
+		for (Direction face : Direction.values()) {
+			this.faceSights.put(face, this.sight(face));
+		}
+	}
+
+	private Goal.Sight sight(@Nullable Direction face) {
+		return (feet, target, broken) -> LineOfSight.sees(this.bot.level(), feet, target, face, broken)
 			&& (!feet.below().equals(target) || this.landsUnhurt(target))
-			&& !(this.restsOnlyOn(target) && !this.landsUnhurt(target) && feet.equals(PathFollower.feet(bot)));
+			&& !(this.restsOnlyOn(target) && !this.landsUnhurt(target) && feet.equals(PathFollower.feet(this.bot)));
 	}
 
 	/**
@@ -128,8 +140,13 @@ final class BotBody implements MoveApi.Body {
 
 	@Override
 	public void startReach(Pos target, double reach) {
+		this.startReach(target, reach, null);
+	}
+
+	@Override
+	public void startReach(Pos target, double reach, @Nullable Direction face) {
 		BlockPos pos = blockPos(target);
-		Goal goal = new Goal.InSight(pos, reach, this.sight);
+		Goal goal = new Goal.InSight(pos, reach, face == null ? this.sight : this.faceSights.get(face));
 		// A block in water or under it, such as kelp or the floor of a pool, may be worked swimming at the surface where no
 		// dry spot is in reach (#840). Only there: an afloat goal searches without breaking first (PathFinder.Search).
 		boolean wet = this.level().getFluidState(pos).is(FluidTags.WATER) || this.level().getFluidState(pos.above()).is(FluidTags.WATER);
@@ -156,6 +173,12 @@ final class BotBody implements MoveApi.Body {
 	@Override
 	public boolean inReach(Pos target) {
 		return this.reach(target).isReached(PathFollower.feet(this.bot));
+	}
+
+	@Override
+	public boolean inReach(Pos target, @Nullable Direction face) {
+		return face == null ? this.inReach(target)
+			: new Goal.InSight(blockPos(target), MoveApi.REACH, this.faceSights.get(face)).isReached(PathFollower.feet(this.bot));
 	}
 
 	/**

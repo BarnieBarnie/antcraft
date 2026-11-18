@@ -73,14 +73,14 @@ public final class WorkApi {
 			Object[] args = Args.bind("place", call, 2, "pos", "item", "facing", "half");
 			Pos target = Pos.of(args[0]);
 			Selector item = Selector.parse(args[1]);
-			Direction facing = Args.absent(args[2]) ? null : facing(args[2]);
+			Direction facing = Args.absent(args[2]) ? null : facing(args[2], "facing");
 			Half half = Args.absent(args[3]) ? null : half(args[3]);
 			return run.start(new Place(run, bot(run, call), target, item, facing, half), call, target);
 		});
 		natives.register("use", call -> {
 			Object[] args = Args.bind("use", call, 1, "pos", "item", "face");
 			Selector item = Args.absent(args[1]) ? null : Selector.parse(args[1]);
-			Direction face = Args.absent(args[2]) ? null : facing(args[2]);
+			Direction face = Args.absent(args[2]) ? null : facing(args[2], "face");
 			if (args[0] instanceof EntityInfo info) {
 				// On a mob, as a player's right click on it: feeding, shearing, milking (#837).
 				AntBot bot = bot(run, call);
@@ -245,9 +245,9 @@ public final class WorkApi {
 		throw new ScriptError("half must be top or bottom, not " + Values.repr(value));
 	}
 
-	static Direction facing(Object value) {
+	static Direction facing(Object value, String argument) {
 		if (!(value instanceof String name)) {
-			throw new ScriptError("facing must be a str, not '" + Values.typeName(value) + "'");
+			throw new ScriptError(argument + " must be a str, not '" + Values.typeName(value) + "'");
 		}
 		return switch (name) {
 			case "north" -> Direction.NORTH;
@@ -256,7 +256,7 @@ public final class WorkApi {
 			case "west" -> Direction.WEST;
 			case "up" -> Direction.UP;
 			case "down" -> Direction.DOWN;
-			default -> throw new ScriptError("facing must be north, south, east, west, up or down, not " + Values.repr(name));
+			default -> throw new ScriptError(argument + " must be north, south, east, west, up or down, not " + Values.repr(name));
 		};
 	}
 
@@ -301,6 +301,11 @@ public final class WorkApi {
 			return null;
 		}
 
+		/** The face of the block the bot must see to work on it, as {@code use(face=)} gives it (#893); null for any. */
+		@Nullable Direction face() {
+			return null;
+		}
+
 		/** A tick of work on the block, in reach; the result once done, null while it goes on. */
 		abstract @Nullable Result work(BlockState state);
 
@@ -331,11 +336,11 @@ public final class WorkApi {
 					return this.finish(failed);
 				}
 			}
-			if (state == null || !this.run.host().body().inReach(this.target)) {
+			if (state == null || !this.run.host().body().inReach(this.target, this.face())) {
 				if (this.walked) {
 					return this.finish(Result.fail(state == null ? Result.NOT_LOADED : Result.OUT_OF_REACH));
 				}
-				this.walk = MoveApi.reach(this.run.host(), this.target);
+				this.walk = MoveApi.reach(this.run.host(), this.target, MoveApi.REACH, this.face());
 				return this.tick();
 			}
 			Result done = this.work(state);
@@ -509,6 +514,11 @@ public final class WorkApi {
 		@Override
 		@Nullable Result before() {
 			return this.item != null && BotHands.find(this.bot, this.item) == null ? Result.fail(Result.NO_ITEM) : super.before();
+		}
+
+		@Override
+		@Nullable Direction face() {
+			return this.face;
 		}
 
 		@Override

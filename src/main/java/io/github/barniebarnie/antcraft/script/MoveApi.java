@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
+import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
@@ -97,6 +98,11 @@ public final class MoveApi {
 		/** Starts walking to where the bot sees {@code target} within {@code reach}, such as {@link #REACH} to work on it. */
 		void startReach(Pos target, double reach);
 
+		/** As {@link #startReach(Pos, double)}, to where the bot sees {@code face} of {@code target} where one is given (#893). */
+		default void startReach(Pos target, double reach, @Nullable Direction face) {
+			this.startReach(target, reach);
+		}
+
 		/**
 		 * How the next walks pillar up: with {@code mayPlace} set, as {@code build} does, only with scaffold blocks the bot
 		 * takes down again by hand, and only where {@code mayPlace} says, such as nowhere its blueprint puts a block; null
@@ -118,6 +124,11 @@ public final class MoveApi {
 
 		/** Whether the bot, where it stands, sees {@code target} within {@link #REACH}. */
 		boolean inReach(Pos target);
+
+		/** As {@link #inReach(Pos)}, seeing {@code face} of {@code target} where one is given (#893). */
+		default boolean inReach(Pos target, @Nullable Direction face) {
+			return this.inReach(target);
+		}
 
 		/** Advances the walk by a tick. */
 		PathStatus tickPath();
@@ -470,7 +481,12 @@ public final class MoveApi {
 
 	/** Like {@link #reach(ScriptRun.Host, Pos)}, to where the bot sees {@code target} within {@code reach}, such as a bow's. */
 	static ScriptRun.Action reach(ScriptRun.Host host, Pos target, double reach) {
-		return new Goto(host, target, 0, reach, null);
+		return reach(host, target, reach, null);
+	}
+
+	/** Like {@link #reach(ScriptRun.Host, Pos)}, to where the bot sees {@code face} of {@code target}, for {@code use(face=)} (#893). */
+	static ScriptRun.Action reach(ScriptRun.Host host, Pos target, double reach, @Nullable Direction face) {
+		return new Goto(host, target, 0, reach, null, face);
 	}
 
 	/** Like {@code goto(target, near)}, for the actions that walk to something first, such as {@code pick_up}. */
@@ -500,12 +516,20 @@ public final class MoveApi {
 		private long closest = Long.MAX_VALUE;
 		private int stalled;
 
+		/** Where reach is above 0, the face of the target the bot must see; null for any. */
+		private final @Nullable Direction face;
+
 		Goto(ScriptRun.Host host, Pos target, int near, double reach, @Nullable Selector keep) {
+			this(host, target, near, reach, keep, null);
+		}
+
+		Goto(ScriptRun.Host host, Pos target, int near, double reach, @Nullable Selector keep, @Nullable Direction face) {
 			this.host = host;
 			this.target = target;
 			this.near = near;
 			this.reach = reach;
 			this.keep = keep;
+			this.face = face;
 		}
 
 		@Override
@@ -543,7 +567,7 @@ public final class MoveApi {
 					body.setKeepItems(keep.items());
 				}
 				if (reach > 0) {
-					body.startReach(target, reach);
+					body.startReach(target, reach, face);
 				} else {
 					body.startPath(target, near);
 				}
