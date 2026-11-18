@@ -521,6 +521,9 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	public void aBotKillsTwoCreepersAndAHuskUnhurtByABlast(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 8);
 		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		// Well fed, as lib.food keeps a working bot: worn down to flee health by the husk, as in about 1 copy in 400, it
+		// heals there rather than take on no creeper until the test runs out (#908).
+		bot.getFood().setSaturation(20);
 		Creeper[] creepers = {helper.spawn(EntityTypes.CREEPER, 9, 1, 14), helper.spawn(EntityTypes.CREEPER, 15, 1, 14)};
 		// Husks do not burn in daylight, so only the bot can kill it.
 		Husk husk = helper.spawn(EntityTypes.HUSK, 12, 1, 15);
@@ -530,6 +533,34 @@ public class FightGameTest implements CustomTestMethodInvoker {
 				helper.assertTrue(creeper.isRemoved() || creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health");
 			}
 			helper.assertTrue(husk.isDeadOrDying(), "husk alive with " + husk.getHealth() + " health");
+			helper.assertTrue(bot.isAlive(), "bot dead");
+		});
+	}
+
+	/**
+	 * A bot at flee health takes on no mob, but heals and fights once over it again (#908). It took a creeper 10 blocks
+	 * off for its target, walked at it, fled it at 8 blocks, and took it again past 8, over and over: worn down to 1.2
+	 * health by the husk of {@link #aBotKillsTwoCreepersAndAHuskUnhurtByABlast}, as in about 1 copy in 400, it so went
+	 * on until the test ran out with a creeper at 20 health, one that never hunted it, as creepers hunt only players. Well
+	 * fed, it heals a point every 10 ticks.
+	 */
+	// Measured: passes at tick 249 alone (red: took the creeper for its target at 1.2 health on tick 8).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 600)
+	public void aBotAtFleeHealthTakesOnNoMobButHealsAndThenFights(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 4.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		bot.setHealth(1.2F);
+		bot.getFood().setFoodLevel(20);
+		bot.getFood().setSaturation(20);
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 14.5));
+		failOnExplosion(helper, bot);
+		helper.onEachTick(() -> {
+			if (bot.getTarget() != null && bot.getHealth() <= AntCraftConfig.botFleeHealth()) {
+				helper.fail("took " + bot.getTarget().getName().getString() + " for its target at " + bot.getHealth() + " health");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(creeper.isRemoved() || creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health, bot at " + bot.getHealth());
 			helper.assertTrue(bot.isAlive(), "bot dead");
 		});
 	}

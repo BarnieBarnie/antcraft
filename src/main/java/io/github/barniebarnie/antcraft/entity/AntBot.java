@@ -266,7 +266,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			(target, level) -> !(target instanceof Creeper creeper && KiteGoal.lit(creeper)) && !leftAlone(target)) {
 			@Override
 			public boolean canUse() {
-				return !this.scriptDecides() && super.canUse();
+				return !this.startsNoFight() && super.canUse();
 			}
 
 			/**
@@ -275,11 +275,16 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			 */
 			@Override
 			public boolean canContinueToUse() {
-				return !this.scriptDecides() && super.canContinueToUse();
+				return !this.startsNoFight() && super.canContinueToUse();
 			}
 
-			private boolean scriptDecides() {
-				return AntBot.this.getHealth() < AntBot.this.getMaxHealth() && AntBot.this.isRunningScript() && !AntBot.this.isIdling();
+			/**
+			 * Also at flee health, where the bot would walk at the mob only to flee it within 8 blocks, and take it again
+			 * past 8, over and over, rather than heal (#908).
+			 */
+			private boolean startsNoFight() {
+				return AntBot.this.getHealth() <= AntCraftConfig.botFleeHealth()
+					|| AntBot.this.getHealth() < AntBot.this.getMaxHealth() && AntBot.this.isRunningScript() && !AntBot.this.isIdling();
 			}
 		});
 	}
