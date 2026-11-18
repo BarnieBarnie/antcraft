@@ -119,14 +119,14 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** A bot showing what it said can still be pushed: a pig standing in it moves it aside (bots do not push each other). */
+	/** A bot showing what it said can still be pushed: a villager standing in it moves it aside (bots do not push each other, and animals do not push bots, #897). */
 	@GameTest(maxTicks = 20)
 	public void aBotShowingWhatItSaidCanBePushed(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		BotScripts.run(bot, "say('hello there')\nwhile True:\n    wait(10)\n");
 		BotScripts.failOnError(helper, bot);
 		Vec3 start = bot.position();
-		helper.spawnWithNoFreeWill(EntityTypes.PIG, new Vec3(3.6, 1, 3.5));
+		helper.spawnWithNoFreeWill(EntityTypes.VILLAGER, new Vec3(3.6, 1, 3.5));
 		helper.succeedWhen(() -> {
 			double moved = bot.position().subtract(start).horizontalDistance();
 			helper.assertTrue(moved > 0.2, "pushed " + moved + " blocks");

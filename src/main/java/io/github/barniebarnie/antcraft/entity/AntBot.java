@@ -66,6 +66,7 @@ import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -247,8 +248,36 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	@Override
 	protected void doPush(Entity entity) {
 		if (!(entity instanceof AntBot)) {
-			super.doPush(entity);
+			this.shoving = entity instanceof Animal;
+			try {
+				super.doPush(entity);
+			} finally {
+				this.shoving = false;
+			}
 		}
+	}
+
+	/** Set while an animal and the bot push each other apart: only the animal moves ({@link #push(Entity)}). */
+	private boolean shoving;
+
+	/**
+	 * Animals do not push bots back, though bots push them (#897): chickens crowded against a pen's door, which stays
+	 * shut to them while the bot walks through it (PathFollower.shutTo), could go nowhere and pushed the bot back until
+	 * its goto gave up. An animal pushing the bot comes here, the bot pushing one goes through {@link #doPush}.
+	 */
+	@Override
+	public void push(Entity entity) {
+		this.shoving = entity instanceof Animal;
+		try {
+			super.push(entity);
+		} finally {
+			this.shoving = false;
+		}
+	}
+
+	@Override
+	public boolean isPushable() {
+		return !this.shoving && super.isPushable();
 	}
 
 	@Override

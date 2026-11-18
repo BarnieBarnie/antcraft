@@ -580,7 +580,8 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 	 * where the gate was (#878): the bot walks out through the door and back in six times, and none of the chickens
 	 * crowded against it gets out.
 	 */
-	// Measured: passes at tick 377 to 393 in four runs (red: on tick 37 a chicken was out in the open door; with the
+	// Measured: passes at tick 377 to 393 in four runs; since #897 at 362 in 40 copies run together, before 387 to 642 and
+	// one in many failing (red: on tick 37 a chicken was out in the open door; with the
 	// gate's panel, 6 to 10 of the block, one was pressed into the space between it and the door's shut panel, at the
 	// pen's side of the block, and was out once the door shut on tick 99).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 800)
@@ -607,6 +608,46 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 			        raise Exception("no way through the door")
 			print("done")
 			""".formatted(out.getX(), out.getY(), out.getZ(), in.getX(), in.getY(), in.getZ()));
+		BotScripts.failOnError(helper, bot);
+		failWhereOneGetsOut(helper, penned, bot);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("done"), "the bot is still walking"));
+	}
+
+	/**
+	 * The door of aBotWalkingThroughACrowdedDoorLetsNoAnimalOut at the end of a passage one wide and two long, plank
+	 * walls on both sides, full of chickens: the bot walks out through them and the door (#897). In the crowded door
+	 * test under load, the chickens the bot pressed against the door, shut to them, could go nowhere, and pushed it back
+	 * until its goto gave up.
+	 */
+	// Measured: passes at tick 32 (red: still walking at tick 202, stuck in front of the open door).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 70)
+	public void aBotWalksThroughChickensPressedAgainstADoor(GameTestHelper helper) {
+		pen(helper);
+		for (int x = 0; x < 8; x++) {
+			helper.setBlock(x, 1, 3, Blocks.OAK_PLANKS);
+			helper.setBlock(x, 2, 3, Blocks.OAK_PLANKS);
+		}
+		for (int z = 4; z <= 5; z++) {
+			for (int y = 1; y <= 2; y++) {
+				helper.setBlock(2, y, z, Blocks.OAK_PLANKS);
+				helper.setBlock(4, y, z, Blocks.OAK_PLANKS);
+			}
+		}
+		BlockState door = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.NORTH);
+		helper.setBlock(new BlockPos(3, 1, 3), door);
+		helper.setBlock(new BlockPos(3, 2, 3), door.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		List<Chicken> penned = new ArrayList<>();
+		for (int i = 0; i < 3; i++) {
+			penned.add(animal(helper, EntityTypes.CHICKEN, 3, 4, false));
+			penned.add(animal(helper, EntityTypes.CHICKEN, 3, 5, false));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 6);
+		BlockPos out = helper.absolutePos(new BlockPos(3, 1, 0));
+		BotScripts.run(bot, """
+			if not goto(Pos(%d, %d, %d)):
+			    raise Exception("no way through the door")
+			print("done")
+			""".formatted(out.getX(), out.getY(), out.getZ()));
 		BotScripts.failOnError(helper, bot);
 		failWhereOneGetsOut(helper, penned, bot);
 		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("done"), "the bot is still walking"));
