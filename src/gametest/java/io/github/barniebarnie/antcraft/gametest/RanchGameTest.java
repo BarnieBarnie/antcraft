@@ -458,13 +458,37 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(helper.getTick() >= 190, "waiting"));
 	}
 
-	/** Fails at once where one of penned dies or is beyond the middle of the pen's fence or gate. */
+
+	/**
+	 * failWhereOneGetsOut counts no animal that dies or is removed in the pen as out (#885): one cow killed and one
+	 * discarded on tick 1, the test ending on tick 40, after the dead cow's body is gone too.
+	 */
+	// Measured: passes at tick 40, its fixed end (red: on tick 3 the dead cow in the pen counted as got out).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 80)
+	public void aPennedAnimalThatDiesOrIsRemovedIsNotOut(GameTestHelper helper) {
+		pen(helper);
+		Cow killed = animal(helper, EntityTypes.COW, 2, 5, false);
+		Cow removed = animal(helper, EntityTypes.COW, 5, 5, false);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		helper.runAfterDelay(1, () -> {
+			killed.kill(helper.getLevel());
+			removed.discard();
+		});
+		failWhereOneGetsOut(helper, List.of(killed, removed), bot);
+		helper.succeedWhen(() -> helper.assertTrue(helper.getTick() >= 40, "waiting"));
+	}
+
+	/**
+	 * Fails at once where one of penned is beyond the middle of the pen's fence or gate, saying where it is dead. One
+	 * removed from the world, such as a dead one whose body is gone or every entity once the test ends, is not out.
+	 */
 	private static void failWhereOneGetsOut(GameTestHelper helper, List<? extends Animal> penned, AntBot bot) {
 		helper.onEachTick(() -> {
 			for (Animal a : penned) {
 				Vec3 at = TestPositions.relative(helper, a.position());
-				if (!a.isAlive() || at.x <= 0.5 || at.x >= 7.5 || at.z <= 3.5 || at.z >= 7.5) {
-					helper.fail("a penned " + a.getType().getDescription().getString() + " got out, at " + at + ", the bot at "
+				if (!a.isRemoved() && (at.x <= 0.5 || at.x >= 7.5 || at.z <= 3.5 || at.z >= 7.5)) {
+					helper.fail("a penned " + a.getType().getDescription().getString() + (a.isAlive() ? "" : ", dead,")
+						+ " got out, at " + at + ", the bot at "
 						+ TestPositions.relative(helper, bot.position()) + ", doing " + (bot.getScript() == null ? null : bot.getScript().action())
 						+ ", the gate " + (helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN) ? "open" : "shut"));
 				}
