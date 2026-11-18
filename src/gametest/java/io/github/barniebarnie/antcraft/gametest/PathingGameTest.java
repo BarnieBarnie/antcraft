@@ -39,7 +39,6 @@ import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.ScaffoldingBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
-import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -219,9 +218,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 40)
 	public void leavesABlockByBushesFromItsMiddle(GameTestHelper helper) {
 		room(helper, 0);
-		for (int x = 1; x <= 3; x++) {
-			helper.setBlock(x, 1, 3, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
-		}
+		GameTests.ripeBushes(helper, new BlockPos(1, 1, 3), new BlockPos(2, 1, 3), new BlockPos(3, 1, 3));
 		fill(helper, 1, 1, 1, 6, 2, 1, Blocks.BEDROCK); // the lane at z 2, between the bushes and a wall
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.5, 1, 2.95));
 		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(1, 1, 2)));
@@ -244,7 +241,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 40)
 	public void aWalkFromTheBlockBesideWherePlannedPlansAgain(GameTestHelper helper) {
 		room(helper, 0);
-		helper.setBlock(3, 1, 3, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		GameTests.ripeBushes(helper, new BlockPos(3, 1, 3));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		ScriptRun run = BotScripts.run(bot, "wait(5)\ngoto((%d, %d, %d))\nwhile True:\n    wait(1000)\n".formatted(
 			helper.absolutePos(new BlockPos(3, 1, 2)).getX(), helper.absolutePos(new BlockPos(3, 1, 2)).getY(), helper.absolutePos(new BlockPos(3, 1, 2)).getZ()));
@@ -277,7 +274,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	public void aStepUpFromTheBlockBesideWherePlannedPlansAgain(GameTestHelper helper) {
 		room(helper, 0);
 		helper.setBlock(3, 1, 2, Blocks.STONE);
-		helper.setBlock(3, 1, 3, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		GameTests.ripeBushes(helper, new BlockPos(3, 1, 3));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		BlockPos goal = helper.absolutePos(new BlockPos(3, 2, 2));
 		ScriptRun run = BotScripts.run(bot, "wait(5)\ngoto((%d, %d, %d))\nwhile True:\n    wait(1000)\n".formatted(goal.getX(), goal.getY(), goal.getZ()));
@@ -312,10 +309,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		fill(helper, 1, 1, 2, 3, 2, 6, Blocks.BEDROCK); // the lane east at z 1, then south at x 4
 		fill(helper, 5, 1, 3, 6, 2, 6, Blocks.BEDROCK);
 		fill(helper, 6, 1, 1, 6, 2, 2, Blocks.BEDROCK);
-		for (int z = 1; z <= 2; z++) {
-			helper.setBlock(5, 0, z, Blocks.DIRT); // or the one bush set next to it drops the other off the stone
-			helper.setBlock(5, 1, z, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
-		}
+		GameTests.ripeBushes(helper, new BlockPos(5, 1, 1), new BlockPos(5, 1, 2));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(4, 1, 6)));
 

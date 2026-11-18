@@ -25,6 +25,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
@@ -308,5 +309,19 @@ public final class GameTests {
 	public static int carried(AntBot bot, Item item) {
 		ItemStack hand = bot.getMainHandItem();
 		return bot.getInventory().countItem(item) + (hand.is(item) ? hand.getCount() : 0);
+	}
+
+	/**
+	 * Ripe sweet berry bushes at {@code at}, each on dirt, and asserts they are all there: a bush cannot survive on the stone
+	 * floor, so the next one set beside it dropped it off (#867).
+	 */
+	public static void ripeBushes(GameTestHelper helper, BlockPos... at) {
+		for (BlockPos pos : at) {
+			helper.setBlock(pos.below(), Blocks.DIRT);
+			helper.setBlock(pos, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		}
+		for (BlockPos pos : at) {
+			helper.assertBlockPresent(Blocks.SWEET_BERRY_BUSH, pos);
+		}
 	}
 }

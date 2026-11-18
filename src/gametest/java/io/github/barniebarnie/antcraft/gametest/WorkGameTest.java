@@ -53,7 +53,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
-import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
@@ -831,7 +830,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	 */
 	@GameTest(maxTicks = 40)
 	public void pickUpTakesAnItemInABushWithoutEnteringIt(GameTestHelper helper) {
-		helper.setBlock(4, 1, 4, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		GameTests.ripeBushes(helper, new BlockPos(4, 1, 4));
 		ItemEntity berries = helper.spawnItem(Items.SWEET_BERRIES, new BlockPos(4, 1, 4));
 		Vec3 in = helper.absoluteVec(new Vec3(4.25, 1, 4.25));
 		berries.setPos(in.x, in.y, in.z);

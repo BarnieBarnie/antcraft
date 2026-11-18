@@ -30,7 +30,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -142,8 +141,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 	public void gotoOntoACactusOrABerryBushFailsAtOnceUnhurt(GameTestHelper helper) {
 		helper.setBlock(5, 0, 2, Blocks.SAND);
 		helper.setBlock(5, 1, 2, Blocks.CACTUS);
-		helper.setBlock(5, 0, 5, Blocks.GRASS_BLOCK);
-		helper.setBlock(5, 1, 5, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		GameTests.ripeBushes(helper, new BlockPos(5, 1, 5));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
 		BlockPos cactus = helper.absolutePos(new BlockPos(5, 1, 2));

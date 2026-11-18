@@ -23,7 +23,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.SaplingBlock;
-import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
@@ -631,8 +630,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 37 (red: hurt on tick 21).
 	@GameTest(maxTicks = 80)
 	public void takeBackOverABerryBushLeavesTheBotUnhurt(GameTestHelper helper) {
-		helper.setBlock(3, 0, 3, Blocks.GRASS_BLOCK);
-		helper.setBlock(3, 1, 3, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		GameTests.ripeBushes(helper, new BlockPos(3, 1, 3));
 		helper.setBlock(3, 2, 3, Blocks.DIRT);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 3, 3);
 		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt at " + bot.position()));
