@@ -16,7 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * The adult cap of the bundled {@code jobs/ranch.py} (docs/cookbook/ranch.md, The pen; #855): as many adults of each kind
  * as one bot tends between two breedings of a parent, by the measured ticks a round spends on each adult, and no more
- * than the kinds can share the pen's floor, a block an animal; at least a pair.
+ * than the kinds and their babies can share the pen's floor, a block an animal; at least a pair.
  */
 class RanchCapTest {
 	@TempDir
@@ -71,9 +71,11 @@ class RanchCapTest {
 	}
 
 	@Test
-	void aSmallPenHoldsABlockAnAnimalAndAtLeastAPair() throws IOException {
-		assertEquals(List.of("4", "2"), logged("""
+	void aSmallPenHoldsABlockAnAnimalBabiesTooAndAtLeastAPair() throws IOException {
+		// Up to as many babies as adults (#864): an 8 by 8 pen, 64 // (2 * 4 kinds) = 8; a 6 by 3 pen 18 // 8 = 2.
+		assertEquals(List.of("8", "2", "2"), logged("""
 			import jobs.ranch
+			print(jobs.ranch.default_cap(Pos(0, 64, 0), Pos(7, 64, 7)))
 			print(jobs.ranch.default_cap(Pos(1, 64, 4), Pos(6, 64, 6)))
 			print(jobs.ranch.default_cap(Pos(0, 64, 0), Pos(1, 64, 1)))
 			"""));

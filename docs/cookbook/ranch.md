@@ -1,6 +1,6 @@
 # Keep a ranch
 
-The job `jobs/ranch` keeps cows, sheep, pigs and chickens in a fenced pen, for meat, leather, wool, eggs and milk, and runs until a player stops it. It lures animals outside the pen in with their food, breeds a pair of each kind while the kind is under its cap, kills the adults over the cap (never a baby), shears the sheep, milks the cows and stores what they give. The pen is the player's: build a fence round it with a gate (#837, #843).
+The job `jobs/ranch` keeps cows, sheep, pigs and chickens in a fenced pen, for meat, leather, wool, eggs and milk, and runs until a player stops it. It lures animals outside the pen in with their food, breeds pairs of each kind while it has fewer babies than its cap, kills the adults over the cap once the babies grow up (never a baby), shears the sheep, milks the cows and stores what they give. The pen is the player's: build a fence round it with a gate (#837, #843).
 
 ```text
 /antcraft bot run jobs.ranch 10 64 10 15 64 14
@@ -26,7 +26,7 @@ Each round, for each kind:
 |---|---|
 | lure | while the kind is under the cap, one of it outside the pen is led in: the bot takes its food from a chest and holds it, and an animal follows a bot holding its food as it follows a player. The bot walks to it, then to the block outside the gate, opens the gate and waits in the pen's corner farthest from it until the animal is in and two blocks clear of the gate (at most 15 seconds), then shuts it. An animal does not find its way round a fence, so the bot leads it to the gate first |
 | cull | the adults past the cap are killed with [`attack`](../reference/combat/attack.md), with an axe the bot has or takes from a chest (a sword's sweep would hurt the babies beside), then their drops picked up; a baby is never attacked |
-| breed | while adults and babies are under the cap, pairs of adults are fed with [`use`](../reference/blocks/use.md#on-a-mob): wheat to cows and sheep, carrots to pigs, seeds to chickens, from the chests; each pair makes one baby. A parent breeds again only after 5 minutes, and a baby takes 20 minutes to grow up, so the bot just tries again each round |
+| breed | while the kind has fewer babies than the cap, pairs of the adults within the cap are fed with [`use`](../reference/blocks/use.md#on-a-mob): wheat to cows and sheep, carrots to pigs, seeds to chickens, from the chests; each pair makes one baby. A parent breeds again only after 5 minutes, and a baby takes 20 minutes to grow up, so the bot just tries again each round. At the cap it still breeds: the grown babies are the adults past the cap that the next cull kills, so a full pen keeps making meat, up to as many a kind each 20 minutes as the cap (#864) |
 | shear | each sheep is sheared, with shears the bot has or takes from a chest, and the wool picked up |
 | milk | each cow is milked into an empty bucket from the chests, so the buckets put there set how much milk the ranch makes |
 
@@ -36,7 +36,7 @@ The food comes first from the chests of the bot's other depots ([`lib.depot`](..
 
 ## The cap
 
-By default the pen keeps as many adults of each kind as the bot tends in the 5 minutes before a parent can breed again, so each pair is fed as soon as it can be: a round takes some 62 ticks an adult (measured with 4 and 8 adults of each kind, feeding, shearing and milking, #855), so (6000 - 100) / (4 kinds x 62) = 23 a kind. No more than the kinds can share the pen's floor, a block an animal: a pen of 6 by 3 keeps 4 a kind. Never under a pair.
+By default the pen keeps as many adults of each kind as the bot tends in the 5 minutes before a parent can breed again, so each pair is fed as soon as it can be: a round takes some 62 ticks an adult (measured with 4 and 8 adults of each kind, feeding, shearing and milking, #855), so (6000 - 100) / (4 kinds x 62) = 23 a kind. No more than the kinds can share the pen's floor, a block an animal, with room for as many babies as adults: a pen of 8 by 8 keeps 8 a kind, one of 6 by 3 keeps 2. Never under a pair, the fewest that breed, so a pen smaller than 4 by 4 holds more animals than blocks (#864); give such a pen a cap, or build it bigger.
 
 ## Animals nearby
 

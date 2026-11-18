@@ -145,6 +145,34 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Four adult cows at a cap of 4, wheat and an axe in the chest: the ranch still breeds them, and once the calves are
+	 * grown (aged up by the test 40 ticks after birth, as growing takes 20 minutes) it kills the adults past the cap and
+	 * stores the beef (#864).
+	 */
+	// Measured: passes at tick 290 to 454 (red: 4 adult cows of 4, no calf; breed fed no pair at the cap, as it counted
+	// the calves to come against it).
+	@GameTest(maxTicks = 900)
+	public void atTheCapTheRanchBreedsAndCullsTheGrownSurplus(GameTestHelper helper) {
+		for (int x = 1; x <= 4; x++) {
+			animal(helper, EntityTypes.COW, x + 1, 6, false);
+		}
+		ranch(helper, 4, new ItemStack(Items.WHEAT, 16), new ItemStack(Items.STONE_AXE));
+		helper.onEachTick(() -> {
+			for (Cow calf : inPen(helper, Cow.class)) {
+				if (calf.isBaby() && calf.getAge() >= -24000 + 40) {
+					calf.setAge(0);
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			List<Cow> cows = inPen(helper, Cow.class);
+			long adults = cows.stream().filter(c -> !c.isBaby()).count();
+			int beef = stored(helper, Items.BEEF);
+			helper.assertTrue(adults == 4 && beef >= 1, adults + " adult cows of " + cows.size() + ", " + beef + " beef stored");
+		});
+	}
+
 	/** A sheep in the pen, shears in the chest: it is sheared and its wool (1 to 3) stored. */
 	// Measured: passes at tick 47 to 48.
 	@GameTest(maxTicks = 120)

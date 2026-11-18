@@ -2,7 +2,7 @@
 # /antcraft bot run jobs.ranch x1 y1 z1 x2 y2 z2 [cap [radius]]: the pen's inside from one corner to the other (its floor
 # level y1), the most adults of each kind it keeps (default_cap by default) and how far to look for chests (32 by default). Each
 # round, for cows, sheep, pigs and chickens, it lures one of a kind that is outside the pen in with its food while the
-# kind is under the cap, kills the adults over it (attack; babies never), breeds pairs with their food (use), shears the
+# kind is under the cap, kills the adults over it (attack; babies never), breeds pairs with their food (use) while it has fewer babies than the cap, shears the
 # sheep and milks the cows with the buckets in the chests; then it picks up what lies in the pen, such as eggs, and stores
 # the produce in a depot of chests three blocks north of the pen's low corner, going east (docs/cookbook/ranch.md, #837,
 # #843). Food comes from the chests of the bot's other depots first, such as its crop farm's, then from those within
@@ -42,10 +42,10 @@ def inside(p, low, high):
 
 def default_cap(low, high):
     """The most adults of each kind kept in the pen from low to high: as many as the bot tends in one round before a
-    parent can breed again (BREED, TEND), and no more than the kinds can share the pen's floor, a block an animal; at
-    least a pair."""
+    parent can breed again (BREED, TEND), and no more than the kinds can share the pen's floor, a block an animal, with
+    as many babies as adults (breed, #864); at least a pair, the fewest that breed."""
     area = (high.x - low.x + 1) * (high.z - low.z + 1)
-    return max(2, min((BREED - REST) // (len(FOOD) * TEND), area // len(FOOD)))
+    return max(2, min((BREED - REST) // (len(FOOD) * TEND), area // (2 * len(FOOD))))
 
 
 def middle(low, high):
@@ -131,8 +131,10 @@ def cull(adults, cap, radius):
 
 
 def breed(kind, animals, adults, cap, radius):
-    """Feeds pairs of adults while the kind would stay within cap: each pair makes one baby."""
-    pairs = min(len(adults) // 2, cap - len(animals))
+    """Feeds pairs of the first cap adults while the babies would stay within cap: each pair makes one baby. The babies
+    grow into adults past the cap, which cull kills, so the ranch keeps making meat at its cap (#864); the pen holds up
+    to twice cap of a kind, half of them babies."""
+    pairs = min(len(adults) // 2, cap - len([a for a in animals if a.baby]))
     food = FOOD[kind]
     if pairs > 0 and take(food, 2 * pairs, radius):
         for a in adults[:2 * pairs]:
