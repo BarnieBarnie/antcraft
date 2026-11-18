@@ -1139,7 +1139,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (last != null) {
 			core.set(ModComponents.CORE_SCRIPT, last);
 		}
-		core.set(ModComponents.REMEMBERED_BOT, new RememberedBot(this.getName().getString(),
+		core.set(ModComponents.REMEMBERED_BOT, RememberedBot.remember(level.getServer(), this.getName().getString(),
 			Memory.toTag(this.memory, problem -> this.log.add(level.getGameTime(), Output.Level.WARN, problem))));
 		this.removeForGood(level);
 		return core;

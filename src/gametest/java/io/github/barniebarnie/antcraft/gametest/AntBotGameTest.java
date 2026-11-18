@@ -24,6 +24,8 @@ import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.commands.CommandSourceStack;
@@ -279,6 +281,29 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A picked-up bot's core moved in the creative inventory (#927), whose client sends the stack back whole as it got it,
+	 * still brings the bot back with its memory: the server keeps the memory, the core only its name and an id.
+	 */
+	@GameTest(maxTicks = 5)
+	public void aCoreSentThroughACreativeClientStillBringsTheMemoryBack(GameTestHelper helper) {
+		AntBot bot = pickable(helper);
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		owner.setShiftKeyDown(true);
+		bot.interact(owner, InteractionHand.MAIN_HAND, bot.position());
+		ItemStack core = core(owner);
+		helper.assertTrue(core != null, "no core");
+		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
+		ItemStack.STREAM_CODEC.encode(buf, core);
+		ItemStack back = ItemStack.STREAM_CODEC.decode(buf);
+		owner.getInventory().clearContent();
+
+		useOnTheFloor(helper, owner, back);
+		AntBot placed = helper.findOneEntity(ModEntities.ANT_BOT);
+		helper.assertValueEqual(placed.getMemory().get("job"), "cane", "memory['job']");
+		helper.succeed();
+	}
+
+	/**
 	 * A bot whose script finished, so it idles, is picked up with that script and comes back running it again (#922), as a
 	 * farm job stopped to move the bot goes on once placed.
 	 */
@@ -341,7 +366,7 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 	public void craftingARememberingCoreAloneGivesABlankCore(GameTestHelper helper) {
 		ItemStack core = new ItemStack(ModItems.BOT_CORE);
 		core.set(ModComponents.CORE_SCRIPT, new CoreScript("miner", List.of("iron")));
-		core.set(ModComponents.REMEMBERED_BOT, new RememberedBot("Ant 1234", new CompoundTag()));
+		core.set(ModComponents.REMEMBERED_BOT, new RememberedBot("Ant 1234", Optional.of(UUID.randomUUID()), new CompoundTag()));
 		CraftingInput input = CraftingInput.of(1, 1, List.of(core));
 		ItemStack result = helper.getLevel().recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, helper.getLevel())
 			.map(recipe -> recipe.value().assemble(input)).orElse(ItemStack.EMPTY);
@@ -366,18 +391,38 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
-	/** A remembering core sent to a client (#923) carries the bot's name for the tooltip, not its memory. */
+	/**
+	 * A remembering core sent to a client (#923) carries the bot's name for the tooltip and the id of its memory (#927), not
+	 * the memory, which the server keeps; nor does a core from before #927 that carries the memory itself.
+	 */
 	@GameTest(maxTicks = 5)
 	public void aRememberingCoreSendsClientsTheNameNotTheMemory(GameTestHelper helper) {
-		ItemStack core = new ItemStack(ModItems.BOT_CORE);
 		CompoundTag memory = new CompoundTag();
 		memory.putString("job", "x".repeat(10_000));
-		core.set(ModComponents.REMEMBERED_BOT, new RememberedBot("Ant 1234", memory));
-		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
-		ItemStack.STREAM_CODEC.encode(buf, core);
-		helper.assertTrue(buf.readableBytes() < 1000, "the core's packet is " + buf.readableBytes() + " bytes");
-		RememberedBot sent = ItemStack.STREAM_CODEC.decode(buf).get(ModComponents.REMEMBERED_BOT);
-		helper.assertValueEqual(sent, new RememberedBot("Ant 1234", new CompoundTag()), "the client's remembered bot");
+		RememberedBot picked = RememberedBot.remember(helper.getLevel().getServer(), "Ant 1234", memory);
+		for (RememberedBot remembered : List.of(picked, new RememberedBot("Ant 1234", Optional.empty(), memory))) {
+			ItemStack core = new ItemStack(ModItems.BOT_CORE);
+			core.set(ModComponents.REMEMBERED_BOT, remembered);
+			RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
+			ItemStack.STREAM_CODEC.encode(buf, core);
+			helper.assertTrue(buf.readableBytes() < 1000, "the core's packet is " + buf.readableBytes() + " bytes");
+			RememberedBot sent = ItemStack.STREAM_CODEC.decode(buf).get(ModComponents.REMEMBERED_BOT);
+			helper.assertValueEqual(sent, new RememberedBot("Ant 1234", remembered.id(), new CompoundTag()), "the client's remembered bot");
+		}
+		helper.assertValueEqual(picked.takeMemory(helper.getLevel().getServer()), memory, "the memory the server kept");
+		helper.succeed();
+	}
+
+	/** A core from before #927, which carries the bot's memory itself, still brings the memory back. */
+	@GameTest(maxTicks = 5)
+	public void anOldCoreCarryingTheMemoryBringsItBack(GameTestHelper helper) {
+		var dict = Memory.fromTag(new CompoundTag());
+		dict.put("job", "cane");
+		CompoundTag memory = Memory.toTag(dict, problem -> helper.fail(problem));
+		ItemStack core = new ItemStack(ModItems.BOT_CORE);
+		core.set(ModComponents.REMEMBERED_BOT, new RememberedBot("Ant 1234", Optional.empty(), memory));
+		useOnTheFloor(helper, core);
+		helper.assertValueEqual(helper.findOneEntity(ModEntities.ANT_BOT).getMemory().get("job"), "cane", "memory['job']");
 		helper.succeed();
 	}
 
@@ -408,7 +453,7 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(core != null, "no core");
 		RememberedBot remembered = core.get(ModComponents.REMEMBERED_BOT);
 		helper.assertTrue(remembered != null && remembered.name().equals(name), "remembers " + remembered);
-		helper.assertValueEqual(Memory.fromTag(remembered.memory()).get("job"), "cane", "remembered memory['job']");
+		helper.assertValueEqual(Memory.fromTag(remembered.memory(helper.getLevel().getServer())).get("job"), "cane", "remembered memory['job']");
 		helper.assertValueEqual(core.get(ModComponents.CORE_SCRIPT), new CoreScript(script.name(), List.of("north", "3")), "script");
 	}
 

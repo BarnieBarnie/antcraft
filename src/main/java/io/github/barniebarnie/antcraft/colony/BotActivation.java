@@ -51,7 +51,7 @@ public final class BotActivation {
 		}
 		if (remembered != null) {
 			bot.setCustomName(Component.literal(remembered.name()));
-			bot.setMemory(Memory.fromTag(remembered.memory()));
+			bot.setMemory(Memory.fromTag(remembered.takeMemory(level.getServer())));
 		}
 		if (player != null) {
 			bot.setOwner(player.getUUID());
