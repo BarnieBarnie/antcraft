@@ -629,19 +629,17 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * corner, 4 to 6 blocks from the creeper, and stood there until it exploded, as in 4 of 200 copies of
 	 * {@link #aBotKillsTwoCreepersAndAHuskUnhurtByABlast}. Only a blast that hurts the bot fails it (#781).
 	 */
-	// Measured: passes in 100 of 100 copies at once (on main: hurt in 100 of 100); at tick 46 alone.
+	// Measured: the fuse lit at once (#915), passes at tick 48 alone and in 200 of 200 copies; before #868 the bot was
+	// hurt in 100 of 100 copies.
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 120)
 	public void aBotBacksOffALitCreeperNearACornerUnhurt(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.5, 1, 2.5));
 		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
 		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(5, 1, 5));
 		creeper.setTarget(bot);
-		// Once the bot stands on the floor: a bot just spawned plans no path, and lost 4 of the fuse's 30 ticks.
-		helper.runAfterDelay(2, () -> {
-			creeper.setSwellDir(1);
-			// Struck it just now: the weapon is not ready, so the bot backs off rather than step in.
-			bot.setLastHurtMob(creeper);
-		});
+		creeper.setSwellDir(1);
+		// Struck it just now: the weapon is not ready, so the bot backs off rather than step in.
+		bot.setLastHurtMob(creeper);
 		failOnExplosion(helper, bot);
 		boolean[] wasLit = {false};
 		helper.onEachTick(() -> wasLit[0] |= creeper.getSwelling(1) > 0);
