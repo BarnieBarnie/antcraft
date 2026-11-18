@@ -1336,9 +1336,24 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * As aSpruceFarmWithOneSaplingMovesToGiantsOnceItHasFour; once the giant cell stands, the test grows the small cell's
 	 * spruce: the giant farm's rounds fell it and do not replant its spot (9, 1, 5) (#807).
 	 */
-	// Measured: passes at tick 748 to 856, the slower with 84 tests at once (red: the small spruce stood at tick 2002).
+	// Measured: passes at tick 748 to 881 (full runs), up to 1507 with 60 copies at once (red: the small spruce stood at tick 2002).
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 1700)
 	public void theSmallCellsTreeIsFelledAndNotReplantedOnceTheFarmMovesToGiants(GameTestHelper helper) {
+		smallCellsTree(helper, false);
+	}
+
+	/**
+	 * As theSmallCellsTreeIsFelledAndNotReplantedOnceTheFarmMovesToGiants, the small spruce grown as the farm moves to
+	 * giants, as random ticks grow it in about 1 run in 100: it stands once the giant cell does (#862).
+	 */
+	// Measured: passes at tick 1255 to 1544 (red: the giant cell built, the small cell holds spruce_log, on tick 1268).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 3000)
+	public void theSmallCellsTreeGrownDuringTheMoveToGiantsIsFelledAndNotReplanted(GameTestHelper helper) {
+		smallCellsTree(helper, true);
+	}
+
+	/** The small cell's spruce grown by the test once the giant cell stands, or where early once the move to giants starts. */
+	private static void smallCellsTree(GameTestHelper helper, boolean early) {
 		BlockPos spot = new BlockPos(9, 1, 5);
 		AntBot bot = saplingFarm(helper, "spruce_sapling", Items.SPRUCE_SAPLING, 1);
 		BotScripts.failOnWarning(helper, bot);
@@ -1351,14 +1366,23 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 				helper.getBlockEntity(new BlockPos(3, 1, 16), ChestBlockEntity.class).setItem(3, new ItemStack(Items.SPRUCE_SAPLING, 4));
 				gave[0] = true;
 			}
-			if (gave[0] && !gave[1] && said(bot).stream().filter(l -> l.contains("built cell 1")).count() == 2
+			if (early && gave[0] && !gave[1] && said(bot).stream().anyMatch(l -> l.startsWith("giant_spruce_farm 1/4"))
 				&& helper.getBlockState(spot).is(Blocks.SPRUCE_SAPLING)) {
 				TreesGameTest.plantTree(helper, spot, Blocks.SPRUCE_LOG, Blocks.SPRUCE_LEAVES, false);
+			}
+			if (gave[0] && !gave[1] && said(bot).stream().filter(l -> l.contains("built cell 1")).count() == 2) {
+				// The small spruce may have grown by itself already (#862): then the farm fells that one.
+				BlockState small = helper.getBlockState(spot);
+				helper.assertTrue(small.is(Blocks.SPRUCE_SAPLING) || small.is(Blocks.SPRUCE_LOG), "the giant cell built, the small cell holds "
+					+ small + "; " + doing(helper, bot));
+				if (small.is(Blocks.SPRUCE_SAPLING)) {
+					TreesGameTest.plantTree(helper, spot, Blocks.SPRUCE_LOG, Blocks.SPRUCE_LEAVES, false);
+				}
 				gave[1] = true;
 			}
 		});
 		helper.succeedWhen(() -> {
-			helper.assertTrue(gave[1], "the small spruce never grew; said " + said(bot));
+			helper.assertTrue(gave[1], "the small spruce never grew, the small cell holds " + helper.getBlockState(spot) + "; " + doing(helper, bot));
 			for (int y = 1; y < 6; y++) {
 				helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, spot.getX(), y, spot.getZ());
 			}
@@ -2198,6 +2222,13 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			+ "; " + BotScripts.log(bot, Output.Level.DEBUG));
 		helper.assertBlockPresent(Blocks.TORCH, spot.offset(-2, 0, -2));
 		helper.assertBlockPresent(Blocks.TORCH, spot.offset(2, 0, 2));
+	}
+
+	/** Where the bot is, the call its script runs and what it said, for a failure message. */
+	private static String doing(GameTestHelper helper, AntBot bot) {
+		ScriptRun run = bot.getScript();
+		return "the bot at " + TestPositions.relative(helper, bot.position()) + (run == null ? "" : ", running " + run.action() + " on line " + run.line())
+			+ "; said " + said(bot);
 	}
 
 	private static List<String> said(AntBot bot) {
