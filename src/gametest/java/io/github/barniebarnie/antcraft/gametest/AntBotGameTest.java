@@ -278,6 +278,39 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A bot whose script finished, so it idles, is picked up with that script and comes back running it again (#922), as a
+	 * farm job stopped to move the bot goes on once placed.
+	 */
+	@GameTest(maxTicks = 10)
+	public void aPickedUpBotWhoseScriptFinishedRunsItAgain(GameTestHelper helper) {
+		String script = BotScripts.libraryScript(helper, "finished_", "memory['ran'] = memory.get('ran', '') + 'x'\n");
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BotScripts.failOnError(helper, bot);
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		AntCraftCommands.runnable(script, failure -> helper.fail(failure.getString()))
+			.ifPresent(found -> bot.runScript(found, List.of("north")));
+		boolean[] placed = {false};
+		helper.onEachTick(() -> {
+			if (!placed[0] && bot.isIdling()) {
+				placed[0] = true;
+				owner.setShiftKeyDown(true);
+				bot.interact(owner, InteractionHand.MAIN_HAND, bot.position());
+				ItemStack core = core(owner);
+				helper.assertTrue(core != null, "no core");
+				CoreScript remembered = core.get(ModComponents.CORE_SCRIPT);
+				helper.assertTrue(new CoreScript(script, List.of("north")).equals(remembered), "remembers script " + remembered);
+				useOnTheFloor(helper, owner, core);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(placed[0], "not idling yet");
+			AntBot back = helper.findOneEntity(ModEntities.ANT_BOT);
+			Object ran = back.getMemory().get("ran");
+			helper.assertTrue("xx".equals(ran), "memory['ran'] " + ran);
+		});
+	}
+
 	/** {@code bot pickup} (#916) and the bots screen's Pick up button pick a bot up as sneak-using it does, for its owner only. */
 	@GameTest(maxTicks = 5)
 	public void thePickupCommandAndTheBotsScreenPickABotUp(GameTestHelper helper) {

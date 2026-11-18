@@ -126,6 +126,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private @Nullable UUID owner;
 	/** The script the bot runs or ran last; a running one is saved and resumed (docs/features/scripts.md, Save and resume). */
 	private @Nullable ScriptRun script;
+	/**
+	 * The script the bot ran itself last, with its args, once it ended, stopped or failed and {@code idle.py} took over: a
+	 * core the bot is picked up into remembers it (#922). Saved.
+	 */
+	private @Nullable CoreScript lastRun;
 	/** The running script the bot was saved with, resumed on its first tick, once the script library is loaded. */
 	private ScriptRun.@Nullable Saved savedScript;
 	/** {@link #idling} as saved with {@link #savedScript}. */
@@ -720,6 +725,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 */
 	private void idleIfDone() {
 		if (this.script == null || (!this.script.running() && !this.script.name().equals(DefaultScripts.IDLE))) {
+			if (this.script != null && !this.idling) {
+				this.lastRun = new CoreScript(this.script.name(), this.script.args());
+			}
 			ServerScripts.idle().ifPresent(idle -> {
 				this.runScript(idle, List.of());
 				this.idling = true;
@@ -1120,13 +1128,15 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/**
 	 * Picks the bot up (#916; docs/features/bots.md, Picking a bot up): removes it as {@link #removeForGood} does and gives
-	 * the Bot Core that remembers it, its name, the script it runs ({@link ModComponents#CORE_SCRIPT}, none while it idles)
+	 * the Bot Core that remembers it, its name, the script it runs or ran last, finished, stopped or failed
+	 * ({@link ModComponents#CORE_SCRIPT}, #922; none if it never ran one of its own)
 	 * and its memory ({@link ModComponents#REMEMBERED_BOT}).
 	 */
 	public ItemStack pickUp(ServerLevel level) {
 		ItemStack core = new ItemStack(ModItems.BOT_CORE);
-		if (this.isRunningScript() && !this.idling) {
-			core.set(ModComponents.CORE_SCRIPT, new CoreScript(this.script.name(), this.script.args()));
+		CoreScript last = this.script != null && !this.idling ? new CoreScript(this.script.name(), this.script.args()) : this.lastRun;
+		if (last != null) {
+			core.set(ModComponents.CORE_SCRIPT, last);
 		}
 		core.set(ModComponents.REMEMBERED_BOT, new RememberedBot(this.getName().getString(),
 			Memory.toTag(this.memory, problem -> this.log.add(level.getGameTime(), Output.Level.WARN, problem))));
@@ -1193,6 +1203,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			output.putInt("Deaths", this.deaths);
 		}
 		output.storeNullable("LastDeath", GlobalPos.CODEC, this.lastDeath);
+		output.storeNullable("LastScript", CoreScript.CODEC, this.lastRun);
 		this.food.save(output);
 		ScriptRun.Saved running = this.isRunningScript() ? this.script.save() : this.savedScript;
 		// The script's saved state holds memory too, so it is saved on its own only when that does not (#341).
@@ -1247,6 +1258,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.owner = input.read("Owner", UUIDUtil.CODEC).orElse(null);
 		this.deaths = input.getIntOr("Deaths", 0);
 		this.lastDeath = input.read("LastDeath", GlobalPos.CODEC).orElse(null);
+		this.lastRun = input.read("LastScript", CoreScript.CODEC).orElse(null);
 		this.food.load(input);
 		this.log.load(input);
 		this.savedScript = ScriptRun.Saved.read(input).orElse(null);
