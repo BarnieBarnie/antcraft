@@ -206,6 +206,7 @@ def tend(boxes, told, radius=32):
 def spec(radius=32):
     """The lib.cellfarm spec of the mushroom farm."""
     return {"size": (3, 1), "categories": {"mushrooms": [BROWN, RED, PODZOL]}, "corners": "mushroom_farms",
+            "kept": lib.cellfarm.floor,
             "keep": KEEP, "materials": lambda: {PODZOL: 3, BROWN: 1, RED: 1}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": lambda low, high: build_cell(low, high, radius),
             "ripe": ripe, "harvest": lambda low, high, told: harvest(low, high, told, radius),"tend": lambda boxes, told: tend(boxes, told, radius),

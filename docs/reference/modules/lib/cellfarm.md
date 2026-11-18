@@ -63,7 +63,7 @@ Optional:
 | `room()` | `1` | empty slots the bot wants before a harvest ([`lib.depot.make_room`](depot.md)) |
 | `stock(boxes)` | none | gets what tending `boxes` takes, after the harvest and store |
 | `chores(keep, told)` | none | harvests before the round's own, such as cells of another farm; gives `(harvests, whether the bot is too full)` |
-| `kept(low, high)` | none | the cell's blocks no walk of the bot's may break, such as the cocoa farm's logs ([`keep_cells`](#keep_cellsf-name), #856) |
+| `kept(low, high)` | none | the cell's blocks no walk of the bot's may break nor put scaffold in, such as the cocoa farm's logs, or the cell's soil and water, [`floor`](#floorlow-high), as every other farm but the wood and kelp farms gives ([`keep_cells`](#keep_cellsf-name), #856, #869) |
 | `switch()` | none | a farm to go on with instead: its result, which `farm` gives, or `None` |
 | `learn(ticks, n)` | [`learn`](#learnname-ticks-n) under the farm's name | `n` harvests of a round took `ticks` game ticks; not called where the round's own harvests are none, only `chores`' |
 | `full(boxes, told)` | none | what a full farm does each round |
@@ -94,7 +94,11 @@ Builds the next cell of the farm `name` ([`following`](#followingf-name-size)): 
 
 ## `keep_cells(f, name)`
 
-Keeps the blocks the spec's `kept(low, high)` gives of each built cell of the farm `name` from the bot's walks with [`keep_blocks`](../../movement/keep_blocks.md), replacing those it kept before: a walk may break any block without a block entity, and a corner walk whose way went through a cocoa cell broke both its logs (#849). Nothing where the spec has no `kept`. `farm` calls it each round and `build` once it built a cell. Done at once.
+Keeps the blocks the spec's `kept(low, high)` gives of each built cell of the farm `name` from the bot's walks with [`keep_blocks`](../../movement/keep_blocks.md), replacing those it kept before: a walk may break any block without a block entity, and a corner walk whose way went through a cocoa cell broke both its logs (#849). Nothing where the spec has no `kept`. `run` calls it once the farm is laid out, so a run resumed after a reload keeps them before its first walk, `farm` each round and `build` once it built a cell. Done at once.
+
+## `floor(low, high)`
+
+The blocks of a cell's floor, from `low` to `high` at `low.y`: its soil and water, what most specs give as `kept` (#869). Not the plants on it: paths treat those as air and put no scaffold in their place (#865). The wood farm keeps nothing yet; the kelp farm nothing, as its cells stand in water and a path never breaks a block beside a fluid. Done at once.
 
 ## `stocked(f, radius)`
 

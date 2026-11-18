@@ -128,7 +128,8 @@ def spec(kind, name, radius):
     """The lib.cellfarm spec of the stem farm name of kind: ripe where fruit stands beside a stem, harvested by mining
     it; a stem that is gone is planted again (tend)."""
     fruit_item, seed = KINDS[kind][1], KINDS[kind][2]
-    return {"size": SIZE, "categories": {"harvest": [fruit_item, seed]}, "corners": "stem_farms", "keep": KEEP,
+    return {"size": SIZE, "categories": {"harvest": [fruit_item, seed]}, "corners": "stem_farms",
+            "kept": lib.cellfarm.floor, "keep": KEEP,
             "materials": lambda: {seed: 4}, "gets": lambda item, n, r: gets(item, n, r),
             "build_cell": lambda low, high: build_cell(kind, name, low, high, radius),
             "ripe": lambda low, high: len(fruit(kind, low, high)) > 0,

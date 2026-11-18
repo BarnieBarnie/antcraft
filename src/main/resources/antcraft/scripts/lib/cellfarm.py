@@ -17,9 +17,10 @@
 #   get random ticks ([low, high]), loaded(low, high): whether the bot can read the cell (both corners loaded),
 #   room(): empty slots a harvest wants (1), stock(boxes): gets what tending them takes, before the bot walks back to a
 #   cell it visits, chores(keep, told): harvests before the round's, giving (harvests, whether the bot is full),
-#   switch(): a farm to go on with instead, its result, or None, kept(low, high): the cell's blocks no walk may break,
-#   such as a cocoa cell's logs (keep_cells, #856), learn(ticks, n): n (> 0) harvests took ticks (else
-#   lib.cellfarm.learn keeps them under the farm's name, for most, #844), full(boxes,
+#   switch(): a farm to go on with instead, its result, or None, kept(low, high): the cell's blocks no walk may break
+#   nor put scaffold in, such as a cocoa cell's logs or a cell's floor (floor; keep_cells, #856, #869),
+#   learn(ticks, n): n (> 0) harvests took ticks (else lib.cellfarm.learn keeps them under the farm's name, for most,
+#   #844), full(boxes,
 #   told): what a full farm does each round, idle(boxes): what a round that harvested nothing does before its wait,
 #   hurts: whether the cells hurt, so the bot waits clear of them (corner_spot, #872).
 #
@@ -67,6 +68,12 @@ def keep_cells(f, name):
     (keep_blocks): a walk whose way went through a cell broke its logs (#849, #856)."""
     if "kept" in f:
         keep_blocks([p for i in lib.cells.built(name) for p in f["kept"](*lib.cells.cell(name, i))])
+
+
+def floor(low, high):
+    """A cell's floor, its soil and water: what most specs' kept gives (#869). Not the plants on it: paths treat those as
+    air and put no scaffold in their place (#865)."""
+    return [Pos(x, low.y, z) for x in range(low.x, high.x + 1) for z in range(low.z, high.z + 1)]
 
 
 def loaded(f, low, high):
@@ -417,6 +424,7 @@ def run(f, name, key, at, steps, radius=32):
         lib.project.reset(name)
         say(f"farm moved to {at.x} {at.y} {at.z}")
     lib.cells.layout(name, at.down(), f["size"])
+    keep_cells(f, name)  # a run resumed after a reload keeps them before its first walk, not from its first round on
     if new or moved:
         hint(f, name, at)
     lib.depot.depot(name, at + (0, 0, -2), "east", f["categories"])

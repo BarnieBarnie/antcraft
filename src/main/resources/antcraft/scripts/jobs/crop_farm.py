@@ -135,6 +135,7 @@ def spec(c, name, radius):
     """The lib.cellfarm spec of the crop farm name of crop c (a lib.farm.CROPS entry): 9x9 cells round a water source,
     harvested when all their crops are ripe, the harvest stored in a crops chest, the bot keeping a cell's seed."""
     return {"size": (SIZE, SIZE), "categories": {"crops": [c[1], c[2], lib.farm.POISON]}, "corners": "crop_farms",
+            "kept": lib.cellfarm.floor,
             "keep": [(c[1], CELL), "#minecraft:hoes", lib.farm.BUCKET, "minecraft:water_bucket", "minecraft:crafting_table"],
             "materials": lambda: {c[1]: CELL}, "gets": lib.treefarm.get_outside,
             "build_cell": lambda low, high: build_cell(c, name, low, high, radius),

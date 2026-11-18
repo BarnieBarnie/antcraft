@@ -120,6 +120,38 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A two-wide shaft up to the roof, as PathingGameTest.pillaringGoesRoundACane: the cheapest pillar goes up the half
+	 * under the target. Its bottom block, air, kept with {@code keep_blocks} as a farm keeps its cells' blocks (a cane
+	 * cell's water, #869), takes no scaffold: the pillar goes up the bot's half.
+	 */
+	// Measured: passes at tick 23 (red: dirt on the kept block on tick 3).
+	@GameTest(maxTicks = 50)
+	public void pillaringPutsNoScaffoldOnAKeptBlock(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				for (int y = 1; y < 8; y++) {
+					helper.setBlock(x, y, z, (x == 2 || x == 3) && z == 3 ? Blocks.AIR : Blocks.BEDROCK);
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		BlockPos target = helper.absolutePos(new BlockPos(3, 4, 3));
+		ScriptRun run = BotScripts.run(bot, "keep_blocks([" + pos(helper.absolutePos(new BlockPos(3, 1, 3))) + "])\nr = goto("
+			+ pos(target) + ", 1)\nprint(r.ok, r.reason)\n");
+		BotScripts.failOnError(helper, bot);
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(new BlockPos(3, 1, 3)).isAir()) {
+				helper.fail("scaffold on the kept block: " + helper.getBlockState(new BlockPos(3, 1, 3)));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(printed(bot).equals(List.of("True None")), "printed " + printed(bot) + ", script " + run.state());
+			helper.assertTrue(bot.blockPosition().distManhattan(target) <= 1, "bot at " + TestPositions.relative(helper, bot.blockPosition()));
+		});
+	}
+
 	/** A spot in mid-air, and no blocks to climb with. */
 	@GameTest(maxTicks = 100)
 	public void gotoASpotThatCannotBeReachedIsUnreachable(GameTestHelper helper) {

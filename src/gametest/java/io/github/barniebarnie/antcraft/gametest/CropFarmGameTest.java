@@ -176,6 +176,40 @@ public class CropFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A walk sent into a built cell's floor (#869, as cocoa's #856): cell 1's floor a block up, from (1, 1, 4) to
+	 * (9, 1, 12) round its water, dirt (farmland the bot stepped onto would be trampled), kept with
+	 * lib.cellfarm.keep_cells (the spec's kept). A goto to the cell's low corner, a spot only breaking the dirt there
+	 * gives, is unreachable, and the dirt stays.
+	 */
+	// Measured: passes at tick 38 (red: the dirt at (1, 1, 4) broke on tick 38).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 80)
+	public void aWalkSentIntoACellLeavesItsFloor(GameTestHelper helper) {
+		forEachSpot(1, (x, z) -> helper.setBlock(x, 1, z, Blocks.DIRT));
+		helper.setBlock(5, 1, 8, Blocks.WATER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 0, 1, 7);
+		BlockPos low = helper.absolutePos(new BlockPos(1, 1, 4));
+		BotScripts.run(bot, """
+			import jobs.crop_farm
+			import lib.cellfarm
+			import lib.cells
+			import lib.farm
+			low = Pos(%d, %d, %d)
+			lib.cells.layout("wheat_farm", low, (9, 9))
+			lib.cells.add("wheat_farm", 0)
+			lib.cellfarm.keep_cells(jobs.crop_farm.spec(lib.farm.crop("wheat"), "wheat_farm", 16), "wheat_farm")
+			r = goto(low)
+			print(r.ok, r.reason)
+			""".formatted(low.getX(), low.getY(), low.getZ()));
+		BotScripts.failOnError(helper, bot);
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(new BlockPos(1, 1, 4)).is(Blocks.DIRT)) {
+				helper.fail("the dirt at (1, 1, 4) broke: " + helper.getBlockState(new BlockPos(1, 1, 4)));
+			}
+		});
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("False unreachable"), "said"));
+	}
+
+	/**
 	 * A dirt floor under both cells, a chest of supplies with seeds of seed, an iron hoe, two water buckets and two chests,
 	 * and, where depot is more than 0, a chest at the depot's first slot holding depot more seeds; the bot by the supplies.
 	 */

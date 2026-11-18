@@ -107,7 +107,8 @@ def tend(boxes, told, radius=32):
 
 def spec(radius=32):
     """The lib.cellfarm spec of the wart farm."""
-    return {"size": (3, 1), "categories": {"wart": [WART, SOUL_SAND]}, "corners": "wart_farms", "keep": KEEP,
+    return {"size": (3, 1), "categories": {"wart": [WART, SOUL_SAND]}, "corners": "wart_farms",
+            "kept": lib.cellfarm.floor, "keep": KEEP,
             "materials": lambda: {WART: 3, SOUL_SAND: 3}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": build_cell,
             "ripe": ripe, "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),

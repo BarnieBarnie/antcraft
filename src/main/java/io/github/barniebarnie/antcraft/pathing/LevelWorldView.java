@@ -73,7 +73,10 @@ public class LevelWorldView implements WorldView {
 		return this;
 	}
 
-	/** Paths never break a block {@code kept} says, besides those kept already, such as one a build has in place. */
+	/**
+	 * Paths never break a block {@code kept} says, besides those kept already, such as one a build has in place, nor put
+	 * scaffold there, such as in a farm cell's water (#869).
+	 */
 	public LevelWorldView keeping(Predicate<BlockPos> kept) {
 		this.kept = kept;
 		return this;
@@ -81,7 +84,7 @@ public class LevelWorldView implements WorldView {
 
 	@Override
 	public boolean mayPlace(BlockPos pos) {
-		return this.mayPlace.test(pos) && !isPlant(this.blocks.get(pos));
+		return this.mayPlace.test(pos) && !this.kept.test(pos) && !isPlant(this.blocks.get(pos));
 	}
 
 	/**

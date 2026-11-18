@@ -4,7 +4,7 @@
 keep_blocks(blocks)
 ```
 
-Keeps the blocks at `blocks` from the bot's walks: no path breaks them (#856).
+Keeps the blocks at `blocks` from the bot's walks: no path breaks them (#856) or puts scaffold in their place (#869).
 
 ## Parameters
 
@@ -26,9 +26,9 @@ Nothing besides the call.
 
 ## Description
 
-A walk, of [`goto`](goto.md) or of an action that walks to its target first (`mine`, `place`, `put`, `take`...), may break any block in its way but those with a block entity, such as a chest, and what players build with, such as fences and glass. `keep_blocks` adds the blocks it is given: a walk goes round them, or digs through other blocks, and where no way is left it fails with `unreachable`. It does not keep the script's own actions from them: `mine` still breaks a kept block.
+A walk, of [`goto`](goto.md) or of an action that walks to its target first (`mine`, `place`, `put`, `take`...), may break any block in its way but those with a block entity, such as a chest, and what players build with, such as fences and glass. `keep_blocks` adds the blocks it is given: a walk goes round them, or digs through other blocks, and where no way is left it fails with `unreachable`. Nor does a pillar or bridge place scaffold where a kept block is, such as in a cell's water or where a lost block of it stood. It does not keep the script's own actions from them: `mine` still breaks a kept block.
 
-Each call replaces the blocks the last kept. They stay kept until the script ends, stops or fails; a script resumed after a reload keeps none, so a long-running script, such as a farm, calls it again now and then. [`lib.cellfarm`](../modules/lib/cellfarm.md) keeps the blocks its spec's `kept` gives of each built cell, such as a cocoa farm's logs.
+Each call replaces the blocks the last kept. They stay kept until the script ends, stops or fails; a script resumed after a reload keeps none, so a long-running script, such as a farm, calls it again when it starts and now and then. [`lib.cellfarm`](../modules/lib/cellfarm.md) keeps the blocks its spec's `kept` gives of each built cell, such as a cocoa farm's logs or a crop farm's soil and water, when it starts and each round.
 
 ## Examples
 
