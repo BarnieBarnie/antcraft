@@ -1220,4 +1220,31 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, run, List.of("antcraft:ant_bot protected", "minecraft:cow protected", "minecraft:player protected",
 			"minecraft:wolf protected"));
 	}
+
+	/**
+	 * A bot spawned in the air with a creeper's fuse lit beside it plans its way off while it falls, from the block it
+	 * lands on, rather than lose its first ticks to no path: vanilla navigation plans only on the ground, and the goal
+	 * then waited 4 ticks to plan again, of the fuse's 30 (#901).
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 10)
+	public void aBotSpawnedInTheAirBacksOffALitCreeperWhileItFalls(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1.5, 12.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(14.5, 1, 12.5));
+		creeper.setTarget(bot);
+		creeper.setSwellDir(1);
+		// Struck it just now: the weapon is not ready, so the bot backs off rather than step in.
+		bot.setLastHurtMob(creeper);
+		boolean[] landed = {false};
+		helper.onEachTick(() -> {
+			if (bot.getNavigation().getPath() == null && landed[0]) {
+				helper.fail("no path on tick " + helper.getTick() + ", landed the tick before");
+			}
+			landed[0] |= bot.onGround();
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(!bot.onGround(), "landed with no path yet");
+			helper.assertTrue(bot.getNavigation().getPath() != null, "no path yet, at y " + (bot.getY() - helper.absoluteVec(Vec3.ZERO).y));
+		});
+	}
 }

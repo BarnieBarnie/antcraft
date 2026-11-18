@@ -62,6 +62,8 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
@@ -81,6 +83,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -200,6 +203,46 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 */
 	public <T extends Entity> List<T> entitiesNear(Class<T> type, AABB box, Predicate<? super T> test) {
 		return this.level().getEntitiesOfClass(type, box, test);
+	}
+
+	/**
+	 * Vanilla's ground navigation, which also plans while the bot falls a short way, as just spawned or mid-jump, from
+	 * the block it lands on: vanilla plans only on the ground, so a bot spawned with a creeper's fuse lit beside it got no
+	 * path for its first ticks (#901). Following a path in the air stays vanilla's.
+	 */
+	@Override
+	protected PathNavigation createNavigation(Level level) {
+		return new GroundPathNavigation(this, level) {
+			private boolean planning;
+
+			@Override
+			protected @Nullable Path createPath(Set<BlockPos> targets, int regionOffset, boolean offsetUpward, int reachRange, float followRange) {
+				this.planning = true;
+				try {
+					return super.createPath(targets, regionOffset, offsetUpward, reachRange, followRange);
+				} finally {
+					this.planning = false;
+				}
+			}
+
+			@Override
+			protected boolean canUpdatePath() {
+				return super.canUpdatePath() || this.planning && AntBot.this.landsWithin(PathFollower.MAX_DROP);
+			}
+		};
+	}
+
+	/** Whether a block to stand on, or a fluid, is within {@code drop} blocks under the bot's feet. */
+	private boolean landsWithin(int drop) {
+		BlockPos feet = this.blockPosition();
+		for (int down = 0; down <= drop; down++) {
+			BlockPos below = feet.below(down + 1);
+			BlockState state = this.level().getBlockState(below);
+			if (!state.getCollisionShape(this.level(), below).isEmpty() || !state.getFluidState().isEmpty()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Override
