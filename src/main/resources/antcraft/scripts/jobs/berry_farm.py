@@ -102,7 +102,7 @@ def tend(boxes, told, radius=32):
 
 def spec(radius=32):
     """The lib.cellfarm spec of the berry farm."""
-    return {"size": (3, 1), "categories": {"berries": [BERRIES]}, "corners": "berry_farms", "keep": KEEP,
+    return {"size": (3, 1), "categories": {"berries": [BERRIES]}, "corners": "berry_farms", "keep": KEEP, "hurts": True,
             "materials": lambda: {BERRIES: 3}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": lambda low, high: build_cell(low, high, radius),
             "ripe": ripe, "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),

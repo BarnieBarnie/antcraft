@@ -20,7 +20,8 @@
 #   switch(): a farm to go on with instead, its result, or None, kept(low, high): the cell's blocks no walk may break,
 #   such as a cocoa cell's logs (keep_cells, #856), learn(ticks, n): n (> 0) harvests took ticks (else
 #   lib.cellfarm.learn keeps them under the farm's name, for most, #844), full(boxes,
-#   told): what a full farm does each round, idle(boxes): what a round that harvested nothing does before its wait.
+#   told): what a full farm does each round, idle(boxes): what a round that harvested nothing does before its wait,
+#   hurts: whether the cells hurt, so the bot waits clear of them (corner_spot, #872).
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -205,20 +206,22 @@ def visit(f, b):
         goto(b[0].up(), 2)
 
 
-def corner(name, told):
+def corner(name, told, clear=False):
     """Walks the bot into the chunk of the farm name's corner, cell 0's low corner, where it stands elsewhere (#814), so
-    the cells ticking counts get random ticks while it waits: to corner_spot. A walk that fails is said once a reason
-    (tell, into told): one to a spot it could never reach went unnoticed, and left the bot by a cactus (#846, #851)."""
+    the cells ticking counts get random ticks while it waits: to corner_spot, clear of the cells where clear (#872). A
+    walk that fails is said once a reason (tell, into told): one to a spot it could never reach went unnoticed, and left
+    the bot by a cactus (#846, #851)."""
     low, high = lib.cells.cell(name, 0)
     p = pos()
     if p.x // 16 == low.x // 16 and p.z // 16 == low.z // 16:
         return
-    r = goto(corner_spot(low, high))
+    # Two arguments where not clear: tests stub corner_spot so.
+    r = goto(corner_spot(low, high, True) if clear else corner_spot(low, high))
     if not r:
         tell(told, f"corner: {r.reason}")
 
 
-def corner_spot(low, high):
+def corner_spot(low, high, clear=False):
     """Where corner sends the bot, over the floor by cell 0's low corner low, the cell's floor reaching to high: the first
     in low's chunk and off the cell of the blocks diagonal into the cell from low, then a block back on z, on x, then
     west of the depot's first chest, a block back on x and two on z, else diagonal out of the cell's far corner. Kept in
@@ -226,13 +229,34 @@ def corner_spot(low, high):
     (#845); into the cell, on a cell deeper than a row, it was sent onto a cactus farm's second cactus, a walk that
     cannot end, which left it by the cactus (#846). A block back on both, diagonal to low, with the corner at chunk-local
     (15, 15), a berry farm's bot ended its walk over the edge of its block toward the bush at low (#854); west of the
-    depot touches no cell block."""
-    for x, z in [(low.x + 1, low.z + 1), (low.x + 1, low.z - 1), (low.x - 1, low.z + 1), (low.x - 1, low.z - 2),
-                 (high.x + 1, high.z + 1)]:
+    depot touches no cell block. Where clear, as for a farm whose cells hurt (the spec's hurts), the first of those in
+    low's chunk that touches no block of any cell, not even diagonally, comes before them all: the block diagonal into
+    the gap after cell 0 sat on the path by a berry farm's middle bush, and its walk could end over the edge of its
+    block toward one (#872). Other farms keep their spots: with the clear one, stem farm tests lost stems."""
+    spots = [(low.x + 1, low.z + 1), (low.x + 1, low.z - 1), (low.x - 1, low.z + 1), (low.x - 1, low.z - 2),
+             (high.x + 1, high.z + 1)]
+    # ponytail: no spot north of the depot: it left the test areas of farms laid out 2 blocks in (#854).
+    if clear:
+        for x, z in spots:
+            if x // 16 == low.x // 16 and z // 16 == low.z // 16 and not by_cells(x, z, low, high):
+                return Pos(x, low.y + 1, z)
+    for x, z in spots:
         on_cell = low.x <= x <= high.x and low.z <= z <= high.z
         if x // 16 == low.x // 16 and z // 16 == low.z // 16 and not on_cell:
             break
     return Pos(x, low.y + 1, z)
+
+
+def by_cells(x, z, low, high):
+    """Whether the block at x, z is on or touches, diagonally too, a block of a cell of the farm whose cell 0 is low to
+    high, laid out as run lays it (lib.cells.layout's row of 4 and gap of 1), any number of rows."""
+    w, d = high.x - low.x + 1, high.z - low.z + 1
+    for dx in [-1, 0, 1]:
+        for dz in [-1, 0, 1]:
+            rx, rz = x + dx - low.x, z + dz - low.z
+            if 0 <= rx < 4 * (w + 1) and rz >= 0 and rx % (w + 1) < w and rz % (d + 1) < d:
+                return True
+    return False
 
 
 def farm(f, name, size, radius):
@@ -335,7 +359,11 @@ def farm(f, name, size, radius):
         if not harvested:
             if "idle" in f:
                 f["idle"](boxes)
-            corner(name, told)
+            # Two arguments where the cells do not hurt: tests stub corner so (#881).
+            if f.get("hurts", False):
+                corner(name, told, True)
+            else:
+                corner(name, told)
         lib.trees.take_back()
         if not harvested:
             wait(WAIT)

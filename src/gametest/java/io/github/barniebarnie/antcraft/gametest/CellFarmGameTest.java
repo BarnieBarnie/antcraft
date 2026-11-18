@@ -288,4 +288,38 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True")),
 			"said " + BotScripts.log(bot, Output.Level.PRINT)));
 	}
+
+	/**
+	 * A berry farm's corner spot touches no bush of any cell, not even diagonally, wherever such a spot is in the
+	 * corner's chunk (#872): the block diagonal into the gap after cell 0 sat on the path beside its middle bush and the
+	 * next row's, and the corner walk could end over the edge of its block toward one. Here the farm's first eight cells
+	 * are laid out from each corner and whether the spot, with the farm's spec's hurts, is two blocks or more off every
+	 * one of them is said.
+	 */
+	// Measured: passes at tick 8 (red: False for the corners at (1, 0, 3) and (5, 0, 8), the spots Pos(2, 1, 4) and
+	// Pos(6, 1, 9) on the path by cell 0's middle bush).
+	@GameTest(maxTicks = 20)
+	public void aBerryFarmsCornerSpotTouchesNoBushWhereOneCan(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			import lib.cells
+			import jobs.berry_farm
+			f = jobs.berry_farm.spec()
+			size = f["size"]
+			for low in [Pos(1, 0, 3), Pos(5, 0, 8), Pos(15, 0, 15)]:
+				name = f"test_farm_{low.x}"
+				lib.cells.layout(name, low, size)
+				s = lib.cellfarm.corner_spot(*lib.cells.cell(name, 0), f.get("hurts", False))
+				clear = True
+				for i in range(8):
+					a, b = lib.cells.cell(name, i)
+					clear = clear and max(a.x - s.x, s.x - b.x, a.z - s.z, s.z - b.z) >= 2
+				print(f"{low}: {clear} {s}")
+			""");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).size() == 3
+			&& BotScripts.log(bot, Output.Level.PRINT).stream().allMatch(l -> l.contains(": True")),
+			"said " + BotScripts.log(bot, Output.Level.PRINT)));
+	}
 }
