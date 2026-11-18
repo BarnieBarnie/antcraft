@@ -1752,6 +1752,24 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A birch tree, a crafting table and no oak (#933): oak slabs take oak planks, so get fails no_logs for the oak log once
+	 * the birch logs it got for "any log" did not do, rather than felling the birch tree round after round.
+	 */
+	// Measured: passes at tick 149.
+	@GameTest(maxTicks = 300)
+	public void oakSlabsWithOnlyBirchAroundFailForTheOakLog(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
+		helper.setBlock(2, 1, 5, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import get
+			r = get("oak_slab", 6)
+			print(r["ok"], r["reason"], r["missing"], count("birch_log") <= 2)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "False no_logs {'minecraft:oak_log': 1} True"));
+	}
+
+	/**
 	 * A birch leaves block at y 7 on a log on a stone column, out of reach from the floor (#654): the bot pillars with
 	 * its dirt to break it for a sapling, and takes the pillar back, so no dirt stands in the area after.
 	 */

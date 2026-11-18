@@ -175,9 +175,14 @@ def ore(item, block, estimate):
 
 # Raw items get gathers, by id ("#minecraft:logs" for any log). A script adds its own: SOURCES["minecraft:clay_ball"] =
 # Source(my_clay, tool="shovel", tier="hand"). ponytail: the estimates are rough guesses of mining plus walking.
+def logs_of(kind):
+    """A Source of the logs kind selects (LOGS: any) from trees, by lib.trees.logs."""
+    return Source(lambda n, radius: lib.trees.logs(n, radius, kind), "axe", "hand",
+                  lib.cost.BREAK["wood"]["stone"] + 8 * lib.cost.WALK, near=kind)
+
+
 SOURCES = {
-    LOGS: Source(lambda n, radius: lib.trees.logs(n, radius), "axe", "hand", lib.cost.BREAK["wood"]["stone"] + 8 * lib.cost.WALK,
-                 near=LOGS),
+    LOGS: logs_of(LOGS),
     COBBLESTONE: Source(lib.dig.stone, "pickaxe", None, lib.cost.BREAK["stone"]["wooden"] + 2 * lib.cost.WALK),
     "minecraft:dirt": Source(dig_up("minecraft:dirt"), "shovel", "hand", lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK,
                              near="minecraft:dirt"),
@@ -385,6 +390,8 @@ def resolve(item, n, radius):
     if item.startswith("#"):
         return result("no_recipe", None, {item: n - count(item)})
     tried = []
+    # The logs got as any log (key): one the plan still asks for after that, the recipe takes only that kind (#933).
+    widened = []
     start = by_stations()
     for _ in range(ROUNDS):
         p = plan_by(start, item, n)
@@ -413,7 +420,12 @@ def resolve(item, n, radius):
             lib.craft.craft_here("minecraft:charcoal", count("minecraft:charcoal") + logs * 3 // 5)
             continue
         for raw, k in p["gather"].items():
-            r = get(raw, count(key(raw)) + k, radius)
+            if raw in widened:
+                r = gather(logs_of(raw), k, radius)
+            else:
+                if key(raw) == LOGS and raw != LOGS:
+                    widened.append(raw)
+                r = get(raw, count(key(raw)) + k, radius)
             if not r["ok"]:
                 return r
     back_to(start)
