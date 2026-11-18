@@ -17,10 +17,11 @@ What the bot still has to gather, and what to craft and smelt from it, to make `
 
 ## Returns
 
-A dict with five keys:
+A dict with six keys:
 
 - `"gather"`: a dict of raw item id to count, what the bot must gather before it can make `item`, given what it carries, its hand included. `{}` when it carries all it needs.
 - `"crafts"`: a list of steps in order, ingredients before what they make, each a tuple `(item, n, how)`: the item id, how many the step makes (a whole number of recipe outputs, so four planks from one log) and `"craft"` or `"smelt"`, so a script can run each one with [`craft`](craft.md) or [`smelt`](smelt.md). `[]` when the bot carries `n` of `item` already.
+- `"uses"`: for each step of `"crafts"`, in the same order, a dict of the item ids it takes to how many: where an ingredient may be any of several items, those the plan picked. Pass them to `craft`'s `use` and `smelt` them, so a step does not take what the plan keeps for a later one: oak signs from six oak and two birch planks make the sticks of the birch planks, where `craft` alone would take the oak planks it has most of (#935).
 - `"table"`: `True` where a `"craft"` step needs the 3x3 grid of a crafting table, `False` where every recipe fits the bot's own 2x2 grid.
 - `"inputs"`: for each `"smelt"` step, what it smelts, as `smelt` takes it: the step's item id to the list of item ids any of which smelts into it. `smelt` takes the input, not what it makes.
 - `"fuel"`: for each `"smelt"` step, what the plan burns for it, as `smelt`'s `fuel` takes it: the step's item id to the list of fuel item ids. Pass it on, so `smelt` does not burn coal the plan keeps for a later step.
@@ -29,6 +30,7 @@ A dict with five keys:
 needs("stone_pickaxe")
 {"gather": {"minecraft:cobblestone": 3, "minecraft:oak_log": 1},
  "crafts": [("minecraft:oak_planks", 4, "craft"), ("minecraft:stick", 4, "craft"), ("minecraft:stone_pickaxe", 1, "craft")],
+ "uses": [{"minecraft:oak_log": 1}, {"minecraft:oak_planks": 2}, {"minecraft:cobblestone": 3, "minecraft:stick": 2}],
  "inputs": {}, "fuel": {}, "table": True}
 ```
 
@@ -38,6 +40,7 @@ With `also`, the steps of those items come first and use up carried items before
 needs("wooden_pickaxe", also=["crafting_table"])
 {"gather": {"minecraft:oak_log": 1},
  "crafts": [("minecraft:crafting_table", 1, "craft"), ("minecraft:oak_planks", 4, "craft"), ("minecraft:wooden_pickaxe", 1, "craft")],
+ "uses": [{"minecraft:oak_planks": 4}, {"minecraft:oak_log": 1}, {"minecraft:oak_planks": 3, "minecraft:stick": 2}],
  "inputs": {}, "fuel": {}, "table": True}
 ```
 
@@ -47,6 +50,7 @@ With `extra`, those items are used as if carried, so a plan can count what a che
 needs("wooden_pickaxe", extra={"stick": 4})
 {"gather": {},
  "crafts": [("minecraft:oak_planks", 4, "craft"), ("minecraft:wooden_pickaxe", 1, "craft")],
+ "uses": [{"minecraft:oak_log": 1}, {"minecraft:oak_planks": 3, "minecraft:stick": 2}],
  "inputs": {}, "fuel": {}, "table": True}
 ```
 
@@ -76,11 +80,12 @@ if r["gather"]:
     say("still need " + str(r["gather"]))
 else:
     table = find_nearest("crafting_table", radius=16)
-    for item, n, how in r["crafts"]:
+    for (item, n, how), uses in zip(r["crafts"], r["uses"]):
         if how == "craft":
-            craft(item, n, table=table)
+            craft(item, n, table=table, use=list(uses))
         else:
-            smelt(r["inputs"][item], n, fuel=r["fuel"][item])
+            for what, m in uses.items():
+                smelt(what, m, fuel=r["fuel"][item])
 ```
 
 ## See also

@@ -99,6 +99,15 @@ class NeedsTest {
 		assertEquals(2, crafts.items.size());
 	}
 
+	/** uses lists, for each step of crafts, the items it takes and how many (#935). */
+	@Test
+	void usesSaysWhatEachStepTakes() {
+		PyDict needs = needs(Items.STONE_PICKAXE, 1, Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 3));
+
+		assertEquals("[{'minecraft:oak_log': 1}, {'minecraft:oak_planks': 2}, {'minecraft:cobblestone': 3, 'minecraft:stick': 2}]",
+			Values.repr(needs.get("uses")));
+	}
+
 	@Test
 	void tableSaysWhetherAStepNeedsACraftingTable() {
 		assertEquals(true, needs(Items.STONE_PICKAXE, 1, Map.of()).get("table"));

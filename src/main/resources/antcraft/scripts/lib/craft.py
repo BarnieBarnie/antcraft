@@ -27,43 +27,32 @@ MADE = ["diamond", "iron", "copper", "stone", "wooden"]
 
 def craft_all(item, n=1, table=None, furnace=None):
     """Makes n of item from what the bot carries: each step needs(item, n) lists, crafted at table or smelted in furnace
-    (None: one within reach, else one put down with smelt_here). A smelting step smelts the input the plan picked (most).
-    Gives result(): ok, missing_ingredients with missing, the raw items it lacks, before it crafts anything, or the
+    (None: one within reach, else one put down with smelt_here). Each step takes the items the plan uses for it (its
+    uses, #935): a craft step those first of interchangeable items (craft's use), a smelting step smelts those. Gives result(): ok, missing_ingredients with missing, the raw items it lacks, before it crafts anything, or the
     reason of the first step that failed, for missing_ingredients with what it lacked (lacking)."""
     plan = needs(item, n)
     if plan["gather"]:
         return result("missing_ingredients", None, plan["gather"])
-    for step, k, how in plan["crafts"]:
+    for (step, k, how), uses in zip(plan["crafts"], plan["uses"]):
         if how == "craft":
-            r = craft(step, k, table=table)
+            r = craft(step, k, table=table, use=list(uses))
             if not r:
                 return lacking(result(r.reason), item, n, step, k)
-        else:
-            # The fuel the plan burns for the step, so coal it keeps for a later step is not burnt (#577).
-            fuel = plan["fuel"].get(step) or None
-            while k > 0:
+            continue
+        # The fuel the plan burns for the step, so coal it keeps for a later step is not burnt (#577).
+        fuel = plan["fuel"].get(step) or None
+        # Each input the plan smelts, as many as it smelts of it, not the one in the first slot (#925).
+        for what, m in uses.items():
+            while m > 0:
                 # ponytail: smelt_here puts a furnace down and takes it back for each stack, fine for tools and armour.
-                what = most(plan["inputs"][step])
                 if furnace is None:
-                    r = smelt_here(what, min(k, STACK), fuel=fuel)
+                    r = smelt_here(what, min(m, STACK), fuel=fuel)
                 else:
-                    r = result(smelt(what, min(k, STACK), furnace=furnace, fuel=fuel).reason)
+                    r = result(smelt(what, min(m, STACK), furnace=furnace, fuel=fuel).reason)
                 if not r["ok"]:
                     return lacking(r, item, n, step, k)
-                k -= min(k, STACK)
+                m -= min(m, STACK)
     return result()
-
-
-def most(items):
-    """Of items, the one the bot carries most of, the first on a tie, as the planner takes one of interchangeable items
-    (#925): smelt would load the first slot's, maybe one the plan keeps for a later step or burns. items where it
-    carries none."""
-    carried = dict([(s.item, count(s.item)) for s in inventory() if s.item in items])
-    best = None
-    for i in items:
-        if carried.get(i, 0) > carried.get(best, 0):
-            best = i
-    return best or items
 
 
 def lacking(r, item, n, step, k):
@@ -152,19 +141,13 @@ def craft_here(item, n=1):
 
 
 def craft_table(p, item, n):
-    """Crafts the crafting table plan(item, n) p plans first, by its steps up to the table, and the table of the items
-    carried before those steps first, as the plan takes carried items before it makes more (#930): the planks a step
-    made for it would be what the bot has most of, maybe those the plan keeps for item."""
-    carried = dict([(s.item, 0) for s in inventory()])
-    for s in inventory():
-        carried[s.item] += s.count
-    use = sorted(carried, key=lambda i: -carried[i])
-    for step, k, how in p["crafts"]:
-        table = step == "minecraft:crafting_table"
-        r = craft(step, k, use=use) if table else craft(step, k)
+    """Crafts the crafting table plan(item, n) p plans first, by its steps up to the table, each of the items the plan
+    uses for it (#930, #935): of what the bot has most, the table might take planks the plan keeps for item."""
+    for (step, k, how), uses in zip(p["crafts"], p["uses"]):
+        r = craft(step, k, use=list(uses))
         if not r:
             return lacking(result(r.reason), item, n, step, k)
-        if table:
+        if step == "minecraft:crafting_table":
             return result()
     return result()
 

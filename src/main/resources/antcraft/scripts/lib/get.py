@@ -656,8 +656,8 @@ def planned(item, n, p, tools):
         return lib.craft.plan(item, n, p)
     gather = dict(p["gather"])
     gather[LOG] = gather.get(LOG, 0) + 1
-    return {"gather": gather, "crafts": t["crafts"] + p["crafts"], "inputs": p["inputs"], "fuel": p["fuel"],
-            "table": True, "also": ["crafting_table"], "no_tool": False}
+    return {"gather": gather, "crafts": t["crafts"] + p["crafts"], "uses": t["uses"] + p["uses"], "inputs": p["inputs"],
+            "fuel": p["fuel"], "table": True, "also": ["crafting_table"], "no_tool": False}
 
 
 def least_make(p, radius, tools):

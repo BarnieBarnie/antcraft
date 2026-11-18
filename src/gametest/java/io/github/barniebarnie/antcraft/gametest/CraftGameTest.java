@@ -407,6 +407,19 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			.replace("print(", "print(s.ok, "), List.of("True True None {} 6 4 0 2"));
 	}
 
+	/**
+	 * Oak signs from six oak and two birch planks (#935): the plan makes the sign of the oak planks and its sticks of the
+	 * birch ones, so the sticks step takes the birch planks it uses, not the oak planks it has most of.
+	 */
+	@GameTest(maxTicks = 20)
+	public void craftAllCraftsEachStepFromTheItemsThePlanUses(GameTestHelper helper) {
+		helper.setBlock(5, 1, 4, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 6));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 2));
+		expect(helper, bot, craftAll("'oak_sign'", "oak_sign", "stick", "oak_planks", "birch_planks"), List.of("True None {} 3 3 0 0"));
+	}
+
 	/** Nothing to smelt (#925): smelt_here's missing_ingredients names the item. */
 	@GameTest(maxTicks = 20)
 	public void smeltHereWithNothingToSmeltNamesIt(GameTestHelper helper) {

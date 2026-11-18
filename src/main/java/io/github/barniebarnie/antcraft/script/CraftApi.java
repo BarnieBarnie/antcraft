@@ -161,7 +161,7 @@ public final class CraftApi {
 
 	/**
 	 * A plan as {@code needs} returns it: {@code gather}, what the plan gathers or misses, by id, and {@code crafts}, its
-	 * steps as {@code (item, n, how)} tuples, and {@code table}, whether a crafting step needs a crafting table's 3x3 grid.
+	 * steps as {@code (item, n, how)} tuples, {@code uses}, for each step the items it takes by id, and {@code table}, whether a crafting step needs a crafting table's 3x3 grid.
 	 */
 	static <I> PyDict needs(TaskPlanner.Plan<I> plan, Function<I, String> id) {
 		Map<String, Long> gather = new LinkedHashMap<>();
@@ -170,6 +170,7 @@ public final class CraftApi {
 		PyDict gatherDict = new PyDict();
 		gather.forEach(gatherDict::put);
 		List<Object> crafts = new ArrayList<>();
+		List<Object> uses = new ArrayList<>();
 		PyDict inputs = new PyDict();
 		PyDict fuel = new PyDict();
 		boolean table = false;
@@ -177,6 +178,10 @@ public final class CraftApi {
 			TaskPlanner.Recipe<I> recipe = craft.recipe();
 			table |= !recipe.smelting() && recipe.large();
 			crafts.add(PyTuple.of(id.apply(recipe.output()), (long) craft.times() * recipe.count(), recipe.smelting() ? "smelt" : "craft"));
+			// What the step takes, so craft(use=...) and smelt take what the plan picked of interchangeable items (#935).
+			PyDict used = new PyDict();
+			craft.uses().forEach((item, count) -> used.put(id.apply(item), (long) count));
+			uses.add(used);
 			if (recipe.smelting()) {
 				// What smelt() takes: the input, any of the recipe's one ingredient.
 				List<Object> options = new ArrayList<>();
@@ -191,6 +196,7 @@ public final class CraftApi {
 		PyDict needs = new PyDict();
 		needs.put("gather", gatherDict);
 		needs.put("crafts", new PyList(crafts));
+		needs.put("uses", new PyList(uses));
 		needs.put("inputs", inputs);
 		needs.put("fuel", fuel);
 		needs.put("table", table);

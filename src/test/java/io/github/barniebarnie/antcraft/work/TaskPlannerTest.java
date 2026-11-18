@@ -76,6 +76,33 @@ class TaskPlannerTest {
 		assertTrue(lookups[0] > after, "not searched for another count");
 	}
 
+	/**
+	 * Each step says what it uses (#935): a sign of six oak planks and a stick, from six oak and two birch planks, makes
+	 * its sticks of the birch planks, though oak is what there is most of, whichever ingredient the recipe lists first.
+	 */
+	@Test
+	void eachStepSaysWhichItemsItUses() {
+		TaskPlanner.RecipeBook<String> book = item -> item.equals("oak_sign")
+			? List.of(recipe("oak_sign", 3, Map.of(Set.of("oak_planks"), 6, Set.of("stick"), 1)))
+			: BOOK.recipesFor(item);
+		TaskPlanner.Plan<String> plan = TaskPlanner.plan("oak_sign", 3, new HashMap<>(Map.of("oak_planks", 6, "birch_planks", 2)), book,
+			GATHERABLE::contains);
+
+		assertEquals(List.of("stick", "oak_sign"), craftOrder(plan));
+		assertEquals(Map.of("birch_planks", 2), plan.crafts().get(0).uses());
+		assertEquals(Map.of("oak_planks", 6, "stick", 1), plan.crafts().get(1).uses());
+	}
+
+	/** A step uses an item it makes as well as one it carries: planks from a log beside one carried plank. */
+	@Test
+	void aStepUsesWhatItTakesAndWhatAnEarlierStepMakes() {
+		TaskPlanner.Plan<String> plan = plan("stick", 4, Map.of("oak_planks", 1, "oak_log", 1));
+
+		assertEquals(List.of("oak_planks", "stick"), craftOrder(plan));
+		assertEquals(Map.of("oak_log", 1), plan.crafts().get(0).uses());
+		assertEquals(Map.of("oak_planks", 2), plan.crafts().get(1).uses());
+	}
+
 	@Test
 	void nothingToDoWhenInStock() {
 		TaskPlanner.Plan<String> plan = plan("stick", 4, Map.of("stick", 10));

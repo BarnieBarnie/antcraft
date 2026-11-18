@@ -38,10 +38,18 @@ public final class TaskPlanner {
 		}
 	}
 
-	/** @param fuel what the furnace burns for a smelting step (empty for crafting) */
-	public record Craft<I>(Recipe<I> recipe, int times, Map<I, Integer> fuel) {
+	/**
+	 * @param fuel what the furnace burns for a smelting step (empty for crafting)
+	 * @param uses the ingredients the step takes, of interchangeable items those the plan picked, in the order it took
+	 *     them (#935)
+	 */
+	public record Craft<I>(Recipe<I> recipe, int times, Map<I, Integer> fuel, Map<I, Integer> uses) {
 		public Craft(Recipe<I> recipe, int times) {
 			this(recipe, times, Map.of());
+		}
+
+		public Craft(Recipe<I> recipe, int times, Map<I, Integer> fuel) {
+			this(recipe, times, fuel, Map.of());
 		}
 	}
 
@@ -465,7 +473,8 @@ public final class TaskPlanner {
 			boolean conversions = !this.isConversion(recipe);
 			List<Map.Entry<Set<I>, Integer>> ingredients = new ArrayList<>(recipe.ingredients().entrySet());
 			State<I> before = ingredients.size() > 1 ? state.copy() : null;
-			this.needAll(state, ingredients, times, innerPath, conversions);
+			Map<I, Integer> uses = new LinkedHashMap<>();
+			this.needAll(state, ingredients, times, innerPath, conversions, uses);
 			if (state.pruned) {
 				return;
 			}
@@ -478,13 +487,15 @@ public final class TaskPlanner {
 				order.addFirst(order.remove(first));
 				State<I> trial = before.copy();
 				trial.boundBy(state.score());
-				this.needAll(trial, order, times, innerPath, conversions);
+				Map<I, Integer> trialUses = new LinkedHashMap<>();
+				this.needAll(trial, order, times, innerPath, conversions, trialUses);
 				if (!trial.pruned && !trial.cycle) {
 					state.assign(trial);
+					uses = trialUses;
 				}
 			}
 			Map<I, Integer> fuel = recipe.smelting() ? this.fuel(state, times * recipe.count(), innerPath) : Map.of();
-			state.crafts.add(new Craft<>(recipe, times, fuel));
+			state.crafts.add(new Craft<>(recipe, times, fuel, Collections.unmodifiableMap(uses)));
 			int leftover = times * recipe.count() - wanted;
 			if (leftover > 0) {
 				state.stock.add(recipe.output(), leftover);
@@ -648,10 +659,10 @@ public final class TaskPlanner {
 			});
 		}
 
-		/** Needs each ingredient {@code times} over, in the given order, until the plan is abandoned. */
-		void needAll(State<I> state, List<Map.Entry<Set<I>, Integer>> ingredients, int times, Set<I> path, boolean conversions) {
+		/** Needs each ingredient {@code times} over, in the given order, until the plan is abandoned; adds the items used to {@code uses}. */
+		void needAll(State<I> state, List<Map.Entry<Set<I>, Integer>> ingredients, int times, Set<I> path, boolean conversions, Map<I, Integer> uses) {
 			for (Map.Entry<Set<I>, Integer> ingredient : ingredients) {
-				this.needAny(state, ingredient.getKey(), ingredient.getValue() * times, path, conversions);
+				this.needAny(state, ingredient.getKey(), ingredient.getValue() * times, path, conversions, uses);
 				if (state.pruned) {
 					return;
 				}
@@ -664,8 +675,8 @@ public final class TaskPlanner {
 			return score[0] + score[1];
 		}
 
-		/** Needs {@code count} items, any mix of {@code options}. */
-		void needAny(State<I> state, Set<I> options, int count, Set<I> path, boolean conversions) {
+		/** Needs {@code count} items, any mix of {@code options}; adds those it picked to {@code uses}. */
+		void needAny(State<I> state, Set<I> options, int count, Set<I> path, boolean conversions, Map<I, Integer> uses) {
 			if (state.pruned) {
 				return;
 			}
@@ -673,13 +684,18 @@ public final class TaskPlanner {
 			List<I> byStock = new ArrayList<>(options);
 			byStock.sort(Comparator.comparingInt((I option) -> state.stock.get(option)).reversed());
 			for (I option : byStock) {
-				remaining -= state.take(option, remaining);
+				int taken = state.take(option, remaining);
+				if (taken > 0) {
+					uses.merge(option, taken, Integer::sum);
+					remaining -= taken;
+				}
 			}
 			if (remaining == 0) {
 				return;
 			}
 
 			State<I> best = null;
+			I picked = null;
 			for (I option : byStock) {
 				if (best != null && this.exhausted()) {
 					break;
@@ -692,9 +708,11 @@ public final class TaskPlanner {
 				if (best == null || (best.pruned && !trial.pruned) || (!trial.pruned && ((best.cycle && !trial.cycle)
 					|| (best.cycle == trial.cycle && BY_SCORE.compare(trial.score(), best.score()) < 0)))) {
 					best = trial;
+					picked = option;
 				}
 			}
 			state.assign(best);
+			uses.merge(picked, remaining, Integer::sum);
 		}
 	}
 }
