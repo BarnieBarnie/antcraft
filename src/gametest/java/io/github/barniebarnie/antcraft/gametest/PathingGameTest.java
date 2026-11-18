@@ -322,6 +322,35 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		succeedWhenAt(helper, bot, new BlockPos(4, 1, 6));
 	}
 
+	/**
+	 * A goto that ends in a block beside a sweet berry bush leaves the bot within 0.2 of the block's middle, not at the
+	 * edge it entered by, its body over the side toward the bush (#873, #854 saw x 0.76 by a bush).
+	 */
+	// Measured: passes at tick 19 (red: goto ended at (4.16, 1, 2.5) on tick 17).
+	@GameTest(maxTicks = 40)
+	public void aGotoBesideABushEndsInTheMiddleOfItsBlock(GameTestHelper helper) {
+		room(helper, 0);
+		GameTests.ripeBushes(helper, new BlockPos(4, 1, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 2);
+		BlockPos goal = helper.absolutePos(new BlockPos(4, 1, 2));
+		ScriptRun run = BotScripts.run(bot, "goto((%d, %d, %d))\nwhile True:\n    wait(1000)\n".formatted(goal.getX(), goal.getY(), goal.getZ()));
+
+		boolean[] walked = new boolean[1];
+		Vec3[] arrived = new Vec3[1];
+		helper.onEachTick(() -> {
+			if (run.walking()) {
+				walked[0] = true;
+			} else if (walked[0] && arrived[0] == null) {
+				arrived[0] = bot.position();
+				Vec3 off = arrived[0].subtract(Vec3.atBottomCenterOf(goal));
+				if (!bot.blockPosition().equals(goal) || off.horizontalDistance() > 0.2) {
+					helper.fail("goto ended at " + TestPositions.relative(helper, arrived[0]));
+				}
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(arrived[0] != null, "still walking, at " + TestPositions.relative(helper, bot.position())));
+	}
+
 	@GameTest(maxTicks = 150)
 	public void walksRoundIronBarsRatherThanThroughThem(GameTestHelper helper) {
 		room(helper, 0);

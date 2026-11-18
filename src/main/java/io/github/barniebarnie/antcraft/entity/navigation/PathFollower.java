@@ -74,7 +74,11 @@ public class PathFollower {
 	private static final int STEP_BASE_BUDGET = 60;
 	/** Extra ticks for a swim step: bots swim slowly, and bob up and down at the surface. */
 	private static final int SWIM_BUDGET = 60;
-	private static final double ARRIVED_DIST_SQR = 0.35 * 0.35;
+	private static final double ARRIVED_DIST = 0.35;
+	/** How near the middle of the goal's block a walk ends beside a hazard that hurts (#873). */
+	private static final double CENTRED_DIST = 0.2;
+	/** How long a walk that reached its goal beside a hazard tries for the middle before it ends anyway. */
+	private static final int CENTRING_TICKS = 20;
 	private static final double SPEED = 1.0;
 	/** How far away other bots' scaffolding is looked for, to keep paths from digging through it. */
 	private static final double KEEP_SCAN = 48;
@@ -90,6 +94,8 @@ public class PathFollower {
 	private int stepTicks;
 	private int stepBudget;
 	private int replansWithoutProgress;
+	/** Ticks spent stepping to the middle of the goal's block after reaching it (see {@link #CENTRED_DIST}). */
+	private int centring;
 
 	private final BlockBreaker breaker;
 	private boolean mayPlace = true;
@@ -149,6 +155,7 @@ public class PathFollower {
 		this.stop();
 		this.goal = goal;
 		this.replansWithoutProgress = 0;
+		this.centring = 0;
 		this.replan();
 	}
 
@@ -167,6 +174,13 @@ public class PathFollower {
 		}
 		BlockPos feet = feet(this.bot);
 		if (this.goal.isReached(feet) && (this.bot.onGround() || this.goal.mayEndAfloat() && this.bot.isInWater())) {
+			if (!this.within(feet, CENTRED_DIST) && this.centring++ < CENTRING_TICKS
+					&& hazardBeside(new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), Set.of()), feet)) {
+				// Entered the goal's block at its edge, its body over the side toward a hazard beside, such as a sweet berry
+				// bush (#873, #854): on to the middle first. Only there, as it makes the walk a few ticks longer.
+				this.moveTo(feet);
+				return Status.RUNNING;
+			}
 			this.stop();
 			return Status.ARRIVED;
 		}
@@ -605,9 +619,14 @@ public class PathFollower {
 	}
 
 	private boolean centered(BlockPos pos) {
+		return this.within(pos, ARRIVED_DIST);
+	}
+
+	/** Whether the bot is within {@code dist} of the middle of {@code pos}, across. */
+	private boolean within(BlockPos pos, double dist) {
 		double dx = this.bot.getX() - (pos.getX() + 0.5);
 		double dz = this.bot.getZ() - (pos.getZ() + 0.5);
-		return dx * dx + dz * dz <= ARRIVED_DIST_SQR;
+		return dx * dx + dz * dz <= dist * dist;
 	}
 
 	private void pillar(ServerLevel level, LevelWorldView world, Step step) {
