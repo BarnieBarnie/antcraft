@@ -187,7 +187,11 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 	 */
 	// Measured: passes at tick 290 to 454 (red: 4 adult cows of 4, no calf; breed fed no pair at the cap, as it counted
 	// the calves to come against it).
-	@GameTest(maxTicks = 900)
+	// Under load (#882; 40 copies beside the gather, dig, mine, tree farm and storage tests, 8 runs): passes at up to tick
+	// 619, and 2 of 320 failed at 900: there a cull's attack took 490 ticks, the bot not getting in reach of a cow in the
+	// crowd, or ended unreachable, so the surplus waited for the next round. It passes only once a cull has left 4 adults
+	// with the beef stored, before the next calf grows.
+	@GameTest(maxTicks = 1250)
 	public void atTheCapTheRanchBreedsAndCullsTheGrownSurplus(GameTestHelper helper) {
 		for (int x = 1; x <= 4; x++) {
 			animal(helper, EntityTypes.COW, x + 1, 6, false);
