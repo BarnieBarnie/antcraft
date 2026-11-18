@@ -999,6 +999,11 @@ public final class WorkApi {
 		private static final double GRAB = 1.0;
 		/** How much farther it reaches for an item lying in a block it cannot walk onto: from anywhere in the block beside it. */
 		private static final double REACH_IN = 0.5;
+		/**
+		 * How far below its feet it reaches for an item in a liquid it walked beside ({@link #beside}): the two blocks under
+		 * them, so also from scaffold over the liquid, where a walk of a cane farm's harvest left the bot (#904).
+		 */
+		private static final double REACH_DOWN = 2.0;
 
 		private final ScriptRun run;
 		private final AntBot bot;
@@ -1012,6 +1017,11 @@ public final class WorkApi {
 		private ScriptRun.@Nullable Action walk;
 		/** How often the bot got to the current goal without taking it: it walks right onto it the second time. */
 		private int arrivals;
+		/**
+		 * Whether it walks beside the current goal rather than to it: an item in a liquid it found no way into, such as cane
+		 * fallen into a cane farm cell's water, which the farm keeps from scaffold (#869), so it reaches in (#904).
+		 */
+		private boolean beside;
 		/** How many of the items the bot carried when it started, to tell how many it took, also by walking over them. */
 		private final long before;
 		private long taken;
@@ -1090,6 +1100,7 @@ public final class WorkApi {
 				this.stopWalk();
 				this.goal = fitting.getFirst();
 				this.arrivals = 0;
+				this.beside = false;
 			}
 			if (this.walk == null) {
 				if (this.arrivals == 0 && this.goal instanceof ItemEntity dropped && !dropped.onGround() && !dropped.isInLiquid()) {
@@ -1097,12 +1108,16 @@ public final class WorkApi {
 					// it did over cane just cut, putting scaffold in place of the cane under it (#853). It lands first.
 					return false;
 				}
-				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && (dropped.hasPickUpDelay() || !dropped.onGround())) {
+				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && (dropped.hasPickUpDelay() || !dropped.onGround() && !this.beside)) {
 					return false; // next to it, waiting for it to land and for its pickup delay to end
 				}
-				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && this.inBlock(dropped)) {
+				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && (this.beside || this.inBlock(dropped))) {
 					// Lying in a block, such as bone meal in a composter: walking onto it would break the block (#817).
-					if (dropped.getBoundingBox().intersects(this.bot.getBoundingBox().inflate(GRAB + REACH_IN, 0.5, GRAB + REACH_IN))) {
+					AABB reach = this.bot.getBoundingBox().inflate(GRAB + REACH_IN, 0.5, GRAB + REACH_IN);
+					if (this.beside) {
+						reach = reach.expandTowards(0, 0.5 - REACH_DOWN, 0);
+					}
+					if (dropped.getBoundingBox().intersects(reach)) {
 						BotHands.collect(this.bot, dropped);
 						return false;
 					}
@@ -1113,7 +1128,7 @@ public final class WorkApi {
 					this.goal = null;
 					return false;
 				}
-				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(this.goal.blockPosition()), this.arrivals == 0 ? 1 : 0);
+				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(this.goal.blockPosition()), this.arrivals > 0 ? 0 : this.beside ? 2 : 1);
 			}
 			if (!this.walk.tick()) {
 				return false;
@@ -1122,6 +1137,8 @@ public final class WorkApi {
 			this.walk = null;
 			if (walked.ok()) {
 				this.arrivals++;
+			} else if (Result.UNREACHABLE.equals(walked.reason()) && !this.beside && this.goal.isInLiquid()) {
+				this.beside = true; // no way into the liquid: it walks to a block beside it and reaches in
 			} else if (Result.UNREACHABLE.equals(walked.reason())) {
 				this.unreachable.add(this.goal.getId());
 				this.goal = null;

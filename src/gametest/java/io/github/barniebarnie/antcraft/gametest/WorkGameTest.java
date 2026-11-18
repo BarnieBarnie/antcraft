@@ -844,6 +844,41 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "r = pick_up('sweet_berries', radius=3)\nprint(r.ok, r.value, count('sweet_berries'))\n", List.of("True 1 1"));
 	}
 
+	/**
+	 * Cane cut over a cane farm cell fell into the cell's water, in the floor between the cane, which the farm keeps from
+	 * the bot's walks (#869): it takes the cane from beside the water, where it left it floating there (#904), and
+	 * CaneFarmGameTest aSecondCellIsPlantedFromStoredCane found 1 cane in the depot, not 2, in 9 of 120 loaded runs.
+	 */
+	// Measured: passes at tick 12 (red: printed [False out_of_reach 0] on tick 11).
+	@GameTest(maxTicks = 30)
+	public void pickUpTakesAnItemFloatingInACellsWater(GameTestHelper helper) {
+		pickUpCaneInACellsWater(helper, helper.spawn(ModEntities.ANT_BOT, 4, 1, 6));
+	}
+
+	/** The same from the bot's scaffold over the water, where a walk of the harvest left the bot (#904). */
+	// Measured: passes at tick 5 (red: printed [False out_of_reach 0] on tick 6, reaching one block down).
+	@GameTest(maxTicks = 30)
+	public void pickUpTakesAnItemFloatingInACellsWaterFromScaffoldOverIt(GameTestHelper helper) {
+		helper.setBlock(4, 1, 4, Blocks.COBBLESTONE);
+		pickUpCaneInACellsWater(helper, helper.spawn(ModEntities.ANT_BOT, 4, 2, 4));
+	}
+
+	/** A cane cell along x at z 4, water at (4, 0, 4) with its floor kept, a cane resting at the water's bottom. */
+	private static void pickUpCaneInACellsWater(GameTestHelper helper, AntBot bot) {
+		helper.setBlock(3, 0, 4, Blocks.DIRT);
+		helper.setBlock(4, 0, 4, Blocks.WATER);
+		helper.setBlock(5, 0, 4, Blocks.DIRT);
+		helper.setBlock(3, 1, 4, Blocks.SUGAR_CANE);
+		helper.setBlock(5, 1, 4, Blocks.SUGAR_CANE);
+		ItemEntity cane = helper.spawnItem(Items.SUGAR_CANE, new BlockPos(4, 0, 4));
+		Vec3 in = helper.absoluteVec(new Vec3(4.125, 0, 4.125));
+		cane.setPos(in.x, in.y, in.z);
+		cane.setDeltaMovement(Vec3.ZERO);
+		expect(helper, bot, "keep_blocks([(Pos" + at(helper, 3, 0, 4) + ", Pos" + at(helper, 5, 0, 4) + ")])\n"
+				+ "r = pick_up('sugar_cane', radius=4)\nprint(r.ok, r.reason, count('sugar_cane'))\n", List.of("True None 1"),
+			() -> helper.assertBlockPresent(Blocks.WATER, 4, 0, 4));
+	}
+
 	// equip
 
 	@GameTest(maxTicks = 20)
