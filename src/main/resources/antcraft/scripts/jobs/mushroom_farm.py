@@ -41,6 +41,12 @@ HUGE = [STEM, "minecraft:brown_mushroom_block", "minecraft:red_mushroom_block"]
 TALL = 6
 # The scaffold the bot climbs to a cap with, from the chests: as many blocks as the cap is high over its mushroom (harvest).
 SCAFFOLD = "#antcraft:scaffold_blocks"
+# An axe from the chests fells a huge mushroom faster than the hand (#859); none is made (ensure_tool may start a long
+# chain of gets for it).
+AXES = "#minecraft:axes"
+# The rounds tend skips the chests at most after it found no bone meal there, and its backoff and skip (#859).
+BACKOFF = 16
+MISSED = {}
 # Kept on the bot, not stored: the crafting table lib.get makes a depot chest with, and the bone meal.
 KEEP = ["minecraft:crafting_table", BONE_MEAL]
 
@@ -130,13 +136,21 @@ def harvest(low, high, told, radius=32):
     the felling or mine that failed with at. The felling's one stand is in the stem's column, the head just under the
     cap's top, which reaches the whole cap: lib.trees.stands took some 170 ticks to work a cap of 50 blocks out, and its
     stands some 600 to fell it, against 300 from the one. The scaffold is as much as the stand's height takes: a fixed 8
-    left the bot short under a tall one's cap, walking there till it gave up (#852)."""
+    left the bot short under a tall one's cap, walking there till it gave up (#852). Where the bot and the chests have too
+    little, the huge mushroom is left standing and that said once. An axe from the chests where the bot carries none:
+    a cap 5 over the floor took some 270 ticks with a stone axe, 470 by hand (#859)."""
     for p in huge(low, high):
         blocks = mushroom_blocks(p)
         top = max([q.y for q in blocks])
         climb = top - p.y
         if count(SCAFFOLD) < climb:
             lib.stock.take_up_to(SCAFFOLD, climb, radius)
+        if count(SCAFFOLD) < climb:
+            # Left standing: short, the bot climbed what it had and left the cap half mined, its drops lying (#859).
+            lib.cellfarm.tell(told, f"harvest: short of scaffold, {climb} for the huge mushroom at {p}")
+            continue
+        if not count(AXES):
+            lib.stock.take_up_to(AXES, 1, radius)
         r = lib.trees.fell_whole(p, False, blocks, [Pos(p.x, top - 2, p.z)])
         if not r["ok"]:
             lib.cellfarm.tell(told, f"harvest: {r['reason']} at {r['at']}")
@@ -151,8 +165,8 @@ def harvest(low, high, told, radius=32):
 
 def room(p, m):
     """Whether a huge mushroom of m has room to grow from p: air up to TALL over it, round the stem as far as its cap
-    reaches (3 for a brown one, 2 for a red one). ponytail: one box, not the cap's shape; a huge mushroom taller than
-    TALL (1 in 12) finds no room and leaves the mushroom, as vanilla does."""
+    reaches (3 for a brown one, 2 for a red one). ponytail: one box, not the cap's shape, and only TALL high: vanilla
+    checks the room for the height it picks, so the tall kind (1 in 12) can still grow into what is over the box."""
     r = 3 if m == BROWN else 2
     for y in range(p.y + 1, p.y + TALL + 1):
         for x in range(p.x - r, p.x + r + 1):
@@ -172,9 +186,16 @@ def tend(boxes, told, radius=32):
                     lib.stock.take_up_to(m, 1, radius)
                 if count(m):
                     place(p, m)
-    # ponytail: a chest scan a round while the bot has no bone meal.
+    # After a miss the chests are skipped 1, 2, 4 rounds up to BACKOFF (#859), as lib.depot.add_chest does; found ends it.
+    # ponytail: in rounds, not ticks, and kept for the run only, not in memory.
     if not count(BONE_MEAL):
-        lib.stock.take_up_to(BONE_MEAL, 64, radius)
+        if MISSED.get("skip"):
+            MISSED["skip"] -= 1
+        elif lib.stock.take_up_to(BONE_MEAL, 64, radius)["ok"] or count(BONE_MEAL):
+            MISSED.clear()
+        else:
+            MISSED["backoff"] = min(BACKOFF, 2 * MISSED.get("backoff", 0) or 1)
+            MISSED["skip"] = MISSED["backoff"]
     for b in boxes:
         for p, m in kept(b[0], b[1]):
             if count(BONE_MEAL) and block(p).id == m and room(p, m):
