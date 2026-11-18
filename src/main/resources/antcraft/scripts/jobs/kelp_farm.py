@@ -1,7 +1,8 @@
 # A job: farms kelp in a pool of water until a player stops it, for dried kelp (food) and dried kelp blocks (fuel). Run
-# it as /antcraft bot run jobs.kelp_farm [x1 y1 z1 x2 y2 z2 [radius [dry]]]: the corners of the pool's floor, the blocks
-# kelp stands on (by default those of the last run), how far to look for kelp to plant (32 by default), and dry to smelt
-# the kelp to dried kelp and craft each 9 to a dried kelp block (#841). The pool is one
+# it as /antcraft bot run jobs.kelp_farm [x1 y1 z1 x2 y2 z2 [radius [dry [food]]]]: the corners of the pool's floor, the
+# blocks kelp stands on (by default those of the last run), how far to look for kelp to plant (32 by default), dry to
+# smelt the kelp to dried kelp and craft each 9 to a dried kelp block (#841), and food, how many dried kelp to keep as
+# food, uncrafted (0 by default; #858). The pool is one
 # already there, two deep or more: the bot works it from its rim where the reach of place and mine (4 from the eyes) gets
 # there, else swimming at the surface (#840; docs/cookbook/kelp-farm.md). Each round it plants kelp on each floor block
 # under water that lacks it, cuts the kelp two high or more down to its bottom block, so it grows again, and stores the
@@ -10,6 +11,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.borrow
 import lib.craft
 import lib.depot
 import lib.food
@@ -68,12 +70,14 @@ def harvest(low, high):
     return n
 
 
-def dry(radius=32):
+def dry(radius=32, food=0):
     """Smelts the kelp the bot carries and the depot holds, a stack at most, to dried kelp in a furnace within radius
     (else one lib.craft.smelt_here puts down), burning a dried kelp block, else coal or charcoal, carried or taken from
-    the chests within radius (else the best fuel carried); then crafts each 9 dried kelp the bot carries and the depot
-    holds to a dried kelp block, at a crafting table within radius (else lib.craft.craft_here's). Kelp in other chests,
-    the planting stock, is left alone. Gives how many kelp it smelted."""
+    the chests within radius (else the best fuel carried), and puts what it took and did not burn back (#858); then
+    crafts each 9 dried kelp the bot carries and the depot holds, but food of them kept as food (#858), to a dried kelp
+    block, at a crafting table within radius (else lib.craft.craft_here's). Kelp in other chests, the planting stock, is
+    left alone. Gives how many kelp it smelted."""
+    since = len(lib.borrow.borrowed())
     lib.stock.take_up_to(KELP, lib.craft.STACK, chests=lib.depot.chests(NAME))
     n = min(count(KELP), lib.craft.STACK)
     before = count(DRIED)
@@ -89,9 +93,11 @@ def dry(radius=32):
             lib.craft.smelt_here(KELP, n, fuel=fuel)
         else:
             smelt(KELP, n, furnace=furnace, fuel=fuel)
+    # The fuel left over, and any kelp over a stack, back to their chests.
+    lib.borrow.give_back(since=since)
     smelted = count(DRIED) - before
     lib.stock.take_up_to(DRIED, lib.craft.STACK, chests=lib.depot.chests(NAME))
-    k = count(DRIED) // 9
+    k = max(0, count(DRIED) - food) // 9
     if k:
         table = find_nearest("minecraft:crafting_table", radius=radius)
         if table is None:
@@ -101,9 +107,9 @@ def dry(radius=32):
     return smelted
 
 
-def run(low=None, high=None, radius=32, dried=False):
+def run(low=None, high=None, radius=32, dried=False, food=0):
     """Farms the pool whose floor runs from low to high (else the last run's) forever, storing the kelp in a depot north
-    of it, at the surface; with dried, smelted and crafted first (dry)."""
+    of it, at the surface; with dried, smelted and crafted first (dry), food dried kelp left uncrafted."""
     box = memory.get(NAME) if low is None else (Pos(low), Pos(high))
     if box is None:
         say("kelp_farm: give the corners of the pool's floor")
@@ -123,7 +129,7 @@ def run(low=None, high=None, radius=32, dried=False):
         if cut:
             say(f"cut {cut} kelp")
         if dried:
-            dry(radius)
+            dry(radius, food)
         lib.depot.store(NAME, None, radius)
         if not cut:
             wait(WAIT)
@@ -136,6 +142,6 @@ except NameError:
 if args is not None:
     if len(args) >= 6:
         run(Pos(int(args[0]), int(args[1]), int(args[2])), Pos(int(args[3]), int(args[4]), int(args[5])),
-            int(args[6]) if len(args) > 6 else 32, len(args) > 7 and args[7] == "dry")
+            int(args[6]) if len(args) > 6 else 32, len(args) > 7 and args[7] == "dry", int(args[8]) if len(args) > 8 else 0)
     else:
         run()

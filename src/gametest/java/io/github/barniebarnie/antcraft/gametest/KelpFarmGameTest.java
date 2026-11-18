@@ -10,10 +10,12 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.entity.FurnaceBlockEntity;
 
 /**
  * {@code jobs/kelp_farm.py} (#835; docs/cookbook/kelp-farm.md): a kelp farm in a pool of water. Each test's ground is
@@ -43,6 +45,14 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 	 * which also holds a coal, and the bot carries 9 dried kelp.
 	 */
 	private static AntBot farm(GameTestHelper helper, int depth, boolean dry) {
+		return farm(helper, depth, dry, 9, "", "");
+	}
+
+	/**
+	 * As farm with dry, the bot carrying {@code dried} dried kelp, {@code before} run in the script before the job and
+	 * {@code args} more arguments of run after dry.
+	 */
+	private static AntBot farm(GameTestHelper helper, int depth, boolean dry, int dried, String before, String args) {
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				boolean pool = x >= 2 && x <= 4 && z >= 3 && z <= 4;
@@ -62,14 +72,15 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, depth + 1, 6);
 		if (dry) {
-			bot.getInventory().addItem(new ItemStack(Items.DRIED_KELP, 9));
+			bot.getInventory().addItem(new ItemStack(Items.DRIED_KELP, dried));
 		}
 		BlockPos low = helper.absolutePos(new BlockPos(2, 0, 3));
 		BlockPos high = helper.absolutePos(new BlockPos(4, 0, 4));
 		BotScripts.run(bot, """
 			import jobs.kelp_farm
-			jobs.kelp_farm.run(Pos(%d, %d, %d), Pos(%d, %d, %d), 8, %s)
-			""".formatted(low.getX(), low.getY(), low.getZ(), high.getX(), high.getY(), high.getZ(), dry ? "True" : "False"));
+			%s
+			jobs.kelp_farm.run(Pos(%d, %d, %d), Pos(%d, %d, %d), 8, %s%s)
+			""".formatted(before, low.getX(), low.getY(), low.getZ(), high.getX(), high.getY(), high.getZ(), dry ? "True" : "False", args));
 		BotScripts.failOnError(helper, bot);
 		return bot;
 	}
@@ -193,6 +204,83 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 			int dried = depot.countItem(Items.DRIED_KELP);
 			helper.assertTrue(dried >= 2 && depot.countItem(Items.KELP) == 0,
 				"dried kelp in the depot " + dried + ", kelp " + depot.countItem(Items.KELP) + "; " + said(bot));
+		});
+	}
+
+	/**
+	 * With dry, a farm that ran without it before: the pool planted, its depot's first chest at (2, 3, 1) holding 2 raw
+	 * kelp, in the job's memory as its kelp chest.
+	 */
+	private static AntBot farmWithKelpInTheDepot(GameTestHelper helper) {
+		helper.setBlock(2, 3, 1, Blocks.CHEST);
+		helper.getBlockEntity(new BlockPos(2, 3, 1), ChestBlockEntity.class).setItem(0, new ItemStack(Items.KELP, 2));
+		BlockPos chest = helper.absolutePos(new BlockPos(2, 3, 1));
+		AntBot bot = farm(helper, 2, true, 0, """
+			import lib.depot
+			lib.depot.depot("kelp_farm", Pos(%d, %d, %d), "east", {})["chests"].append(["kelp", Pos(%d, %d, %d)])
+			""".formatted(chest.getX(), chest.getY(), chest.getZ(), chest.getX(), chest.getY(), chest.getZ()), "");
+		// After farm, which fills the pool with water: the script runs from the next tick on.
+		for (int x = 2; x <= 4; x++) {
+			for (int z = 3; z <= 4; z++) {
+				helper.setBlock(x, 1, z, Blocks.KELP);
+			}
+		}
+		return bot;
+	}
+
+	/** How many of item the depot's first three chests, (2, 3, 1) going east, hold: the kelp chest and those added after it. */
+	private static int inDepot(GameTestHelper helper, Item item) {
+		int n = 0;
+		for (int x = 2; x <= 4; x++) {
+			if (helper.getBlockState(new BlockPos(x, 3, 1)).is(Blocks.CHEST)) {
+				n += helper.getBlockEntity(new BlockPos(x, 3, 1), ChestBlockEntity.class).countItem(item);
+			}
+		}
+		return n;
+	}
+
+	/** With dry, raw kelp the depot already holds is taken out, smelted to dried kelp and stored (#858). */
+	// Measured: passes at tick 427 to 482, the smelt taking 200 ticks a kelp (green already: dry took the depot's kelp).
+	@GameTest(maxTicks = 900)
+	public void kelpInTheDepotIsSmelted(GameTestHelper helper) {
+		AntBot bot = farmWithKelpInTheDepot(helper);
+		helper.succeedWhen(() -> {
+			int dried = inDepot(helper, Items.DRIED_KELP);
+			int kelp = inDepot(helper, Items.KELP);
+			helper.assertTrue(dried >= 2 && kelp == 0, "dried kelp in the depot " + dried + ", kelp " + kelp + "; " + said(bot));
+		});
+	}
+
+	/**
+	 * With dry, a coal taken from the supply chest that the smelt does not burn, as the furnace burns the coal already in
+	 * its fuel slot, goes back to the supply chest (#858).
+	 */
+	// Measured: passes at tick 428 (red: coal in the supply chest 0, carried 1).
+	@GameTest(maxTicks = 900)
+	public void leftoverFuelGoesBackToItsChest(GameTestHelper helper) {
+		AntBot bot = farmWithKelpInTheDepot(helper);
+		helper.getBlockEntity(new BlockPos(7, 3, 6), FurnaceBlockEntity.class).setItem(1, new ItemStack(Items.COAL));
+		Container supply = helper.getBlockEntity(new BlockPos(6, 3, 6), ChestBlockEntity.class);
+		helper.succeedWhen(() -> {
+			int dried = inDepot(helper, Items.DRIED_KELP);
+			helper.assertTrue(dried >= 2, "dried kelp in the depot " + dried + "; " + said(bot));
+			helper.assertTrue(supply.countItem(Items.COAL) == 1 && bot.getInventory().countItem(Items.COAL) == 0,
+				"coal in the supply chest " + supply.countItem(Items.COAL) + ", carried "
+					+ bot.getInventory().countItem(Items.COAL) + "; " + said(bot));
+		});
+	}
+
+	/** With dry and a food count of 9, of the 18 dried kelp the bot carries 9 are pressed into a block, 9 stay dried kelp (#858). */
+	// Measured: passes at tick 60 (red: run() takes from 0 to 4 positional arguments but 5 were given).
+	@GameTest(maxTicks = 120)
+	public void theFoodCountOfDriedKelpStaysUnpressed(GameTestHelper helper) {
+		AntBot bot = farm(helper, 2, true, 18, "", ", 9");
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.CHEST, 2, 3, 1);
+			Container depot = helper.getBlockEntity(new BlockPos(2, 3, 1), ChestBlockEntity.class);
+			helper.assertTrue(depot.countItem(Items.DRIED_KELP_BLOCK) == 1 && depot.countItem(Items.DRIED_KELP) == 9,
+				"dried kelp blocks in the depot " + depot.countItem(Items.DRIED_KELP_BLOCK) + ", dried kelp "
+					+ depot.countItem(Items.DRIED_KELP) + "; " + said(bot));
 		});
 	}
 }

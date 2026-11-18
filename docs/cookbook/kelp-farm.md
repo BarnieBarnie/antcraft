@@ -6,10 +6,11 @@ The job `jobs/kelp_farm` farms kelp in a pool of water until a player stops it. 
 /antcraft bot run jobs.kelp_farm 10 62 10 14 62 12
 /antcraft bot run jobs.kelp_farm 10 62 10 14 62 12 16
 /antcraft bot run jobs.kelp_farm 10 62 10 14 62 12 32 dry
+/antcraft bot run jobs.kelp_farm 10 62 10 14 62 12 32 dry 18
 /antcraft bot run jobs.kelp_farm
 ```
 
-The arguments are the corners `x1 y1 z1 x2 y2 z2` of the pool's floor, the blocks the kelp stands on (by default those of the last run), how far to look for kelp to plant, a furnace, a crafting table and fuel, in blocks (default 32), and `dry` to make dried kelp and dried kelp blocks of it ([Drying the kelp](#drying-the-kelp)). The bot says `planted 6 kelp` once it has planted the pool, and `cut 2 kelp` each round that cut some.
+The arguments are the corners `x1 y1 z1 x2 y2 z2` of the pool's floor, the blocks the kelp stands on (by default those of the last run), how far to look for kelp to plant, a furnace, a crafting table and fuel, in blocks (default 32), `dry` to make dried kelp and dried kelp blocks of it ([Drying the kelp](#drying-the-kelp)), and after it how many dried kelp to keep as food, not pressed into blocks (default 0). The bot says `planted 6 kelp` once it has planted the pool, and `cut 2 kelp` each round that cut some.
 
 ## The pool
 
@@ -28,10 +29,10 @@ Each round the bot plants kelp on each floor block whose water lacks it, with ke
 
 ## Drying the kelp
 
-Without `dry` the bot stores raw kelp. With it (from a script, `jobs.kelp_farm.run(low, high, radius, True)`), each round after cutting it also:
+Without `dry` the bot stores raw kelp. With it (from a script, `jobs.kelp_farm.run(low, high, radius, True, food)`), each round after cutting it also:
 
-1. takes the kelp the depot holds, up to a stack with what it carries, and smelts it to dried kelp in the nearest furnace within the radius, which it walks to. Where there is none it puts one down and takes it back after ([`lib.craft.smelt_here`](../reference/modules/lib/craft.md)), which needs a pickaxe and a furnace or what to craft one of. It burns a dried kelp block (20 kelp each), else coal or charcoal (8 each), carried or taken from the chests within the radius, else the best fuel it carries, as [`smelt`](../reference/crafting/smelt.md) picks it. Once the farm has made a block it fuels itself. A smelt takes 10 seconds a kelp.
-2. takes the dried kelp the depot holds and crafts each 9 into a dried kelp block, at the nearest crafting table within the radius, else one it places from planks it carries ([`lib.craft.craft_here`](../reference/modules/lib/craft.md)). Fewer than 9 left over stay dried kelp, food.
+1. takes the kelp the depot holds, up to a stack with what it carries, and smelts it to dried kelp in the nearest furnace within the radius, which it walks to. Where there is none it puts one down and takes it back after ([`lib.craft.smelt_here`](../reference/modules/lib/craft.md)), which needs a pickaxe and a furnace or what to craft one of. It burns a dried kelp block (20 kelp each), else coal or charcoal (8 each), carried or taken from the chests within the radius, else the best fuel it carries, as [`smelt`](../reference/crafting/smelt.md) picks it. Once the farm has made a block it fuels itself. A smelt takes 10 seconds a kelp. Fuel it took and did not burn, such as a coal while the furnace still burns the last one, goes back to the chest it came from, as does kelp over a stack.
+2. takes the dried kelp the depot holds and crafts each 9 into a dried kelp block, at the nearest crafting table within the radius, else one it places from planks it carries ([`lib.craft.craft_here`](../reference/modules/lib/craft.md)), but the food count: with `dry 18`, 18 dried kelp stay dried kelp, food, and only those over it are pressed. Fewer than 9 left over stay dried kelp too.
 
 The depot keeps raw kelp in its `kelp` chests and dried kelp and its blocks in its `dried` chests. Kelp in other chests, such as the one the bot planted from, is left alone as planting stock. Put a furnace and a crafting table by the depot, and a few coal in a chest nearby to start.
 
