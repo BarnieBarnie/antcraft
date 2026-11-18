@@ -443,7 +443,7 @@ def spec(kind, name, radius):
             "tools": lambda low, high: soil_tools(kind, low, high),
             "build_cell": lambda low, high: lib.treefarm.build_cell(kind, low, high),
             "spots": lambda low, high: lib.treefarm.spots(kind, low, high),
-            "loaded": lambda low, high: lib.treefarm.loaded(kind, low, high),
+            "loaded": lambda low, high: lib.treefarm.loaded(kind, low, high), "kept": lib.cellfarm.floor,
             "ripe": lambda low, high: lib.treefarm.grown(kind, low, high),
             "room": lambda: free(kind),
             "harvest": lambda low, high, told: reap(kind, (low, high), radius, told),

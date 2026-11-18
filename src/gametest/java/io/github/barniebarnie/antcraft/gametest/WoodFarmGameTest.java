@@ -2231,6 +2231,50 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(bot.getScript() != null, "not run: " + said);
 	}
 
+	/**
+	 * A walk sent into a built birch cell's floor (#890, as the crop farm's #869): the cell's floor a block up, dirt from
+	 * (1, 1, 4) to (5, 1, 8), kept with lib.cellfarm.keep_cells (the spec's kept). A goto to the cell's low corner, a spot
+	 * only breaking the dirt there gives, is unreachable, and the dirt stays.
+	 */
+	// Measured: passes at tick 37 (red: the dirt at (1, 1, 4) broke on tick 39).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 80)
+	public void aWalkSentIntoACellLeavesItsFloor(GameTestHelper helper) {
+		walkIntoCell(helper, "minecraft:birch_sapling", 5);
+	}
+
+	/** As aWalkSentIntoACellLeavesItsFloor, for a giant spruce's 10-wide cell, its floor from (1, 1, 4) to (10, 1, 13). */
+	// Measured: passes at tick 37 (red: the dirt at (1, 1, 4) broke on tick 39).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 80)
+	public void aWalkSentIntoAGiantCellLeavesItsFloor(GameTestHelper helper) {
+		walkIntoCell(helper, "giant_spruce", 10);
+	}
+
+	private static void walkIntoCell(GameTestHelper helper, String kind, int width) {
+		for (BlockPos p : BlockPos.betweenClosed(1, 1, 4, width, 1, width + 3)) {
+			helper.setBlock(p, Blocks.DIRT);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 0, 1, 7);
+		BlockPos low = helper.absolutePos(new BlockPos(1, 1, 4));
+		BotScripts.run(bot, """
+			import jobs.wood_farm
+			import lib.cellfarm
+			import lib.cells
+			low = Pos(%d, %d, %d)
+			lib.cells.layout("wood_farm", low, (%d, %d))
+			lib.cells.add("wood_farm", 0)
+			lib.cellfarm.keep_cells(jobs.wood_farm.spec("%s", "wood_farm", 16), "wood_farm")
+			r = goto(low)
+			print(r.ok, r.reason)
+			""".formatted(low.getX(), low.getY(), low.getZ(), width, width, kind));
+		BotScripts.failOnError(helper, bot);
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(new BlockPos(1, 1, 4)).is(Blocks.DIRT)) {
+				helper.fail("the dirt at (1, 1, 4) broke: " + helper.getBlockState(new BlockPos(1, 1, 4)));
+			}
+		});
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("False unreachable"), "said"));
+	}
+
 	/** Runs body after importing jobs.wood_farm, with kind birch, cell 1's box as cell and its sapling spot as spot. */
 	private static void script(GameTestHelper helper, AntBot bot, String body) {
 		BlockPos l = helper.absolutePos(new BlockPos(6, 0, 2));
