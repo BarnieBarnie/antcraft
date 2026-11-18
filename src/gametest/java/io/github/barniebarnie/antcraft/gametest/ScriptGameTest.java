@@ -152,6 +152,20 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** {@code /antcraft bot status} shows what a script with no action running does, its call (#894), not an empty action. */
+	@GameTest(maxTicks = 20)
+	public void statusShowsTheCallWithNoActionRunning(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BotScripts.run(bot, "n = 0\nwhile True:\n    n = n + 1\n");
+		BotScripts.failOnError(helper, bot);
+
+		helper.succeedWhen(() -> {
+			List<String> status = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " status");
+			helper.assertTrue(bot.getScript().action() == null, "action " + bot.getScript().action());
+			helper.assertTrue(status.size() == 1 && status.getFirst().contains(", script code, "), "status " + status);
+		});
+	}
+
 	/** The last action's result is saved with the bot, so {@code /antcraft bot status} still shows it after a reload. */
 	@GameTest(maxTicks = 80)
 	public void theLastResultSurvivesASaveAndLoad(GameTestHelper helper) {
