@@ -298,15 +298,21 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 	 * a furnace at (7, 3, 6) and a crafting table at (7, 3, 4), a coal in the supply chest.
 	 */
 	private static AntBot cells(GameTestHelper helper, int size, boolean dry) {
+		return cells(helper, size, dry, 2);
+	}
+
+	/** As cells, the stone up to y depth and the cells depth deep (#877): the corner at (1, depth + 1, 3), the chests a level up. */
+	private static AntBot cells(GameTestHelper helper, int size, boolean dry, int depth) {
+		int top = depth + 1;
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
-				for (int y = 1; y <= 2; y++) {
+				for (int y = 1; y <= depth; y++) {
 					helper.setBlock(x, y, z, Blocks.STONE);
 				}
 			}
 		}
-		helper.setBlock(6, 3, 6, Blocks.CHEST);
-		Container chest = helper.getBlockEntity(new BlockPos(6, 3, 6), ChestBlockEntity.class);
+		helper.setBlock(6, top, 6, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(new BlockPos(6, top, 6), ChestBlockEntity.class);
 		chest.setItem(0, new ItemStack(Items.KELP, size));
 		for (int i = 1; i <= 4; i++) {
 			chest.setItem(i, new ItemStack(Items.WATER_BUCKET));
@@ -318,20 +324,25 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(7, 3, 6, Blocks.FURNACE);
 			helper.setBlock(7, 3, 4, Blocks.CRAFTING_TABLE);
 		}
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 6);
-		BlockPos at = helper.absolutePos(new BlockPos(1, 3, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, top, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(1, top, 3));
 		BotScripts.run(bot, """
 			import jobs.kelp_farm
-			jobs.kelp_farm.grow(Pos(%d, %d, %d), %d, 8%s)
-			""".formatted(at.getX(), at.getY(), at.getZ(), size, dry ? ", True" : ""));
+			jobs.kelp_farm.grow(Pos(%d, %d, %d), %d, 8, %s%s)
+			""".formatted(at.getX(), at.getY(), at.getZ(), size, dry ? "True" : "False", depth == 2 ? "" : ", depth=" + depth));
 		BotScripts.failOnError(helper, bot);
 		return bot;
 	}
 
 	/** The blocks of the cell at (x, 3), y 0 to 3. */
 	private static String column(GameTestHelper helper, int x) {
+		return column(helper, x, 3);
+	}
+
+	/** The blocks of the cell at (x, 3), y 0 to top. */
+	private static String column(GameTestHelper helper, int x, int top) {
 		StringBuilder s = new StringBuilder("(" + x + ", 3):");
-		for (int y = 0; y <= 3; y++) {
+		for (int y = 0; y <= top; y++) {
 			s.append(' ').append(helper.getBlockState(new BlockPos(x, y, 3)).getBlock().getName().getString());
 		}
 		return s.toString();
@@ -372,10 +383,15 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 
 	/** How many of item the cell farm's depot holds, its chests from (1, 3, 1) going east. */
 	private static int inCellDepot(GameTestHelper helper, Item item) {
+		return inCellDepot(helper, item, 3);
+	}
+
+	/** As inCellDepot, its chests at height y. */
+	private static int inCellDepot(GameTestHelper helper, Item item, int y) {
 		int n = 0;
 		for (int x = 1; x <= 5; x++) {
-			if (helper.getBlockState(new BlockPos(x, 3, 1)).is(Blocks.CHEST)) {
-				n += helper.getBlockEntity(new BlockPos(x, 3, 1), ChestBlockEntity.class).countItem(item);
+			if (helper.getBlockState(new BlockPos(x, y, 1)).is(Blocks.CHEST)) {
+				n += helper.getBlockEntity(new BlockPos(x, y, 1), ChestBlockEntity.class).countItem(item);
 			}
 		}
 		return n;
@@ -438,5 +454,39 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 			int dried = inCellDepot(helper, Items.DRIED_KELP);
 			helper.assertTrue(dried >= 1, "dried kelp in the depot " + dried + ", kelp " + inCellDepot(helper, Items.KELP) + "; " + said(bot));
 		});
+	}
+
+	/**
+	 * A water cell three deep is dug and filled layer by layer, a source in each, kelp planted on its floor; grown up to
+	 * its top block, a cut gives two kelp, its bottom block left (#877).
+	 */
+	// Measured: passes at tick 307 to 309 (red: grow() got an unexpected keyword argument 'depth').
+	@GameTest(maxTicks = 600)
+	public void aThreeDeepWaterCellIsFilledAndACutGivesTwoKelp(GameTestHelper helper) {
+		AntBot bot = cells(helper, 1, false, 3);
+		boolean[] grown = new boolean[1];
+		helper.onEachTick(() -> {
+			if (BotScripts.log(bot, Output.Level.PRINT).stream().anyMatch(l -> l.contains("cell not built") || l.contains("next cell:"))) {
+				helper.fail("the cell not built; " + column(helper, 1, 4) + ", the bot at " + TestPositions.relative(helper, bot.position())
+					+ ", carrying " + bot.getInventory().getItems() + "; " + said(bot));
+			}
+			if (!grown[0] && BotScripts.log(bot, Output.Level.PRINT).contains("built cell 1") && helper.getBlockState(new BlockPos(1, 1, 3)).is(Blocks.KELP)
+				&& source(helper, 1, 2, 3) && source(helper, 1, 3, 3)) {
+				helper.setBlock(1, 1, 3, Blocks.KELP_PLANT);
+				helper.setBlock(1, 2, 3, Blocks.KELP_PLANT);
+				helper.setBlock(1, 3, 3, Blocks.KELP);
+				grown[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grown[0], "not built, filled and planted; " + column(helper, 1, 4) + "; " + said(bot));
+			helper.assertTrue(helper.getBlockState(new BlockPos(1, 1, 3)).is(Blocks.KELP), "bottom block gone; " + column(helper, 1, 4));
+			int stored = inCellDepot(helper, Items.KELP, 4);
+			helper.assertTrue(stored >= 2, "kelp in the depot " + stored + "; " + column(helper, 1, 4) + "; " + said(bot));
+		});
+	}
+
+	private static boolean source(GameTestHelper helper, int x, int y, int z) {
+		return helper.getBlockState(new BlockPos(x, y, z)).is(Blocks.WATER) && helper.getBlockState(new BlockPos(x, y, z)).getFluidState().isSource();
 	}
 }
