@@ -395,7 +395,7 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 	 * A pig outside the pen, south of its fence, carrots in the chest, and animals in the pen that do not follow carrots:
 	 * a chicken on each block of the row along the far fence and a cow. The bot lures the pig in, and none of the
 	 * penned animals gets past the fence, not even while the gate stands open: none is beyond the middle of the fence or
-	 * gate. Fails at once where one is.
+	 * gate. Fails at once where one is, or where one dies (#903).
 	 */
 	// Measured: passes at tick 262 to 289, the gate open some 53 ticks. Already green with #843's lure. With the chickens
 	// crowded against the gate instead, one in two runs failed: the bot walking out through the gate shoved one out ahead
@@ -410,6 +410,7 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		Pig stray = animal(helper, EntityTypes.PIG, 3, 10, false);
 		AntBot bot = ranch(helper, 8, new ItemStack(Items.CARROT, 4));
 		failWhereOneGetsOut(helper, penned, bot);
+		failWhereOneDies(helper, penned, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(inPen(helper, Pig.class).contains(stray), "the pig is not in the pen but at "
 				+ TestPositions.relative(helper, stray.position()) + ", the bot at " + TestPositions.relative(helper, bot.position()));
@@ -570,6 +571,19 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 						+ " got out, at " + at + ", the bot at "
 						+ TestPositions.relative(helper, bot.position()) + ", doing " + (bot.getScript() == null ? null : bot.getScript().action())
 						+ ", the gate " + (helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN) ? "open" : "shut"));
+				}
+			}
+		});
+	}
+
+	/** Fails at once where one of penned dies, such as one the bot killed; failWhereOneGetsOut leaves dead ones out (#885). */
+	private static void failWhereOneDies(GameTestHelper helper, List<? extends Animal> penned, AntBot bot) {
+		helper.onEachTick(() -> {
+			for (Animal a : penned) {
+				if (a.getHealth() <= 0) {
+					helper.fail("a penned " + a.getType().getDescription().getString() + " died at "
+						+ TestPositions.relative(helper, a.position()) + ", the bot at " + TestPositions.relative(helper, bot.position())
+						+ ", doing " + (bot.getScript() == null ? null : bot.getScript().action()));
 				}
 			}
 		});
