@@ -5,6 +5,7 @@
 	"mixins": [
 		"BlockStateBaseMixin",
 		"FenceGateBlockMixin",
+		"MoveControlMixin",
 		"ProjectileMixin",
 		"ServerLevelMixin"
 	],

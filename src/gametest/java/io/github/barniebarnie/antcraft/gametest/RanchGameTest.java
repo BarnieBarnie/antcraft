@@ -438,6 +438,26 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A chicken in the pen driven north into its shut gate, as into a fence, does not jump at it (#896): vanilla's
+	 * MoveControl jumps at a block with collision but not at a fence or door. Fails at once on a jump.
+	 */
+	@GameTest(maxTicks = 300)
+	public void aChickenDrivenIntoAShutGateDoesNotJump(GameTestHelper helper) {
+		pen(helper);
+		Chicken chicken = animal(helper, EntityTypes.CHICKEN, 3, 5, false);
+		Vec3 north = helper.absoluteVec(new Vec3(3.5, 1, 1.5));
+		boolean[] wasOnGround = {false};
+		helper.onEachTick(() -> {
+			chicken.getMoveControl().setWantedPosition(north.x, north.y, north.z, 1.0);
+			if (wasOnGround[0] && !chicken.onGround() && chicken.getDeltaMovement().y > 0.2) {
+				helper.fail("the chicken jumped at " + TestPositions.relative(helper, chicken.position()));
+			}
+			wasOnGround[0] = chicken.onGround();
+		});
+		helper.succeedWhen(() -> helper.assertTrue(helper.getTick() >= 190, "waiting"));
+	}
+
 	/** Fails at once where one of penned dies or is beyond the middle of the pen's fence or gate. */
 	private static void failWhereOneGetsOut(GameTestHelper helper, List<? extends Animal> penned, AntBot bot) {
 		helper.onEachTick(() -> {
