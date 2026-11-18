@@ -22,6 +22,7 @@ import lib.bootstrap
 import lib.cellfarm
 import lib.cells
 import lib.depot
+import lib.get
 import lib.stock
 import lib.terrain
 import lib.treefarm
@@ -163,15 +164,39 @@ def materials(kind):
 def gets(item, n, radius):
     """get(item, n, radius), but dirt none from under the farm's cells (lib.treefarm.get_outside, #768), and the roof's
     slabs (lib.treefarm.SLABS, a tag) are any wooden slabs the chests within radius hold (lib.stock.take_up_to takes a
-    tag), and those they lack are made as oak slabs (#612). Gives result()."""
+    tag), and those they lack are made of the wood at hand (slab, #934). Gives result()."""
     if item == lib.treefarm.DIRT:
         return lib.treefarm.get_outside(item, n, radius)
     if item != lib.treefarm.SLABS:
         return get(item, n, radius)
     if lib.stock.take_up_to(item, n, radius)["ok"]:
         return result()
-    # ponytail: lib.get takes an item, not a tag; oak is the one kind of slab it makes, a tag-aware get would make any.
-    return get("minecraft:oak_slab", count("minecraft:oak_slab") + n - count(item), radius)
+    s = slab(radius)
+    return get(s, count(s) + n - count(item), radius)
+
+
+WOODS = ["_planks", "_log", "_wood", "_stem", "_hyphae"]
+
+
+def slab(radius):
+    """The wooden slab to make the roof of (#934): of the planks, else the logs, the bot carries most of, else of the
+    nearest tree's logs within radius, else oak."""
+    for tag in [lib.get.PLANKS, lib.trees.LOGS]:
+        held = [s.item for s in inventory() if matches(s, tag)]
+        if held:
+            return slab_of(max(held, key=count))
+    base = lib.trees.next_tree(radius)
+    return slab_of(block(base).id if base else "minecraft:oak_log")
+
+
+def slab_of(wood):
+    """The slab of the planks a wood id (planks, log, wood, stem or hyphae, stripped or not) makes: birch_log gives
+    minecraft:birch_slab."""
+    name = wood.replace("stripped_", "")
+    for suffix in WOODS:
+        if name.endswith(suffix):
+            name = name[:-len(suffix)]
+    return name + "_slab"
 
 
 def first_cell(kind, name, size, radius):

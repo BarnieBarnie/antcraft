@@ -1495,6 +1495,31 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * An oak farm with no slabs in the chest and only the supply birch about makes its roof of birch slabs (#934): it made
+	 * oak slabs, and with no oak about the get failed no_logs {oak_log}.
+	 */
+	// Measured: passes at tick 388 (red: oak_farm stopped: no_logs at cell, missing minecraft:oak_log x2).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 800)
+	public void roofsAnOakCellWithBirchSlabsWhereNoOakGrows(GameTestHelper helper) {
+		AntBot bot = farm(helper, 0, 2);
+		helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class).setItem(3, new ItemStack(Items.OAK_SAPLING, 2));
+		BlockPos at = helper.absolutePos(AT);
+		List<String> out = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm oak_sapling "
+			+ at.getX() + " " + at.getY() + " " + at.getZ() + " 1 12");
+		helper.assertTrue(bot.getScript() != null, "not run: " + out);
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot).contains("built cell 1"), "said " + said(bot));
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, OAK_SPOT);
+			for (int x = -1; x <= 1; x++) {
+				for (int z = -1; z <= 1; z++) {
+					helper.assertBlockPresent(Blocks.BIRCH_SLAB, OAK_SPOT.offset(x, 8, z));
+				}
+			}
+		});
+	}
+
 	/** Stopped once it farms and run again, it goes on farming the same farm: no second first cell. */
 	// Measured: passes at tick 91 to 94.
 	// Full runs: passes at up to tick 139 (#861).
