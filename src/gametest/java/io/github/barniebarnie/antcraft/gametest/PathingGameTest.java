@@ -1104,6 +1104,28 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Another bot just outside the test area, as a neighbouring test's would be, does not hold this bot's path to its
+	 * scaffold (#917): the bot digs through a dirt wall in its corridor that the other bot keeps.
+	 */
+	@GameTest(maxTicks = 120)
+	public void digsThroughScaffoldKeptByABotBesideTheArea(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 6, 7, 2, Blocks.BEDROCK);
+		fill(helper, 1, 1, 4, 6, 7, 6, Blocks.BEDROCK);
+		fill(helper, 3, 1, 3, 3, 2, 3, Blocks.DIRT);
+		helper.setBlock(-1, 0, 3, Blocks.STONE);
+		fill(helper, -1, 1, 3, -1, 2, 3, Blocks.AIR);
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, -1, 1, 3);
+		other.setNoAi(true);
+		other.addPathScaffold(helper.absolutePos(new BlockPos(3, 1, 3)));
+		other.addPathScaffold(helper.absolutePos(new BlockPos(3, 2, 3)));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 1, 3)));
+
+		succeedWhenAt(helper, bot, new BlockPos(6, 1, 3));
+	}
+
 	/** A bot without scaffold dropped in the middle of a 5x5 pool, 2 deep, swims to the shore and climbs out. */
 	@GameTest(maxTicks = 200)
 	public void swimsOutOfADeepPool(GameTestHelper helper) {

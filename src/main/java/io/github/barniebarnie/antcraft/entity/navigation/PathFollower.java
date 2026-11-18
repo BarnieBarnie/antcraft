@@ -408,7 +408,7 @@ public class PathFollower {
 	 */
 	private Set<BlockPos> othersScaffold(ServerLevel level) {
 		Set<BlockPos> keep = new HashSet<>();
-		for (AntBot other : level.getEntitiesOfClass(AntBot.class, this.bot.getBoundingBox().inflate(KEEP_SCAN), other -> other != this.bot)) {
+		for (AntBot other : this.bot.entitiesNear(AntBot.class, this.bot.getBoundingBox().inflate(KEEP_SCAN), other -> other != this.bot)) {
 			keep.addAll(other.getProtectedScaffold());
 		}
 		return keep;
