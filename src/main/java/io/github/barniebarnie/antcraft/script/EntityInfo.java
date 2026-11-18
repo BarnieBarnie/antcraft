@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.script;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.script.lang.HostValue;
 import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import java.util.UUID;
@@ -89,12 +90,21 @@ public final class EntityInfo implements HostValue {
 			case "pos" -> found == null ? PyNone.NONE : pos(found.blockPosition());
 			case "health" -> found instanceof LivingEntity living ? (Object) (double) living.getHealth() : PyNone.NONE;
 			case "baby" -> found instanceof LivingEntity living && living.isBaby();
-			case "age" -> found == null ? PyNone.NONE : (Object) (long) found.tickCount;
+			case "age" -> found == null ? PyNone.NONE : (Object) age(found);
 			case "neutral" -> found != null && AntBot.leftAlone(found);
 			case "valid" -> this.valid();
 			case "item" -> found instanceof ItemEntity item ? SenseApi.stack(item.getItem()) : PyNone.NONE;
 			default -> null;
 		};
+	}
+
+	/**
+	 * Its ticks since it was first seen: the first ask saves the game time less its tickCount with it, so the age goes on
+	 * across chunk reloads, where tickCount starts again at 0 (docs/reference/types/entity.md, #886).
+	 */
+	private static long age(Entity entity) {
+		long now = entity.level().getGameTime();
+		return now - entity.getAttachedOrSet(ModComponents.FIRST_SEEN, now - entity.tickCount);
 	}
 
 	static Pos pos(BlockPos pos) {

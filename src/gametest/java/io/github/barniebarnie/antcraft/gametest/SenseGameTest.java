@@ -306,13 +306,41 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, run, List.of("1 True"));
 	}
 
-	/** An Entity's age is the ticks since it was spawned or loaded (Entity.tickCount, #871). */
+	/** An Entity's age, first asked, is its ticks since it was spawned or loaded (Entity.tickCount, #871). */
 	@GameTest(maxTicks = 10)
 	public void anEntitysAgeIsItsTicksSinceItWasLoaded(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		helper.spawnWithNoFreeWill(EntityTypes.COW, 5, 1, 3).tickCount = 1000;
 		ScriptRun run = run(helper, bot, "a = entities('cow', radius=8)[0].age\nprint(1000 <= a < 1010)\n");
 		succeedWhenPrinted(helper, bot, run, List.of("True"));
+	}
+
+	/**
+	 * An Entity's age is kept across a save and load (#886): once asked, the cow's first-seen game time is saved with it,
+	 * so a copy loaded from its data, whose tickCount starts again at 0, still has its age of 1000 and more.
+	 */
+	@GameTest(maxTicks = 10)
+	public void anEntitysAgeIsKeptAcrossASaveAndLoad(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		Cow cow = helper.spawnWithNoFreeWill(EntityTypes.COW, 5, 1, 3);
+		cow.tickCount = 1000;
+		ScriptRun first = run(helper, bot, "print(entities('cow', radius=8)[0].age >= 1000)\n");
+		ScriptRun[] second = {null};
+		helper.onEachTick(() -> {
+			if (first.state() == ScriptRun.State.FINISHED && second[0] == null) {
+				TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+				cow.saveWithoutId(output);
+				cow.discard();
+				Cow copy = helper.spawnWithNoFreeWill(EntityTypes.COW, 5, 1, 3);
+				copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), output.buildResult()));
+				second[0] = BotScripts.run(bot, "c = entities('cow', radius=8)\nprint(len(c), c[0].age >= 1000)\n");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(second[0] != null && second[0].state() == ScriptRun.State.FINISHED, "not reloaded yet");
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(printed.equals(List.of("True", "1 True")), "printed " + printed);
+		});
 	}
 
 	/**
