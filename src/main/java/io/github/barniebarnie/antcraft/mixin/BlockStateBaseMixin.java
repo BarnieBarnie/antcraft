@@ -57,8 +57,8 @@ abstract class BlockStateBaseMixin {
 	}
 
 	/**
-	 * Whether the animal is on the pen's side of a door a bot opened with use, so one following a bot's food does not
-	 * follow it out (PathFollower.usedOpen, #884).
+	 * Whether the animal is on the pen's side of a door opened by hand, so one following a bot's food does not follow it
+	 * out (PathFollower.usedOpen, #884, #905).
 	 */
 	private static boolean keptIn(Animal animal, BlockPos lower) {
 		Direction inward = PathFollower.inward(animal.level(), lower);

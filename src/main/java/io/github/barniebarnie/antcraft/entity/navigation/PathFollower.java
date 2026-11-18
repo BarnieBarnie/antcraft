@@ -65,7 +65,7 @@ import org.jspecify.annotations.Nullable;
  * blocks in the way, placing scaffold blocks, then moving.
  */
 public class PathFollower {
-	/** The way in of each pen door or gate a bot opened with use ({@link #usedOpen}), by its place. */
+	/** The way in of each pen door or gate opened by hand ({@link #usedOpen}), by its place. */
 	private static final Map<GlobalPos, Direction> INWARD = new ConcurrentHashMap<>();
 	/** A fill round more blocks than this is not a pen ({@link #usedOpen}). */
 	private static final int PEN_CELLS = 2048;
@@ -497,22 +497,27 @@ public class PathFollower {
 	}
 
 	/**
-	 * Notes which side of the door or gate at pos, if a bot just opened it with {@code use}, is a pen's inside: the side
-	 * where a fill along the ground at its height, round blocks with collision, reaches fewer blocks, up to
-	 * {@link #PEN_CELLS} (where both reach that many, neither). An animal following a bot that holds its food goes
-	 * through it only inward ({@link #inward}; FenceGateBlockMixin, BlockStateBaseMixin, #884): a lured animal comes in,
-	 * a penned one does not follow the food out, whichever side the bot opened it from.
+	 * Notes which side of the door or gate at pos, just opened or shut by hand (a player's or a bot's {@code use};
+	 * FenceGateBlockMixin, DoorBlockMixin, #905), is a pen's inside: the side where a fill along the ground at its height,
+	 * round blocks with collision, reaches fewer blocks, up to {@link #PEN_CELLS} (where both reach that many, neither).
+	 * Shut, it forgets the side. An animal following a bot that holds its food goes through it only inward
+	 * ({@link #inward}; FenceGateBlockMixin, BlockStateBaseMixin, #884): a lured animal comes in, a penned one does not
+	 * follow the food out, whichever side it was opened from.
 	 */
 	public static void usedOpen(ServerLevel level, BlockPos pos) {
 		BlockState state = level.getBlockState(pos);
-		if (!(state.getBlock() instanceof FenceGateBlock || state.getBlock() instanceof DoorBlock) || !state.getValue(BlockStateProperties.OPEN)) {
+		if (!(state.getBlock() instanceof FenceGateBlock || state.getBlock() instanceof DoorBlock)) {
 			return;
 		}
 		BlockPos lower = state.getBlock() instanceof DoorBlock && state.getValue(DoorBlock.HALF) == DoubleBlockHalf.UPPER ? pos.below() : pos;
+		GlobalPos key = GlobalPos.of(level.dimension(), lower);
+		if (!state.getValue(BlockStateProperties.OPEN)) {
+			INWARD.remove(key);
+			return;
+		}
 		Direction facing = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
 		int front = fill(level, lower.relative(facing), lower);
 		int back = fill(level, lower.relative(facing.getOpposite()), lower);
-		GlobalPos key = GlobalPos.of(level.dimension(), lower);
 		if (front != back) {
 			INWARD.put(key, front < back ? facing : facing.getOpposite());
 		} else {
@@ -522,9 +527,10 @@ public class PathFollower {
 
 	/**
 	 * The way into the pen through the door or gate at pos (the lower half of a door), as {@link #usedOpen} found it when
-	 * a bot last opened it with {@code use}; null where it found no pen.
+	 * it was last opened by hand; null where it found no pen.
 	 */
-	// ponytail: kept until the next use of that gate, so one in a pen torn down since still keeps tempted animals out.
+	// ponytail: kept until the next use by hand of that gate, so one opened by redstone, or in a pen torn down since,
+	// keeps the side its last use found; hook setBlock/onRemove if that ever matters.
 	public static @Nullable Direction inward(Level level, BlockPos pos) {
 		return level instanceof ServerLevel ? INWARD.get(GlobalPos.of(level.dimension(), pos)) : null;
 	}

@@ -19,10 +19,12 @@ import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.chicken.Chicken;
 import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.animal.pig.Pig;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
@@ -504,6 +506,33 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(new BlockPos(3, 1, 3), door);
 		helper.setBlock(new BlockPos(3, 2, 3), door.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
 		leadOutFromInside(helper, EntityTypes.CHICKEN, Items.WHEAT_SEEDS);
+	}
+
+	/**
+	 * A player in the pen opens its gate, so it swings out, and a bot outside holds wheat: the cow in the pen does not
+	 * follow the wheat out (#905), as with a gate a bot opened from inside. Fails at once where it gets out.
+	 */
+	// Measured: passes at tick 200, its fixed end (red: on tick 20 the cow was out in the gate).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 300)
+	public void aCowDoesNotFollowTheWheatOutThroughAGateAPlayerOpenedFromInside(GameTestHelper helper) {
+		pen(helper);
+		List<Cow> penned = List.of(animal(helper, EntityTypes.COW, 3, 5, false));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT, 1));
+		BotScripts.run(bot, """
+			equip("minecraft:wheat")
+			wait(1000)
+			""");
+		BotScripts.failOnError(helper, bot);
+		Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+		Vec3 inside = helper.absoluteVec(new Vec3(3.5, 1, 4.5));
+		BlockPos gate = helper.absolutePos(new BlockPos(3, 1, 3));
+		Direction out = Direction.getApproximateNearest(Vec3.atLowerCornerOf(gate.subtract(helper.absolutePos(new BlockPos(3, 1, 4)))));
+		player.snapTo(inside.x, inside.y, inside.z, out.toYRot(), 0);
+		helper.useBlock(new BlockPos(3, 1, 3), player);
+		helper.assertTrue(helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the player did not open the gate");
+		failWhereOneGetsOut(helper, penned, bot);
+		helper.succeedWhen(() -> helper.assertTrue(helper.getTick() >= 200, "waiting"));
 	}
 
 	/** A bot in the pen with food opens its gate or door at (3, 1, 3) with use and walks out; the animal of type in the pen stays in. */
