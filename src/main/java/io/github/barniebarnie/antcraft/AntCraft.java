@@ -14,6 +14,7 @@ import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.item.BotCoreWipeRecipe;
 import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.script.PlayerLimits;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
@@ -41,6 +42,7 @@ public class AntCraft implements ModInitializer {
 		BotTemptGoal.register();
 		ModComponents.register();
 		ModItems.register();
+		BotCoreWipeRecipe.register();
 		AntCraftCommands.register();
 		ServerScripts.register();
 		PlayerLimits.register();

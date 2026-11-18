@@ -315,6 +315,22 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	/** A blank core crafted alone matches no recipe (#924); a core with only a script still wipes. */
+	@GameTest(maxTicks = 5)
+	public void onlyACoreWithSomethingToForgetCanBeWiped(GameTestHelper helper) {
+		CraftingInput blank = CraftingInput.of(1, 1, List.of(new ItemStack(ModItems.BOT_CORE)));
+		helper.assertTrue(helper.getLevel().recipeAccess().getRecipeFor(RecipeType.CRAFTING, blank, helper.getLevel()).isEmpty(),
+			"a blank core matches a recipe");
+		ItemStack scripted = new ItemStack(ModItems.BOT_CORE);
+		scripted.set(ModComponents.CORE_SCRIPT, new CoreScript("miner", List.of()));
+		CraftingInput input = CraftingInput.of(1, 1, List.of(scripted));
+		ItemStack result = helper.getLevel().recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, helper.getLevel())
+			.map(recipe -> recipe.value().assemble(input)).orElse(ItemStack.EMPTY);
+		helper.assertTrue(ItemStack.isSameItemSameComponents(result, new ItemStack(ModItems.BOT_CORE)),
+			"crafted " + result + " " + result.getComponentsPatch());
+		helper.succeed();
+	}
+
 	/** A bot with a name, a library script running with args, something in memory, and things to carry. */
 	private static AntBot pickable(GameTestHelper helper) {
 		String script = BotScripts.libraryScript(helper, "picked_", "while True:\n    wait(20)\n");
