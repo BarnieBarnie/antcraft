@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.blueprint.ChosenBlueprint;
 import com.mojang.serialization.Codec;
 import io.github.barniebarnie.antcraft.item.CoreScript;
+import io.github.barniebarnie.antcraft.item.RememberedBot;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.minecraft.core.Registry;
@@ -24,6 +25,13 @@ public final class ModComponents {
 		BuiltInRegistries.DATA_COMPONENT_TYPE,
 		AntCraft.id("script"),
 		DataComponentType.<CoreScript>builder().persistent(CoreScript.CODEC).networkSynchronized(CoreScript.STREAM_CODEC).build()
+	);
+
+	/** The bot a Bot Core was picked up from, which the core brings back (#916; see {@code BotActivation}). */
+	public static final DataComponentType<RememberedBot> REMEMBERED_BOT = Registry.register(
+		BuiltInRegistries.DATA_COMPONENT_TYPE,
+		AntCraft.id("remembered_bot"),
+		DataComponentType.<RememberedBot>builder().persistent(RememberedBot.CODEC).networkSynchronized(RememberedBot.STREAM_CODEC).build()
 	);
 
 	/**

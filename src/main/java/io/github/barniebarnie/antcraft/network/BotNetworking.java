@@ -121,9 +121,9 @@ public final class BotNetworking {
 		}
 	}
 
-	/** What the screen asks of one bot, standing for {@code bot run}, {@code stop}, {@code edit} and {@code status}. */
+	/** What the screen asks of one bot, standing for {@code bot run}, {@code stop}, {@code edit}, {@code status} and {@code pickup}. */
 	public enum Action {
-		RUN, STOP, EDIT, STATUS
+		RUN, STOP, EDIT, STATUS, PICKUP
 	}
 
 	/** The client asks to do {@code action} on {@code bot}; {@code script} and {@code args} are for {@link Action#RUN}. */
@@ -233,6 +233,7 @@ public final class BotNetworking {
 				AntCraftCommands.runScript(source, bots, request.script(), args.isEmpty() ? List.of() : List.of(args.split("\\s+")));
 			}
 			case STOP -> AntCraftCommands.stop(source, bots);
+			case PICKUP -> AntCraftCommands.pickUp(source, bots);
 			case EDIT -> {
 				try {
 					if (AntCraftCommands.editBotScript(source, bots) > 0) {

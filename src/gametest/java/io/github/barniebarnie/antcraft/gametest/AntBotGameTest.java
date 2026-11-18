@@ -1,8 +1,18 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.item.CoreScript;
+import io.github.barniebarnie.antcraft.item.RememberedBot;
+import io.github.barniebarnie.antcraft.network.BotNetworking;
+import io.github.barniebarnie.antcraft.script.Memory;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.item.crafting.RecipeType;
+import org.jspecify.annotations.Nullable;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -215,6 +225,125 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		List<String> noCore = BotScripts.command(helper, player, "antcraft core script " + good);
 		helper.assertTrue(noCore.contains("Hold a Bot Core in your main hand"), "answered " + noCore);
 		helper.succeed();
+	}
+
+	/**
+	 * Sneak-using a bot with an empty hand (#916) picks it up for its owner: what it carries lies on the ground, the bot is
+	 * gone, and the owner gets a Bot Core that remembers its name, script and memory. A player who may not control the bot
+	 * cannot pick it up.
+	 */
+	@GameTest(maxTicks = 5)
+	public void sneakUsingABotPicksItUpIntoACore(GameTestHelper helper) {
+		AntBot bot = pickable(helper);
+		BotScripts.RecordingPlayer stranger = BotScripts.owner(helper, bot);
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		String name = bot.getName().getString();
+
+		stranger.setShiftKeyDown(true);
+		bot.interact(stranger, InteractionHand.MAIN_HAND, bot.position());
+		helper.assertTrue(bot.isAlive() && !bot.isRemoved(), "a stranger picked the bot up");
+		helper.assertTrue(core(stranger) == null, "the stranger got a core");
+
+		owner.setShiftKeyDown(true);
+		bot.interact(owner, InteractionHand.MAIN_HAND, bot.position());
+		helper.assertTrue(bot.isRemoved(), "bot still there");
+		helper.assertItemEntityPresent(Items.COBBLESTONE, new BlockPos(1, 1, 1), 2.0);
+		helper.assertItemEntityPresent(Items.IRON_PICKAXE, new BlockPos(1, 1, 1), 2.0);
+		assertRemembers(helper, core(owner), name, bot.getScript());
+		helper.succeed();
+	}
+
+	/** A core a bot was picked up into (#916), placed again, brings that bot back: its name, its memory, running its script. */
+	@GameTest(maxTicks = 5)
+	public void aPickedUpBotsCoreBringsItBack(GameTestHelper helper) {
+		AntBot bot = pickable(helper);
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		String name = bot.getName().getString();
+		ScriptRun was = bot.getScript();
+		owner.setShiftKeyDown(true);
+		bot.interact(owner, InteractionHand.MAIN_HAND, bot.position());
+		ItemStack core = core(owner);
+		helper.assertTrue(core != null, "no core");
+
+		useOnTheFloor(helper, owner, core);
+		AntBot back = helper.findOneEntity(ModEntities.ANT_BOT);
+		helper.assertValueEqual(back.getName().getString(), name, "name");
+		helper.assertValueEqual(back.getMemory().get("job"), "cane", "memory['job']");
+		helper.succeedWhen(() -> {
+			ScriptRun run = back.getScript();
+			helper.assertTrue(run != null && run.name().equals(was.name()) && run.args().equals(was.args()),
+				"runs " + (run == null ? null : run.name() + run.args()));
+		});
+	}
+
+	/** {@code bot pickup} (#916) and the bots screen's Pick up button pick a bot up as sneak-using it does, for its owner only. */
+	@GameTest(maxTicks = 5)
+	public void thePickupCommandAndTheBotsScreenPickABotUp(GameTestHelper helper) {
+		AntBot byCommand = pickable(helper);
+		BotScripts.RecordingPlayer stranger = BotScripts.owner(helper, byCommand);
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, byCommand);
+		String name = byCommand.getName().getString();
+		List<String> refused = BotScripts.commandAsPlayer(helper, stranger, "antcraft bot " + byCommand.getStringUUID() + " pickup");
+		helper.assertTrue(refused.size() == 1 && refused.getFirst().endsWith(" is not your bot"), "answer " + refused);
+		helper.assertFalse(byCommand.isRemoved(), "a stranger picked the bot up");
+		List<String> answer = BotScripts.commandAsPlayer(helper, owner, "antcraft bot " + byCommand.getStringUUID() + " pickup");
+		helper.assertTrue(answer.equals(List.of("commands.antcraft.bot.pickup[1]")), "answer " + answer);
+		helper.assertTrue(byCommand.isRemoved(), "bot still there");
+		assertRemembers(helper, core(owner), name, byCommand.getScript());
+		owner.getInventory().clearContent();
+
+		AntBot byScreen = pickable(helper);
+		byScreen.setOwner(owner.getUUID());
+		String screenName = byScreen.getName().getString();
+		BotNetworking.handle(owner, new BotNetworking.BotAction(byScreen.getUUID(), BotNetworking.Action.PICKUP, "", ""));
+		helper.assertTrue(byScreen.isRemoved(), "bot still there after the screen's Pick up");
+		assertRemembers(helper, core(owner), screenName, byScreen.getScript());
+		helper.succeed();
+	}
+
+	/** A remembering core crafted alone (#916) gives a blank core. */
+	@GameTest(maxTicks = 5)
+	public void craftingARememberingCoreAloneGivesABlankCore(GameTestHelper helper) {
+		ItemStack core = new ItemStack(ModItems.BOT_CORE);
+		core.set(ModComponents.CORE_SCRIPT, new CoreScript("miner", List.of("iron")));
+		core.set(ModComponents.REMEMBERED_BOT, new RememberedBot("Ant 1234", new CompoundTag()));
+		CraftingInput input = CraftingInput.of(1, 1, List.of(core));
+		ItemStack result = helper.getLevel().recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, helper.getLevel())
+			.map(recipe -> recipe.value().assemble(input)).orElse(ItemStack.EMPTY);
+		helper.assertTrue(ItemStack.isSameItemSameComponents(result, new ItemStack(ModItems.BOT_CORE)),
+			"crafted " + result + " " + result.getComponentsPatch());
+		helper.succeed();
+	}
+
+	/** A bot with a name, a library script running with args, something in memory, and things to carry. */
+	private static AntBot pickable(GameTestHelper helper) {
+		String script = BotScripts.libraryScript(helper, "picked_", "while True:\n    wait(20)\n");
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.setCustomName(Component.literal("Ant " + bot.getUUID().toString().substring(0, 4)));
+		bot.getMemory().put("job", "cane");
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 5));
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_PICKAXE));
+		AntCraftCommands.runnable(script, failure -> helper.fail(failure.getString()))
+			.ifPresent(found -> bot.runScript(found, List.of("north", "3")));
+		return bot;
+	}
+
+	/** The Bot Core in {@code player}'s inventory, if any. */
+	static @Nullable ItemStack core(ServerPlayer player) {
+		for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+			if (player.getInventory().getItem(i).is(ModItems.BOT_CORE)) {
+				return player.getInventory().getItem(i);
+			}
+		}
+		return null;
+	}
+
+	private static void assertRemembers(GameTestHelper helper, @Nullable ItemStack core, String name, ScriptRun script) {
+		helper.assertTrue(core != null, "no core");
+		RememberedBot remembered = core.get(ModComponents.REMEMBERED_BOT);
+		helper.assertTrue(remembered != null && remembered.name().equals(name), "remembers " + remembered);
+		helper.assertValueEqual(Memory.fromTag(remembered.memory()).get("job"), "cane", "remembered memory['job']");
+		helper.assertValueEqual(core.get(ModComponents.CORE_SCRIPT), new CoreScript(script.name(), List.of("north", "3")), "script");
 	}
 
 	/** A player who uses {@code core} on the middle of the floor; the bot appears above it. */

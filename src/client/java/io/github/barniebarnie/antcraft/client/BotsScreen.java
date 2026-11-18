@@ -96,7 +96,7 @@ public class BotsScreen extends Screen {
 	protected void init() {
 		Page page = this.page();
 		this.page = page.index();
-		int x = this.width - MARGIN - 4 * (BUTTON_WIDTH + 2);
+		int x = this.width - MARGIN - 5 * (BUTTON_WIDTH + 2);
 		for (int i = page.from(); i < page.to(); i++) {
 			BotNetworking.BotEntry bot = this.list.bots().get(i);
 			int y = TOP + (i - page.from()) * ROW_HEIGHT;
@@ -104,6 +104,7 @@ public class BotsScreen extends Screen {
 			this.button("screen.antcraft.bots.status", x + BUTTON_WIDTH + 2, y, () -> send(bot, BotNetworking.Action.STATUS));
 			this.button("screen.antcraft.bots.stop", x + 2 * (BUTTON_WIDTH + 2), y, () -> send(bot, BotNetworking.Action.STOP));
 			this.button("screen.antcraft.bots.edit", x + 3 * (BUTTON_WIDTH + 2), y, () -> send(bot, BotNetworking.Action.EDIT));
+			this.button("screen.antcraft.bots.pickup", x + 4 * (BUTTON_WIDTH + 2), y, () -> send(bot, BotNetworking.Action.PICKUP));
 		}
 		int y = this.height - MARGIN - BAR_HEIGHT;
 		this.addRenderableWidget(Button.builder(Component.literal("<"), b -> this.turn(-1)).bounds(MARGIN, y, 20, BAR_HEIGHT).build()).active = page.index() > 0;

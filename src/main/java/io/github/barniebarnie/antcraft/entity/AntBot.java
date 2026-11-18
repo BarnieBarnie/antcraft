@@ -1,7 +1,15 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.item.CoreScript;
+import io.github.barniebarnie.antcraft.item.RememberedBot;
+import io.github.barniebarnie.antcraft.registry.ModComponents;
+import io.github.barniebarnie.antcraft.registry.ModItems;
+import net.minecraft.util.Prediction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -864,6 +872,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.memory;
 	}
 
+	/** Replaces the scripts' {@code memory}, such as with what a picked-up bot's core remembers; before any script runs. */
+	public void setMemory(PyDict memory) {
+		this.memory = memory;
+	}
+
 	/** How often the bot has died. */
 	public int getDeaths() {
 		return this.deaths;
@@ -1103,6 +1116,39 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		MinecraftServer server = level.getServer();
 		server.getAllLevels().forEach(each -> BotRespawns.get(each).forget(server, this.getUUID()));
 		this.discard();
+	}
+
+	/**
+	 * Picks the bot up (#916; docs/features/bots.md, Picking a bot up): removes it as {@link #removeForGood} does and gives
+	 * the Bot Core that remembers it, its name, the script it runs ({@link ModComponents#CORE_SCRIPT}, none while it idles)
+	 * and its memory ({@link ModComponents#REMEMBERED_BOT}).
+	 */
+	public ItemStack pickUp(ServerLevel level) {
+		ItemStack core = new ItemStack(ModItems.BOT_CORE);
+		if (this.isRunningScript() && !this.idling) {
+			core.set(ModComponents.CORE_SCRIPT, new CoreScript(this.script.name(), this.script.args()));
+		}
+		core.set(ModComponents.REMEMBERED_BOT, new RememberedBot(this.getName().getString(),
+			Memory.toTag(this.memory, problem -> this.log.add(level.getGameTime(), Output.Level.WARN, problem))));
+		this.removeForGood(level);
+		return core;
+	}
+
+	/** Sneak-using the bot with an empty hand picks it up ({@link #pickUp}), for a player who may control it. */
+	@Override
+	protected InteractionResult mobInteract(Player player, InteractionHand hand) {
+		if (hand != InteractionHand.MAIN_HAND || !player.isSecondaryUseActive() || !player.getMainHandItem().isEmpty()) {
+			return super.mobInteract(player, hand);
+		}
+		if (!(this.level() instanceof ServerLevel level) || !(player instanceof ServerPlayer serverPlayer)) {
+			return InteractionResult.SUCCESS;
+		}
+		if (!AntCraftCommands.mayControl(serverPlayer.createCommandSourceStack(), this)) {
+			player.sendOverlayMessage(Component.translatable("commands.antcraft.bot.not_yours", this.getName()));
+			return InteractionResult.FAIL;
+		}
+		player.getInventory().placeItemBackInInventory(this.pickUp(level), Prediction.SERVER_ONLY);
+		return InteractionResult.SUCCESS;
 	}
 
 	/** Drops everything the bot carries, like a player: its inventory and whatever it holds or wears. */

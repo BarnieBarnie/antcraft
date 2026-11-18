@@ -35,6 +35,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.ItemStack;
+import io.github.barniebarnie.antcraft.registry.ModItems;
 import net.minecraft.world.item.Items;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -486,6 +487,9 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			"job still taken: " + colony.jobs().jobs("haul"));
 		helper.assertItemEntityPresent(Items.COBBLESTONE, new BlockPos(1, 1, 1), 2.0);
 		helper.assertItemEntityPresent(Items.IRON_PICKAXE, new BlockPos(1, 1, 1), 2.0);
+		// The owner gets a blank core back (#916).
+		ItemStack core = AntBotGameTest.core(owner);
+		helper.assertTrue(core != null && ItemStack.isSameItemSameComponents(core, new ItemStack(ModItems.BOT_CORE)), "core given back: " + core);
 		helper.succeed();
 	}
 

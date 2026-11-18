@@ -67,7 +67,7 @@ import org.jspecify.annotations.Nullable;
  * /antcraft script edit &lt;script&gt;   (also any player; opens the script editor, which only operators may save from)
  * /antcraft script new &lt;script&gt;   (opens the script editor on a new script; any player may run it, only operators are let through)
  * /antcraft script reload
- * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|join &lt;core pos&gt; [dimension]|leave|status|log [n] [level]|edit   (defaults to the nearest bot; also a
+ * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|pickup|join &lt;core pos&gt; [dimension]|leave|status|log [n] [level]|edit   (defaults to the nearest bot; also a
  *     bot's owner, on their own bots, within the limits of {@link PlayerLimits})
  * /antcraft bots   (any player; opens the bots screen with the bots they may control)
  * /antcraft bot remove "&lt;name&gt;"   (a dead bot waiting to respawn, by its name; also its owner)
@@ -328,9 +328,44 @@ public final class AntCraftCommands {
 		if (!checkAny(source, bots)) {
 			return 0;
 		}
-		bots.forEach(bot -> bot.removeForGood((ServerLevel) bot.level()));
+		for (AntBot bot : bots) {
+			// A blank core back, so cores are never lost (#916).
+			giveCore(source, bot, new ItemStack(ModItems.BOT_CORE));
+			bot.removeForGood((ServerLevel) bot.level());
+		}
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.remove", bots.size()), false);
 		return bots.size();
+	}
+
+	/**
+	 * Picks {@code bots} up ({@link AntBot#pickUp}, #916): each one's core, which remembers it, goes to the player who asked
+	 * ({@link #giveCore}).
+	 */
+	public static int pickUp(CommandSourceStack source, List<AntBot> bots) {
+		if (!checkAny(source, bots)) {
+			return 0;
+		}
+		for (AntBot bot : bots) {
+			BlockPos at = bot.blockPosition();
+			ItemStack core = bot.pickUp((ServerLevel) bot.level());
+			giveCore(source, bot.level(), at, core);
+		}
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.pickup", bots.size()), false);
+		return bots.size();
+	}
+
+	private static void giveCore(CommandSourceStack source, AntBot bot, ItemStack core) {
+		giveCore(source, bot.level(), bot.blockPosition(), core);
+	}
+
+	/** Gives {@code core} to the source's player, dropped at their feet if their inventory is full, or with no player drops it {@code at}. */
+	private static void giveCore(CommandSourceStack source, net.minecraft.world.level.Level level, BlockPos at, ItemStack core) {
+		ServerPlayer player = source.getPlayer();
+		if (player != null) {
+			player.getInventory().placeItemBackInInventory(core, net.minecraft.util.Prediction.SERVER_ONLY);
+		} else {
+			net.minecraft.world.level.block.Block.popResource(level, at, core);
+		}
 	}
 
 	/** Drops the respawn the dead bot {@code id} waits for, if the source may control it; {@code noEntity} where none waits. */
@@ -586,13 +621,14 @@ public final class AntCraftCommands {
 		return 1;
 	}
 
-	/** {@code run <script> [args]|stop|remove|join <core pos> [dimension]|leave|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
+	/** {@code run <script> [args]|stop|remove|pickup|join <core pos> [dimension]|leave|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
 	private static <T extends ArgumentBuilder<CommandSourceStack, T>> T botCommands(T node, BotsArgument bots) {
 		return node
 			.then(Commands.literal("run")
 				.then(scriptArgument((ctx, name, args) -> runScript(ctx.getSource(), bots.get(ctx), name, args))))
 			.then(Commands.literal("stop").executes(ctx -> stop(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("remove").executes(ctx -> remove(ctx, bots)))
+			.then(Commands.literal("pickup").executes(ctx -> pickUp(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("join").then(Commands.argument("core", BlockPosArgument.blockPos())
 				.executes(ctx -> join(ctx.getSource(), bots.get(ctx), BlockPosArgument.getBlockPos(ctx, "core"), ctx.getSource().getLevel()))
 				.then(Commands.argument("dimension", DimensionArgument.dimension())

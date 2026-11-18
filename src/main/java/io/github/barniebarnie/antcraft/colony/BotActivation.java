@@ -4,6 +4,8 @@ import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.item.CoreScript;
+import io.github.barniebarnie.antcraft.item.RememberedBot;
+import io.github.barniebarnie.antcraft.script.Memory;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.PlayerLimits;
 import java.util.List;
@@ -38,12 +40,18 @@ public final class BotActivation {
 	 * With a {@code script} (the core's {@link CoreScript}) the bot starts it at once, as {@code /antcraft bot run} would;
 	 * one that is gone or no longer compiles is refused as that command refuses it, in the player's chat, and the bot
 	 * runs {@code idle.py} as one from a core without a script does. So does a player who already runs
-	 * {@code maxScriptsPerPlayer} scripts ({@link PlayerLimits#mayStart}), who is told so.
+	 * {@code maxScriptsPerPlayer} scripts ({@link PlayerLimits#mayStart}), who is told so. A core a bot was picked up into
+	 * ({@code remembered}, #916) gives that bot's name and memory back, before its script starts.
 	 */
-	public static @Nullable AntBot activate(ServerLevel level, BlockPos pos, @Nullable Player player, @Nullable CoreScript script) {
+	public static @Nullable AntBot activate(ServerLevel level, BlockPos pos, @Nullable Player player, @Nullable CoreScript script,
+		@Nullable RememberedBot remembered) {
 		AntBot bot = activate(level, pos, mayJoin(player, pos));
 		if (bot == null) {
 			return null;
+		}
+		if (remembered != null) {
+			bot.setCustomName(Component.literal(remembered.name()));
+			bot.setMemory(Memory.fromTag(remembered.memory()));
 		}
 		if (player != null) {
 			bot.setOwner(player.getUUID());
@@ -61,7 +69,7 @@ public final class BotActivation {
 		return bot;
 	}
 
-	/** Which colonies a bot activated at {@code pos} by {@code player} may join; see {@link #activate(ServerLevel, BlockPos, Player, CoreScript)}. */
+	/** Which colonies a bot activated at {@code pos} by {@code player} may join; see {@link #activate(ServerLevel, BlockPos, Player, CoreScript, RememberedBot)}. */
 	public static Predicate<Colony> mayJoin(@Nullable Player player, BlockPos pos) {
 		if (player == null) {
 			return colony -> false;
