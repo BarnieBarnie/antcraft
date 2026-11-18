@@ -378,6 +378,22 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Six iron ingots with two oak and three birch planks to burn (#932): the plan burns the three birch planks, those it
+	 * has most of, and one oak plank, so the smelt burns the birch planks first, not the oak planks in the first slot,
+	 * which left a birch plank where the plan kept an oak one.
+	 */
+	@GameTest(maxTicks = 2600)
+	public void craftAllBurnsTheFuelThePlanPicked(GameTestHelper helper) {
+		furnace(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 2));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 3));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 6));
+		expect(helper, bot, craftAll("'iron_ingot', 6, furnace=" + furnaceAt(helper), "iron_ingot", "oak_planks", "birch_planks"),
+			List.of("True None {} 6 1 0"));
+	}
+
+	/**
 	 * Sticks, then oak slabs, from three oak and four birch planks (#925): craft takes the planks the plan takes, those it
 	 * has most of (birch), not the oak planks in the first slot that the slabs need.
 	 */

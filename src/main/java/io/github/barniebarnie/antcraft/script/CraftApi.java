@@ -520,16 +520,28 @@ public final class CraftApi {
 			.map(recipe -> recipe.value().assemble(input)).orElse(ItemStack.EMPTY);
 	}
 
-	/** The best fuel the bot carries, in the order of {@link GameRecipeBook#fuels}; one that matches nothing if it carries none. */
-	private static Predicate<ItemStack> bestFuel(ServerLevel level, AntBot bot) {
+	/**
+	 * The best fuel the bot carries that {@code allowed} takes, as the plan burns it (TaskPlanner burnStock, #932): in the
+	 * order of {@link GameRecipeBook#fuels}, and of interchangeable fuels the one carried most of, the first on a tie;
+	 * null if it carries none of the book's fuels that allowed takes.
+	 */
+	private static @Nullable Predicate<ItemStack> bestFuel(ServerLevel level, AntBot bot, Predicate<ItemStack> allowed) {
 		for (TaskPlanner.Fuel<Item> fuel : GameRecipeBook.of(level.getServer()).fuels()) {
+			Item best = null;
+			long most = 0;
 			for (Item item : fuel.items()) {
-				if (BotHands.count(bot, stack -> stack.is(item)) > 0) {
-					return stack -> stack.is(item);
+				long count = allowed.test(new ItemStack(item)) ? BotHands.count(bot, stack -> stack.is(item)) : 0;
+				if (count > most) {
+					best = item;
+					most = count;
 				}
 			}
+			if (best != null) {
+				Item burn = best;
+				return stack -> stack.is(burn);
+			}
 		}
-		return stack -> false;
+		return null;
 	}
 
 	/** Loading a furnace, waiting by it and taking the output out. */
@@ -625,11 +637,17 @@ public final class CraftApi {
 		}
 
 		/**
-		 * What to burn now: the fuel asked for, else the best fuel carried, so once one runs out the next goes in. Only
-		 * when the fire is out: bestFuel reads the inventory once for each fuel item (#347).
+		 * What to burn now: the fuel last burnt while any is left, else the best carried of the fuel asked for, else of
+		 * any fuel, so one is used up before the next goes in, as the plan burns them (#932); a fuel asked for that the
+		 * book does not rank burns in slot order. Only when the fire is out: bestFuel reads the inventory once for each
+		 * fuel item (#347).
 		 */
 		private Predicate<ItemStack> fuel() {
-			Predicate<ItemStack> fuel = this.fuel != null ? this.fuel : bestFuel(this.level, this.bot);
+			Predicate<ItemStack> allowed = this.fuel != null ? this.fuel : stack -> true;
+			Item last = this.lastFuel;
+			Predicate<ItemStack> best = last != null && allowed.test(new ItemStack(last)) && BotHands.count(this.bot, stack -> stack.is(last)) > 0
+				? stack -> stack.is(last) : bestFuel(this.level, this.bot, allowed);
+			Predicate<ItemStack> fuel = best != null ? best : this.fuel != null ? this.fuel : stack -> false;
 			return fuel.and(burnable -> burnable.has(DataComponents.COOKING_FUEL));
 		}
 
