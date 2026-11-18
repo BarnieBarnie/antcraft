@@ -251,8 +251,9 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 	 * A cow outside the pen, south of its fence, wheat in the chest: the bot lures it in with the wheat, through the gate
 	 * on the north side, and shuts the gate behind it.
 	 */
-	// Measured: passes at tick 277 (red: the cow stayed outside; without BotTemptGoal it wanders off, and led straight to
-	// the far corner it stood at the fence nearest the bot, as an animal finds no way round a fence).
+	// Measured: passes at tick 272 to 309, 80 copies of 80 (one in 40 failed before #874, see the test below; red: the
+	// cow stayed outside; without BotTemptGoal it wanders off, and led straight to the far corner it stood at the fence
+	// nearest the bot, as an animal finds no way round a fence).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 600)
 	public void aCowOutsideThePenIsLuredIn(GameTestHelper helper) {
 		Cow cow = animal(helper, EntityTypes.COW, 3, 10, false);
@@ -261,6 +262,35 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(inPen(helper, Cow.class).size() == 1, "the cow is not in the pen but at "
 				+ TestPositions.relative(helper, cow.position()) + ", the bot at " + TestPositions.relative(helper, bot.position()) + ", "
 				+ BotScripts.carries(bot) + ", " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(!helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the gate is open");
+		});
+	}
+
+	/**
+	 * A cow just outside the pen's south fence, two blocks from the bot inside, wheat in the chest: the bot still walks
+	 * out to it and leads it round to the gate. Fails at once where the bot waits in its corner for the cow with the
+	 * gate shut.
+	 */
+	// Measured: passes at tick 271 to 347, 80 copies of 80 (red: on tick 99 the bot waits with the cow outside:
+	// goto(stray.pos, near=3) was done from inside the pen, through the fence, so the bot walked out through the gate
+	// with the cow left behind, and the gate it had opened for that walk, still open as the bot checked it, was shut by
+	// its walk to the corner. #874: one run in 40 of aCowOutsideThePenIsLuredIn, where the cow came to the fence by the
+	// bot while it took the wheat.)
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 600)
+	public void aCowAtTheFenceOutsideIsLedRoundToTheGate(GameTestHelper helper) {
+		Cow cow = animal(helper, EntityTypes.COW, 3, 8, false);
+		AntBot bot = ranch(helper, 4, new ItemStack(Items.WHEAT, 4));
+		helper.onEachTick(() -> {
+			String action = bot.getScript() == null ? null : bot.getScript().action();
+			if ("wait(10)".equals(action) && inPen(helper, Cow.class).isEmpty()
+				&& !helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN)) {
+				helper.fail("the bot waits for the cow with the gate shut, the cow at " + TestPositions.relative(helper, cow.position())
+					+ ", the bot at " + TestPositions.relative(helper, bot.position()));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(inPen(helper, Cow.class).size() == 1, "the cow is not in the pen but at "
+				+ TestPositions.relative(helper, cow.position()) + ", the bot at " + TestPositions.relative(helper, bot.position()));
 			helper.assertTrue(!helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the gate is open");
 		});
 	}

@@ -99,9 +99,12 @@ def lure(kind, animals, low, high, cap, radius):
         return
     stray = strays[0]
     equip(FOOD[kind])
-    goto(stray.pos, near=3)
+    # Near enough only outside the fence: within 3 a bot in the pen got there through the fence and left the animal
+    # behind (#874).
+    goto(stray.pos, near=1)
     out = Pos(g.x + (1 if g.x > high.x else -1 if g.x < low.x else 0), g.y, g.z + (1 if g.z > high.z else -1 if g.z < low.z else 0))
     goto(out)
+    wait(2)  # a gate the walk opened is shut once the bot has passed it; left open, the next walk would shut it (#874)
     # The gate stands open while the stray comes in; the penned animals that follow the food follow the bot to its corner,
     # and none of a pen full of others walked out in RanchGameTest aLureLetsNoPennedAnimalOut (#855).
     if not block(g).state["open"]:
