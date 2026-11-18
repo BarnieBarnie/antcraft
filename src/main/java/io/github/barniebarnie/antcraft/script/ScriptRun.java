@@ -647,6 +647,19 @@ public final class ScriptRun {
 		return action == null ? null : action.describe();
 	}
 
+	/**
+	 * What the script is doing on its {@link #line}, for a failure message: the action's description, else the native it
+	 * called on that line, such as a plan or scan whose charged instructions it still pays off with no action running
+	 * (#876), else {@code script code}.
+	 */
+	public String call() {
+		if (action != null) {
+			return action.describe();
+		}
+		String called = vm.call();
+		return called == null ? "script code" : called + "(...)";
+	}
+
 	/** Whether the script runs an action that walks the bot ({@link Action#walks}), such as {@code goto}. */
 	public boolean walking() {
 		return action != null && action.walks();

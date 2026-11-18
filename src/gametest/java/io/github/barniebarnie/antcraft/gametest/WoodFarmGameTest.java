@@ -2251,7 +2251,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	/** Where the bot is, the call its script runs and what it said, for a failure message. */
 	private static String doing(GameTestHelper helper, AntBot bot) {
 		ScriptRun run = bot.getScript();
-		return "the bot at " + TestPositions.relative(helper, bot.position()) + (run == null ? "" : ", running " + run.action() + " on line " + run.line())
+		return "the bot at " + TestPositions.relative(helper, bot.position()) + (run == null ? "" : ", running " + run.call() + " on line " + run.line())
 			+ "; said " + said(bot);
 	}
 

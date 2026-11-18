@@ -693,6 +693,9 @@ class MoveApiTest {
 		assertTrue(run.action() != null && run.action().startsWith("reachable"), "action " + run.action());
 		tick(run);
 		assertTrue(run.action() == null, "still planning: " + run.action());
+		// Paying off the plan's instructions, the script runs no action, but a failure message still names the call (#876).
+		assertEquals("reachable(...)", run.call());
+		assertEquals(1, run.line());
 		// The charged instructions use up this tick's budget and the next ones' before the script goes on.
 		for (int i = 0; i < 5 && run.state() == ScriptRun.State.RUNNING; i++) {
 			tick(run);

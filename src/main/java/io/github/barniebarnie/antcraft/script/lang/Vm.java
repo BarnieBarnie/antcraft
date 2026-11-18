@@ -113,6 +113,9 @@ public final class Vm {
 	/** Values every module sees, such as {@code memory}; a module's own global of the same name hides one. */
 	final Map<String, Object> builtins = new LinkedHashMap<>();
 	final List<Frame> frames = new ArrayList<>();
+	/** The native the script called last and the line it called it on, for {@link #call}; not saved. */
+	private @Nullable String lastNative;
+	private int lastNativeLine;
 	Status status = Status.RUNNING;
 	private ScriptError error;
 	long executed;
@@ -215,6 +218,14 @@ public final class Vm {
 			}
 		}
 		return frame.code.lines()[Math.min(frame.pc, frame.code.size() - 1)];
+	}
+
+	/**
+	 * The native the script called last, if it called it on the line it is at now ({@link #line}), else null: such as a
+	 * native whose charged instructions it still pays off, or one it waits on (#876).
+	 */
+	public @Nullable String call() {
+		return lastNative != null && lastNativeLine == line() ? lastNative : null;
 	}
 
 	/**
@@ -894,6 +905,8 @@ public final class Vm {
 	/** Calls {@code function} with {@code args}; {@code given} are the arguments the script gave {@code callee}. */
 	private void callNative(Object callee, NativeFunction function, String name, List<Object> args, Map<String, Object> kwargs,
 			List<Object> given) {
+		lastNative = name;
+		lastNativeLine = line();
 		Object result = function.call(new NativeCall(name, Collections.unmodifiableList(args),
 				Collections.unmodifiableMap(kwargs)));
 		if (result == NativeCall.SUSPEND) {

@@ -96,6 +96,7 @@ class ScriptRunTest {
 		ScriptRun run = start("x = 1\nwait(20)\n");
 		tick(run, 2000);
 		assertEquals("wait(20)", run.action());
+		assertEquals("wait(20)", run.call());
 		assertEquals(2, run.line());
 	}
 
@@ -164,6 +165,7 @@ class ScriptRunTest {
 		assertEquals(ScriptRun.State.RUNNING, run.state());
 		assertEquals(1500, run.executed());
 		assertNull(run.action());
+		assertEquals("script code", run.call());
 	}
 
 	@Test

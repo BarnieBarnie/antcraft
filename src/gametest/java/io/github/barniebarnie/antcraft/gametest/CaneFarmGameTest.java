@@ -167,7 +167,7 @@ public class CaneFarmGameTest implements CustomTestMethodInvoker {
 				ScriptRun run = bot.getScript();
 				helper.fail((broken ? "cell 1 broken: " + helper.getBlockState(new BlockPos(1, 1, 3)) + ", " + helper.getBlockState(new BlockPos(2, 0, 3))
 					+ ", " + helper.getBlockState(new BlockPos(3, 1, 3)) : "a cell not built") + "; the bot at " + TestPositions.relative(helper, bot.position())
-					+ (run == null ? "" : ", running " + run.action() + " on line " + run.line()) + "; said " + BotScripts.log(bot, Output.Level.PRINT));
+					+ (run == null ? "" : ", running " + run.call() + " on line " + run.line()) + "; said " + BotScripts.log(bot, Output.Level.PRINT));
 			}
 		});
 		helper.succeedWhen(() -> {

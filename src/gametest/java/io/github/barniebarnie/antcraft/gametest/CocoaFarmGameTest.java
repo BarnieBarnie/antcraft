@@ -84,7 +84,7 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 						built[cell] |= y == 2;
 					} else if (built[cell]) {
 						helper.fail("the jungle log at " + log + " is gone: " + helper.getBlockState(log) + "; the bot at "
-							+ TestPositions.relative(helper, bot.position()) + ", running " + run.action() + " on line " + run.line());
+							+ TestPositions.relative(helper, bot.position()) + ", running " + run.call() + " on line " + run.line());
 					}
 				}
 			}
