@@ -211,11 +211,14 @@ def corner(name, told):
 
 def corner_spot(low, high):
     """Where corner sends the bot, over the floor by cell 0's low corner low, the cell's floor reaching to high: the first
-    in low's chunk and off the cell of the blocks diagonal from low, into the cell first, then a block back on z, on x,
-    on both, else diagonal out of the cell's far corner. Kept in the chunk by capping, it was sent onto the cell's row,
-    a berry bush, which its path pillared over and dropped it into (#845); into the cell, on a cell deeper than a row, it
-    was sent onto a cactus farm's second cactus, a walk that cannot end, which left it by the cactus (#846)."""
-    for x, z in [(low.x + 1, low.z + 1), (low.x + 1, low.z - 1), (low.x - 1, low.z + 1), (low.x - 1, low.z - 1),
+    in low's chunk and off the cell of the blocks diagonal into the cell from low, then a block back on z, on x, then
+    west of the depot's first chest, a block back on x and two on z, else diagonal out of the cell's far corner. Kept in
+    the chunk by capping, it was sent onto the cell's row, a berry bush, which its path pillared over and dropped it into
+    (#845); into the cell, on a cell deeper than a row, it was sent onto a cactus farm's second cactus, a walk that
+    cannot end, which left it by the cactus (#846). A block back on both, diagonal to low, with the corner at chunk-local
+    (15, 15), a berry farm's bot ended its walk over the edge of its block toward the bush at low (#854); west of the
+    depot touches no cell block."""
+    for x, z in [(low.x + 1, low.z + 1), (low.x + 1, low.z - 1), (low.x - 1, low.z + 1), (low.x - 1, low.z - 2),
                  (high.x + 1, high.z + 1)]:
         on_cell = low.x <= x <= high.x and low.z <= z <= high.z
         if x // 16 == low.x // 16 and z // 16 == low.z // 16 and not on_cell:

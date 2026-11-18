@@ -217,7 +217,31 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			""");
 		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(
-			List.of("Pos(2, 1, 4) Pos(2, 1, 14) Pos(-18, 1, -2)", "Pos(2, 1, 2) Pos(0, 1, 17) Pos(18, 1, 18)")),
+			List.of("Pos(2, 1, 4) Pos(2, 1, 14) Pos(-18, 1, -3)", "Pos(2, 1, 2) Pos(0, 1, 17) Pos(18, 1, 18)")),
+			"said " + BotScripts.log(bot, Output.Level.PRINT)));
+	}
+
+	/**
+	 * A berry farm's corner at chunk-local (15, 15): its corner spot touches no bush of cell 0, not even diagonally
+	 * (#854). It was the block diagonal back from the corner, by the bush there, and the corner walk could end with the
+	 * bot over the edge of its block toward it. Here whether the spot is two blocks or more off the cell, on the farther
+	 * axis, is said.
+	 */
+	// Measured: passes at tick 5 (red: said False, the spot Pos(14, 1, 14) diagonal to the bush at the corner).
+	@GameTest(maxTicks = 20)
+	public void aBerryFarmsCornerSpotAtTheChunksEdgeTouchesNoBush(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			import jobs.berry_farm
+			w, d = jobs.berry_farm.spec()["size"]
+			low = Pos(15, 0, 15)
+			high = low + (w - 1, 0, d - 1)
+			s = lib.cellfarm.corner_spot(low, high)
+			print(max(low.x - s.x, s.x - high.x, low.z - s.z, s.z - high.z) >= 2)
+			""");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True")),
 			"said " + BotScripts.log(bot, Output.Level.PRINT)));
 	}
 }
