@@ -338,6 +338,9 @@ public final class BotHands {
 			}
 			return failed[0] == null;
 		});
+		if (failed[0] == null) {
+			PathFollower.usedOpen(level, pos);
+		}
 		return failed[0];
 	}
 

@@ -22,7 +22,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * at its gate, the bot shoved one out ahead of it, or the crowd pressed one through behind it. A gate opened otherwise,
  * such as by jobs.ranch's {@code use} to lure an animal in, is open to them as usual, but an animal following a bot
  * that holds its food ({@link BotTemptGoal}) goes through it only the way it swung open, away from whoever opened it
- * (#879): a lured animal follows the bot in, a penned one does not follow it out.
+ * (#879): a lured animal follows the bot in, a penned one does not follow it out. Where a bot opened it with use and it
+ * is a pen's gate, the way in counts, not the swing ({@link PathFollower#usedOpen}, #884): opened from inside, it
+ * swings out.
  * <p>
  * Shut to an animal, it is {@link PathFollower#shutTo}'s panel.
  */
@@ -33,14 +35,17 @@ abstract class FenceGateBlockMixin {
 		CallbackInfoReturnable<VoxelShape> cir) {
 		if (state.getValue(BlockStateProperties.OPEN) && context instanceof EntityCollisionContext entityContext
 			&& entityContext.getEntity() instanceof Animal animal
-			&& (PathFollower.openedByBot(animal.level(), pos) || BotTemptGoal.leads(animal) && pastSwing(state, pos, animal))) {
+			&& (PathFollower.openedByBot(animal.level(), pos) || BotTemptGoal.leads(animal) && keptIn(state, pos, animal))) {
 			cir.setReturnValue(PathFollower.shutTo(animal, state, getter, pos));
 		}
 	}
 
-	/** Whether the animal is on the side an open gate swung to, which vanilla turns away from the one who opened it. */
-	private static boolean pastSwing(BlockState state, BlockPos pos, Animal animal) {
-		Direction facing = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
-		return (animal.getX() - pos.getX() - 0.5) * facing.getStepX() + (animal.getZ() - pos.getZ() - 0.5) * facing.getStepZ() > 0;
+	/**
+	 * Whether the animal is on the pen's side of a gate a bot opened with use ({@link PathFollower#usedOpen}, #884), or,
+	 * where that found no pen, on the side the open gate swung to, which vanilla turns away from the one who opened it.
+	 */
+	private static boolean keptIn(BlockState state, BlockPos pos, Animal animal) {
+		Direction inward = PathFollower.inward(animal.level(), pos);
+		return PathFollower.inside(animal, pos, inward != null ? inward : state.getValue(BlockStateProperties.HORIZONTAL_FACING));
 	}
 }

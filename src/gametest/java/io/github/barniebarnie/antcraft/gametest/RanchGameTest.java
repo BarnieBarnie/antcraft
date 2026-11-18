@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
@@ -476,6 +477,54 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		});
 		failWhereOneGetsOut(helper, List.of(killed, removed), bot);
 		helper.succeedWhen(() -> helper.assertTrue(helper.getTick() >= 40, "waiting"));
+	}
+
+	/**
+	 * A cow in the pen and a bot by it holding wheat, which opens the gate with {@code use} from inside, so it swings
+	 * out, and walks out through it: the cow does not follow the wheat out (#884). Fails at once where it gets out.
+	 */
+	// Measured: passes at tick 200, its fixed end, in three runs (red: on tick 28 the cow was out in the gate).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 300)
+	public void aCowDoesNotFollowTheWheatOutThroughAGateUsedFromInside(GameTestHelper helper) {
+		pen(helper);
+		leadOutFromInside(helper, EntityTypes.COW, Items.WHEAT);
+	}
+
+	/** aCowDoesNotFollowTheWheatOutThroughAGateUsedFromInside with a plank wall, two high, an oak door for the gate and a chicken following seeds (#884). */
+	// Measured: passes at tick 200, its fixed end, in three runs (red: on tick 36 the chicken was out in the door; a cow
+	// following wheat did not come through the door even before the fix).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 300)
+	public void aChickenDoesNotFollowTheSeedsOutThroughADoorUsedFromInside(GameTestHelper helper) {
+		pen(helper);
+		for (int x = 0; x < 8; x++) {
+			helper.setBlock(x, 1, 3, Blocks.OAK_PLANKS);
+			helper.setBlock(x, 2, 3, Blocks.OAK_PLANKS);
+		}
+		BlockState door = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.NORTH);
+		helper.setBlock(new BlockPos(3, 1, 3), door);
+		helper.setBlock(new BlockPos(3, 2, 3), door.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		leadOutFromInside(helper, EntityTypes.CHICKEN, Items.WHEAT_SEEDS);
+	}
+
+	/** A bot in the pen with food opens its gate or door at (3, 1, 3) with use and walks out; the animal of type in the pen stays in. */
+	private static void leadOutFromInside(GameTestHelper helper, EntityType<? extends Animal> type, Item food) {
+		List<Animal> penned = List.of(animal(helper, type, 3, 6, false));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(food, 1));
+		BlockPos gate = helper.absolutePos(new BlockPos(3, 1, 3));
+		BlockPos out = helper.absolutePos(new BlockPos(3, 1, 0));
+		BotScripts.run(bot, """
+			equip("%s")
+			if not use(Pos(%d, %d, %d)) or not goto(Pos(%d, %d, %d)):
+			    raise Exception("no way out")
+			wait(1000)
+			""".formatted(BuiltInRegistries.ITEM.getKey(food), gate.getX(), gate.getY(), gate.getZ(), out.getX(), out.getY(), out.getZ()));
+		BotScripts.failOnError(helper, bot);
+		failWhereOneGetsOut(helper, penned, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getTick() >= 200, "waiting");
+			helper.assertTrue(helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the gate is shut");
+		});
 	}
 
 	/**

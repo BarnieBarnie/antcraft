@@ -14,13 +14,17 @@ import io.github.barniebarnie.antcraft.pathing.PathBudget;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.pathing.Step;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
+import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
@@ -45,6 +49,7 @@ import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.phys.AABB;
@@ -60,6 +65,10 @@ import org.jspecify.annotations.Nullable;
  * blocks in the way, placing scaffold blocks, then moving.
  */
 public class PathFollower {
+	/** The way in of each pen door or gate a bot opened with use ({@link #usedOpen}), by its place. */
+	private static final Map<GlobalPos, Direction> INWARD = new ConcurrentHashMap<>();
+	/** A fill round more blocks than this is not a pen ({@link #usedOpen}). */
+	private static final int PEN_CELLS = 2048;
 	public static final TagKey<Item> SCAFFOLD_BLOCKS = TagKey.create(Registries.ITEM, AntCraft.id("scaffold_blocks"));
 	/**
 	 * Scaffold blocks that break quickly by hand (item tag {@code antcraft:lumberjack_scaffold_blocks}), for bots
@@ -485,6 +494,65 @@ public class PathFollower {
 		return animal.getX() > pos.getX() + 0.5
 			? Shapes.box(0, 0, 0, shut.max(Direction.Axis.X), top, 1)
 			: Shapes.box(shut.min(Direction.Axis.X), 0, 0, 1, top, 1);
+	}
+
+	/**
+	 * Notes which side of the door or gate at pos, if a bot just opened it with {@code use}, is a pen's inside: the side
+	 * where a fill along the ground at its height, round blocks with collision, reaches fewer blocks, up to
+	 * {@link #PEN_CELLS} (where both reach that many, neither). An animal following a bot that holds its food goes
+	 * through it only inward ({@link #inward}; FenceGateBlockMixin, BlockStateBaseMixin, #884): a lured animal comes in,
+	 * a penned one does not follow the food out, whichever side the bot opened it from.
+	 */
+	public static void usedOpen(ServerLevel level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+		if (!(state.getBlock() instanceof FenceGateBlock || state.getBlock() instanceof DoorBlock) || !state.getValue(BlockStateProperties.OPEN)) {
+			return;
+		}
+		BlockPos lower = state.getBlock() instanceof DoorBlock && state.getValue(DoorBlock.HALF) == DoubleBlockHalf.UPPER ? pos.below() : pos;
+		Direction facing = state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+		int front = fill(level, lower.relative(facing), lower);
+		int back = fill(level, lower.relative(facing.getOpposite()), lower);
+		GlobalPos key = GlobalPos.of(level.dimension(), lower);
+		if (front != back) {
+			INWARD.put(key, front < back ? facing : facing.getOpposite());
+		} else {
+			INWARD.remove(key);
+		}
+	}
+
+	/**
+	 * The way into the pen through the door or gate at pos (the lower half of a door), as {@link #usedOpen} found it when
+	 * a bot last opened it with {@code use}; null where it found no pen.
+	 */
+	// ponytail: kept until the next use of that gate, so one in a pen torn down since still keeps tempted animals out.
+	public static @Nullable Direction inward(Level level, BlockPos pos) {
+		return level instanceof ServerLevel ? INWARD.get(GlobalPos.of(level.dimension(), pos)) : null;
+	}
+
+	/** Whether the animal is on the pen's side of the middle of the door or gate at pos, whose way in is inward. */
+	public static boolean inside(Entity animal, BlockPos pos, Direction inward) {
+		return (animal.getX() - pos.getX() - 0.5) * inward.getStepX() + (animal.getZ() - pos.getZ() - 0.5) * inward.getStepZ() > 0;
+	}
+
+	/** How many blocks a fill from start reaches, not through gate, up to {@link #PEN_CELLS}; that many at an unloaded one. */
+	private static int fill(ServerLevel level, BlockPos start, BlockPos gate) {
+		Set<BlockPos> seen = new HashSet<>(List.of(gate, start));
+		ArrayDeque<BlockPos> next = new ArrayDeque<>(List.of(start));
+		while (!next.isEmpty()) {
+			BlockPos at = next.poll();
+			if (seen.size() > PEN_CELLS || !level.isLoaded(at)) {
+				return PEN_CELLS;
+			}
+			if (level.getBlockState(at).getCollisionShape(level, at).isEmpty()) {
+				for (Direction d : Direction.Plane.HORIZONTAL) {
+					BlockPos beside = at.relative(d);
+					if (seen.add(beside)) {
+						next.add(beside);
+					}
+				}
+			}
+		}
+		return seen.size();
 	}
 
 	private static void setOpen(AntBot bot, ServerLevel level, BlockPos pos, BlockState state, boolean open) {

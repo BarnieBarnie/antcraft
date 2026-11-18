@@ -1,7 +1,9 @@
 package io.github.barniebarnie.antcraft.mixin;
 
+import io.github.barniebarnie.antcraft.entity.BotTemptGoal;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
@@ -48,9 +50,18 @@ abstract class BlockStateBaseMixin {
 			&& entityContext.getEntity() instanceof Animal animal) {
 			BlockState state = (BlockState) (Object) this;
 			BlockPos lower = state.getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER ? pos : pos.below();
-			if (state.getValue(DoorBlock.OPEN) && PathFollower.openedByBot(animal.level(), lower)) {
+			if (state.getValue(DoorBlock.OPEN) && (PathFollower.openedByBot(animal.level(), lower) || BotTemptGoal.leads(animal) && keptIn(animal, lower))) {
 				cir.setReturnValue(PathFollower.shutTo(animal, state, getter, pos));
 			}
 		}
+	}
+
+	/**
+	 * Whether the animal is on the pen's side of a door a bot opened with use, so one following a bot's food does not
+	 * follow it out (PathFollower.usedOpen, #884).
+	 */
+	private static boolean keptIn(Animal animal, BlockPos lower) {
+		Direction inward = PathFollower.inward(animal.level(), lower);
+		return inward != null && PathFollower.inside(animal, lower, inward);
 	}
 }
