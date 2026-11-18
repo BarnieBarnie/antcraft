@@ -7,7 +7,9 @@ import io.github.barniebarnie.antcraft.item.CoreScript;
 import io.github.barniebarnie.antcraft.item.RememberedBot;
 import io.github.barniebarnie.antcraft.network.BotNetworking;
 import io.github.barniebarnie.antcraft.script.Memory;
+import io.netty.buffer.Unpooled;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.crafting.CraftingInput;
@@ -328,6 +330,21 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 			.map(recipe -> recipe.value().assemble(input)).orElse(ItemStack.EMPTY);
 		helper.assertTrue(ItemStack.isSameItemSameComponents(result, new ItemStack(ModItems.BOT_CORE)),
 			"crafted " + result + " " + result.getComponentsPatch());
+		helper.succeed();
+	}
+
+	/** A remembering core sent to a client (#923) carries the bot's name for the tooltip, not its memory. */
+	@GameTest(maxTicks = 5)
+	public void aRememberingCoreSendsClientsTheNameNotTheMemory(GameTestHelper helper) {
+		ItemStack core = new ItemStack(ModItems.BOT_CORE);
+		CompoundTag memory = new CompoundTag();
+		memory.putString("job", "x".repeat(10_000));
+		core.set(ModComponents.REMEMBERED_BOT, new RememberedBot("Ant 1234", memory));
+		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
+		ItemStack.STREAM_CODEC.encode(buf, core);
+		helper.assertTrue(buf.readableBytes() < 1000, "the core's packet is " + buf.readableBytes() + " bytes");
+		RememberedBot sent = ItemStack.STREAM_CODEC.decode(buf).get(ModComponents.REMEMBERED_BOT);
+		helper.assertValueEqual(sent, new RememberedBot("Ant 1234", new CompoundTag()), "the client's remembered bot");
 		helper.succeed();
 	}
 

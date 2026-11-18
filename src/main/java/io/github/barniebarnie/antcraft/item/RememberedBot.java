@@ -20,8 +20,12 @@ public record RememberedBot(String name, CompoundTag memory) {
 		CompoundTag.CODEC.optionalFieldOf("memory", new CompoundTag()).forGetter(RememberedBot::memory)
 	).apply(instance, RememberedBot::new));
 
-	public static final StreamCodec<RegistryFriendlyByteBuf, RememberedBot> STREAM_CODEC = StreamCodec.composite(
-		ByteBufCodecs.STRING_UTF8, RememberedBot::name,
-		ByteBufCodecs.COMPOUND_TAG, RememberedBot::memory,
-		RememberedBot::new);
+	/**
+	 * What clients get (#923): only the name, which the tooltip shows; a client's copy remembers an empty memory, so a
+	 * large memory does not make a large item packet.
+	 */
+	// ponytail: a creative player's client sends stacks back whole, so a core moved in the creative inventory comes back
+	// with an empty memory; keep the memory server side (saved data keyed by an id on the core) if that matters.
+	public static final StreamCodec<RegistryFriendlyByteBuf, RememberedBot> STREAM_CODEC = ByteBufCodecs.STRING_UTF8
+		.map(name -> new RememberedBot(name, new CompoundTag()), RememberedBot::name).cast();
 }
