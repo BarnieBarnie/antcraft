@@ -63,7 +63,7 @@ Optional:
 | `room()` | `1` | empty slots the bot wants before a harvest ([`lib.depot.make_room`](depot.md)) |
 | `stock(boxes)` | none | gets what tending `boxes` takes, after the harvest and store |
 | `chores(keep, told)` | none | harvests before the round's own, such as cells of another farm; gives `(harvests, whether the bot is too full)` |
-| `kept(low, high)` | none | the cell's blocks no walk of the bot's may break nor put scaffold in, such as the cocoa farm's logs, or the cell's soil and water, [`floor`](#floorlow-high), as every other farm but the kelp farm gives ([`keep_cells`](#keep_cellsf-name), #856, #869, the wood farm #890) |
+| `kept(low, high)` | none | the cell's blocks no walk of the bot's may break nor put scaffold in, such as the cocoa farm's logs, or the cell's soil and water, [`floor`](#floorlow-high), as every other farm but the kelp farm gives (the cane farm also the block over its water, #912) ([`keep_cells`](#keep_cellsf-name), #856, #869, the wood farm #890) |
 | `switch()` | none | a farm to go on with instead: its result, which `farm` gives, or `None` |
 | `learn(ticks, n)` | [`learn`](#learnname-ticks-n) under the farm's name | `n` harvests of a round took `ticks` game ticks; not called where the round's own harvests are none, only `chores`' |
 | `full(boxes, told)` | none | what a full farm does each round |

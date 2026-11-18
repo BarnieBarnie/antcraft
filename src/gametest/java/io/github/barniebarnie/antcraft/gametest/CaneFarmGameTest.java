@@ -141,6 +141,40 @@ public class CaneFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The farm's kept blocks of a cane cell take in the block over its water (#912): a walk of the harvest left the bot on
+	 * scaffold there, a block above the water, where the cell's kept floor (lib.cellfarm.floor) did not reach. With the
+	 * cell's kept blocks kept, as the farm keeps them, a walk to stand over the water puts no scaffold over it.
+	 */
+	// Measured: passes at tick 58, the goto unreachable (red: cobblestone over the water on tick 40, the bot on it).
+	@GameTest(maxTicks = 120)
+	public void noScaffoldGoesOverACellsWater(GameTestHelper helper) {
+		helper.setBlock(1, 0, 3, Blocks.DIRT);
+		helper.setBlock(2, 0, 3, Blocks.WATER);
+		helper.setBlock(3, 0, 3, Blocks.DIRT);
+		helper.setBlock(1, 1, 3, Blocks.SUGAR_CANE);
+		helper.setBlock(3, 1, 3, Blocks.SUGAR_CANE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 16));
+		BlockPos low = helper.absolutePos(new BlockPos(1, 0, 3));
+		BlockPos high = helper.absolutePos(new BlockPos(3, 0, 3));
+		BlockPos over = helper.absolutePos(new BlockPos(2, 2, 3));
+		BotScripts.run(bot, """
+			import jobs.cane_farm
+			keep_blocks(jobs.cane_farm.spec()["kept"](Pos(%d, %d, %d), Pos(%d, %d, %d)))
+			r = goto(Pos(%d, %d, %d))
+			print("walked", r.ok, r.reason)
+			""".formatted(low.getX(), low.getY(), low.getZ(), high.getX(), high.getY(), high.getZ(), over.getX(), over.getY(), over.getZ()));
+		BotScripts.failOnError(helper, bot);
+		BlockPos above = new BlockPos(2, 1, 3);
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(above).isAir()) {
+				helper.fail(helper.getBlockState(above) + " over the water; the bot at " + TestPositions.relative(helper, bot.position()));
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(said(bot, "walked"), "said " + BotScripts.log(bot, Output.Level.PRINT)));
+	}
+
+	/**
 	 * With cane for one cell only, the farm builds cell 1, then lacks cane for cell 2; cane grown in cell 1 is harvested
 	 * and stored, and cell 2 is planted from the depot's cane, the other 2 left there.
 	 */

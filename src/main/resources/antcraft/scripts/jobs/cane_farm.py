@@ -50,6 +50,12 @@ def waters():
     return [water(lib.cells.cell(NAME, i)[0]) for i in lib.cells.built(NAME)] if NAME in memory.get("cells", {}) else []
 
 
+def kept(low, high):
+    """The cell's blocks no walk breaks nor puts scaffold in: its floor (lib.cellfarm.floor) and the block over its
+    water, where a walk of the harvest left the bot on scaffold over the water (#912)."""
+    return lib.cellfarm.floor(low, high) + [water(low).up()]
+
+
 def tools(low, high):
     """The tools to dig the water's hole and the sides that are no soil (SOIL), such as stone: kind to uses."""
     t = {}
@@ -115,7 +121,7 @@ def tend(boxes, told, radius=32):
 def spec(radius=32):
     """The lib.cellfarm spec of the cane farm."""
     return {"size": (3, 1), "categories": {"cane": [CANE]}, "corners": "cane_farms",
-            "kept": lib.cellfarm.floor, "keep": KEEP,
+            "kept": kept, "keep": KEEP,
             "materials": lambda: {CANE: 2}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": lambda low, high: build_cell(low, high, radius),
             "ripe": ripe, "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),
