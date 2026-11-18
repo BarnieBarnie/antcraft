@@ -155,15 +155,20 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 	 * A round that harvests nothing walks the bot into the chunk of the farm's corner where it stands elsewhere
 	 * (lib.cellfarm.corner, #814), to a block by the corner beside no cactus: the block diagonal into the cell from its
 	 * corner, where it was sent before, is the cell's second cactus, so the walk failed as unreachable and left the bot
-	 * where its search gave up, by the cactus or outside the chunk (#846). The corner is 12 blocks into its chunk along x,
-	 * the bot 6 east of it, in the next chunk.
+	 * where its search gave up, by the cactus or outside the chunk (#846). The cactus spec says hurts, so farm sends it
+	 * to a spot touching no cell block, not even diagonally (#887): the block back on z it took before was diagonal to
+	 * the cactus at the corner. The corner is 12 blocks into its chunk along x and 4 along z, so that spot, 2 back on z, is
+	 * in the chunk; the bot 6 east of it, in the next chunk.
 	 */
 	// Measured: passes at tick 27 (red: the bot stopped at (14.34, 1, 5.5), beside the cactus at (13, 1, 5); in other
 	// runs at (9.27, 1, 5.5), 6 from the corner in the next chunk, or (11.09, 1, 5.4), 3 from it).
+	// With the spec's hurts (#887): passes at tick 60 (red without it: the walk ended diagonal to the cactus at the
+	// corner, and once the script ended the bot left the chunk, the last failure, on tick 82).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 80)
 	public void theCornerWalkEndsBesideNoCactus(GameTestHelper helper) {
 		int x = Math.floorMod(12 - helper.absolutePos(BlockPos.ZERO).getX(), 16);
-		BlockPos low = new BlockPos(x < 2 ? x + 16 : x, 0, 4);
+		int z = Math.floorMod(4 - helper.absolutePos(BlockPos.ZERO).getZ(), 16);
+		BlockPos low = new BlockPos(x < 2 ? x + 16 : x, 0, z < 2 ? z + 16 : z);
 		BlockPos high = low.offset(1, 0, 1);
 		for (BlockPos spot : new BlockPos[] {low, high}) {
 			helper.setBlock(spot, Blocks.SAND);
@@ -174,9 +179,10 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 		ScriptRun run = BotScripts.run(bot, """
 			import lib.cells
 			import lib.cellfarm
+			import jobs.cactus_farm
 			lib.cells.layout("cactus_farm", Pos(%d, %d, %d), (2, 2))
 			lib.cells.add("cactus_farm", 0)
-			lib.cellfarm.corner("cactus_farm", {})
+			lib.cellfarm.corner("cactus_farm", {}, jobs.cactus_farm.spec().get("hurts", False))
 			print("waits")
 			""".formatted(at.getX(), at.getY(), at.getZ()));
 		BotScripts.failOnError(helper, bot);
@@ -186,11 +192,11 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 			BlockPos feet = bot.blockPosition();
 			helper.assertTrue(feet.getX() >> 4 == at.getX() >> 4 && feet.getZ() >> 4 == at.getZ() >> 4,
 				"the bot at " + TestPositions.relative(helper, bot.position()) + ", not in the corner's chunk");
-			helper.assertTrue(Math.abs(feet.getX() - at.getX()) <= 1 && Math.abs(feet.getZ() - at.getZ()) <= 1,
+			helper.assertTrue(Math.abs(feet.getX() - at.getX()) <= 1 && Math.abs(feet.getZ() - at.getZ()) <= 2,
 				"the bot at " + TestPositions.relative(helper, bot.position()) + ", not by the corner " + low);
-			for (Direction dir : Direction.Plane.HORIZONTAL) {
-				helper.assertFalse(bot.level().getBlockState(feet.relative(dir)).is(Blocks.CACTUS),
-					"the bot at " + TestPositions.relative(helper, bot.position()) + ", beside a cactus");
+			for (BlockPos p : BlockPos.betweenClosed(feet.offset(-1, 0, -1), feet.offset(1, 0, 1))) {
+				helper.assertFalse(bot.level().getBlockState(p).is(Blocks.CACTUS),
+					"the bot at " + TestPositions.relative(helper, bot.position()) + ", touching a cactus");
 			}
 			helper.assertBlockPresent(Blocks.CACTUS, low.above());
 			helper.assertBlockPresent(Blocks.CACTUS, high.above());

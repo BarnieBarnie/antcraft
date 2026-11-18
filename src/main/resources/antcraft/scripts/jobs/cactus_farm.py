@@ -99,7 +99,7 @@ def tend(boxes, told, radius=32):
 def spec(radius=32):
     """The lib.cellfarm spec of the cactus farm."""
     return {"size": (2, 2), "categories": {"cactus": [CACTUS]}, "corners": "cactus_farms",
-            "kept": lib.cellfarm.floor, "keep": KEEP,
+            "kept": lib.cellfarm.floor, "keep": KEEP, "hurts": True,
             "materials": lambda: {CACTUS: 2}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": lambda low, high: build_cell(low, high, radius),
             "ripe": ripe, "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),
