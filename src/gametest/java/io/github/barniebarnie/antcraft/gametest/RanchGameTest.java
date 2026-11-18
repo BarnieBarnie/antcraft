@@ -344,6 +344,31 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A cow in the pen and a bot outside it holding wheat, which opens the gate with {@code use} and stays there: the cow
+	 * comes to the gate but does not follow the wheat out through it (#879). Fails at once where it gets out.
+	 */
+	// Measured: passes at tick 200, its fixed end, in three runs (red: on tick 20 the cow was out in the gate).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 300)
+	public void aCowDoesNotFollowTheWheatOutThroughAUsedGate(GameTestHelper helper) {
+		pen(helper);
+		List<Cow> penned = List.of(animal(helper, EntityTypes.COW, 3, 5, false));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT, 1));
+		BlockPos gate = helper.absolutePos(new BlockPos(3, 1, 3));
+		BotScripts.run(bot, """
+			equip("minecraft:wheat")
+			use(Pos(%d, %d, %d))
+			wait(1000)
+			""".formatted(gate.getX(), gate.getY(), gate.getZ()));
+		BotScripts.failOnError(helper, bot);
+		failWhereOneGetsOut(helper, penned, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getTick() >= 200, "waiting");
+			helper.assertTrue(helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the gate is shut");
+		});
+	}
+
 	/** Fails at once where one of penned dies or is beyond the middle of the pen's fence or gate. */
 	private static void failWhereOneGetsOut(GameTestHelper helper, List<? extends Animal> penned, AntBot bot) {
 		helper.onEachTick(() -> {

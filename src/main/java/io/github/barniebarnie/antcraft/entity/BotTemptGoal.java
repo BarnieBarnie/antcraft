@@ -42,6 +42,11 @@ public final class BotTemptGoal extends Goal {
 		});
 	}
 
+	/** Whether the animal is following a bot that holds its food; such an animal keeps to the way a gate swung (FenceGateBlockMixin, #879). */
+	public static boolean leads(Animal animal) {
+		return animal.getGoalSelector().getAvailableGoals().stream().anyMatch(g -> g.isRunning() && g.getGoal() instanceof BotTemptGoal);
+	}
+
 	@Override
 	public boolean canUse() {
 		// An entity query round each animal every other tick, as TemptGoal looks through the players: 200 cows in one
