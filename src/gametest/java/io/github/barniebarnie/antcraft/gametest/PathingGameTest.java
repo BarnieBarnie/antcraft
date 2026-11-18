@@ -268,6 +268,66 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * As {@link #aWalkFromTheBlockBesideWherePlannedPlansAgain}, but the path's first step is a step up east, onto a block
+	 * with a sweet berry bush south of it: slid south off the step's start, the bot plans again rather than jump straight
+	 * for the step's block across the bush (#860).
+	 */
+	@GameTest(maxTicks = 60)
+	public void aStepUpFromTheBlockBesideWherePlannedPlansAgain(GameTestHelper helper) {
+		room(helper, 0);
+		helper.setBlock(3, 1, 2, Blocks.STONE);
+		helper.setBlock(3, 1, 3, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		BlockPos goal = helper.absolutePos(new BlockPos(3, 2, 2));
+		ScriptRun run = BotScripts.run(bot, "wait(5)\ngoto((%d, %d, %d))\nwhile True:\n    wait(1000)\n".formatted(goal.getX(), goal.getY(), goal.getZ()));
+
+		boolean[] pushed = new boolean[1];
+		int[] walking = new int[1];
+		helper.onEachTick(() -> {
+			if (!pushed[0] && run.walking() && ++walking[0] == 2) {
+				bot.setPos(bot.getX(), bot.getY(), helper.absoluteVec(new Vec3(2.5, 1, 3.3)).z);
+				bot.setDeltaMovement(0, 0, 0.2);
+				pushed[0] = true;
+			}
+			if (bot.getLastDamageSource() != null) {
+				helper.fail("hurt by " + bot.getLastDamageSource().getMsgId() + " at " + TestPositions.relative(helper, bot.position()));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(pushed[0] && !run.walking(), "still walking, at " + TestPositions.relative(helper, bot.position()));
+			helper.assertTrue(bot.blockPosition().equals(goal), "stopped at " + TestPositions.relative(helper, bot.position()));
+		});
+	}
+
+	/**
+	 * A walk east along a lane that turns sharply south, with sweet berry bushes on the outside of the turn: turning, the bot
+	 * keeps at least 0.1 block clear of them (#860). Turning from just short of the middle of the corner block, its way on
+	 * east carried it within 0.08 of them.
+	 */
+	// Measured: passes at tick 41 (red: within 0.1 of the bushes at (4.62, 1, 1.89) on tick 21).
+	@GameTest(maxTicks = 100)
+	public void aSharpTurnBesideABushKeepsClearOfIt(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 2, 3, 2, 6, Blocks.BEDROCK); // the lane east at z 1, then south at x 4
+		fill(helper, 5, 1, 3, 6, 2, 6, Blocks.BEDROCK);
+		fill(helper, 6, 1, 1, 6, 2, 2, Blocks.BEDROCK);
+		for (int z = 1; z <= 2; z++) {
+			helper.setBlock(5, 0, z, Blocks.DIRT); // or the one bush set next to it drops the other off the stone
+			helper.setBlock(5, 1, z, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(4, 1, 6)));
+
+		AABB bushes = new AABB(helper.absolutePos(new BlockPos(5, 1, 1))).minmax(new AABB(helper.absolutePos(new BlockPos(5, 1, 2))));
+		helper.onEachTick(() -> {
+			if (bot.getBoundingBox().inflate(0.1).intersects(bushes) || bot.getLastDamageSource() != null) {
+				helper.fail("within 0.1 of the bushes at " + TestPositions.relative(helper, bot.position()));
+			}
+		});
+		succeedWhenAt(helper, bot, new BlockPos(4, 1, 6));
+	}
+
 	@GameTest(maxTicks = 150)
 	public void walksRoundIronBarsRatherThanThroughThem(GameTestHelper helper) {
 		room(helper, 0);

@@ -194,11 +194,14 @@ public class PathFollower {
 		this.skipRisenPast(feet, world);
 		Step step = this.path.steps().get(this.stepIndex);
 		BlockPos start = this.stepFrom();
-		if (step.type() == MoveType.WALK && step.to().getY() == start.getY() && feet.getY() == start.getY() && feet.distManhattan(start) == 1
-				&& !feet.equals(step.to()) && this.bot.onGround() && !this.bot.onClimbable()) {
-			// Slid on along the ground into the block beside where a level walk starts, such as from a walk that ended mid-step:
-			// heading straight from there for the step's block, it cut across the corner between them, into a sweet berry bush
-			// there (#848). Plan again from where it is.
+		boolean sideways = step.type() == MoveType.WALK || step.type() == MoveType.STEP_UP || step.type() == MoveType.DROP;
+		if (sideways && feet.getY() == start.getY() && feet.distManhattan(start) == 1
+				&& (feet.getX() != step.to().getX() || feet.getZ() != step.to().getZ()) && this.bot.onGround() && !this.bot.onClimbable()) {
+			// Slid on along the ground into the block beside where a walk, step up or drop starts, such as from a walk that
+			// ended mid-step: heading straight from there for the step's block, it cut across the corner between them, into a
+			// sweet berry bush there (#848, #860). Plan again from where it is. On the way a step's feet are only ever in the
+			// column it starts at (a step up rises in it) or the one it heads for (a drop falls in it), so only a block
+			// beside the start that is in neither counts as slid off.
 			if (!this.replan()) {
 				this.stop();
 				return Status.FAILED;
@@ -260,6 +263,13 @@ public class PathFollower {
 				// heading straight for the next block, such as a sweet berry bush at the inside of a turn: to the middle first (#845).
 				this.moveTo(feet);
 			} else {
+				if (sideways && feet.equals(this.stepFrom()) && hazardBeside(world, feet)) {
+					// Its way on from the step before carries it on across the turn, such as into a bush at the outside of a sharp
+					// turn: it came within 0.08 of one (#860). Stop that way at the turn.
+					Vec3 v = this.bot.getDeltaMovement();
+					boolean alongX = step.to().getX() != feet.getX();
+					this.bot.setDeltaMovement(alongX ? v.x : 0, v.y, alongX ? 0 : v.z);
+				}
 				this.moveTo(step.to());
 			}
 			if (step.type() != MoveType.SWIM && this.bot.isInWater()) {
