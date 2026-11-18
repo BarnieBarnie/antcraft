@@ -306,6 +306,15 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, run, List.of("1 True"));
 	}
 
+	/** An Entity's age is the ticks since it was spawned or loaded (Entity.tickCount, #871). */
+	@GameTest(maxTicks = 10)
+	public void anEntitysAgeIsItsTicksSinceItWasLoaded(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		helper.spawnWithNoFreeWill(EntityTypes.COW, 5, 1, 3).tickCount = 1000;
+		ScriptRun run = run(helper, bot, "a = entities('cow', radius=8)[0].age\nprint(1000 <= a < 1010)\n");
+		succeedWhenPrinted(helper, bot, run, List.of("True"));
+	}
+
 	/**
 	 * An Entity's neutral is the bot's own list of mobs it leaves alone until hurt (AntBot.leftAlone), so jobs.guard reads
 	 * the same list (#772): true for an enderman, false for a zombie.

@@ -15,7 +15,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * An entity in a script, the {@code Entity} type (docs/reference/types/entity.md): {@code id} (its UUID as a string),
  * {@code type} such as {@code minecraft:cow}, {@code pos} (the block it stands in), {@code health} ({@code None} for an
- * entity without health, such as a dropped item), {@code baby} (true for a young animal or mob), {@code neutral} (true for a mob bots leave alone until it hurts them,
+ * entity without health, such as a dropped item), {@code baby} (true for a young animal or mob), {@code age} (ticks since
+ * it was spawned or last loaded, {@code Entity.tickCount}, so it starts again from 0 when its chunk loads; #871), {@code neutral} (true for a mob bots leave alone until it hurts them,
  * {@link AntBot#leftAlone}, #772), {@code valid} (false once it is gone: dead, picked up, or unloaded)
  * and, for a dropped item, {@code item}, the {@code Stack} it holds ({@code None} for other entities). Live: its
  * attributes are read when the script asks for them. Equal by UUID. Not plain data, so not for {@code memory}; a saved
@@ -88,6 +89,7 @@ public final class EntityInfo implements HostValue {
 			case "pos" -> found == null ? PyNone.NONE : pos(found.blockPosition());
 			case "health" -> found instanceof LivingEntity living ? (Object) (double) living.getHealth() : PyNone.NONE;
 			case "baby" -> found instanceof LivingEntity living && living.isBaby();
+			case "age" -> found == null ? PyNone.NONE : (Object) (long) found.tickCount;
 			case "neutral" -> found != null && AntBot.leftAlone(found);
 			case "valid" -> this.valid();
 			case "item" -> found instanceof ItemEntity item ? SenseApi.stack(item.getItem()) : PyNone.NONE;

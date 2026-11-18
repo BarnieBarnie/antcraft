@@ -151,6 +151,33 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Four adult cows, a cap of 2 and an axe in the chest: the two oldest (by Entity age, #871) are killed, whatever order
+	 * entities() gives them in. Fails at once where a young one dies.
+	 */
+	// Measured: passes at tick 94 (red: a young cow was killed on tick 75); the cull test above's limit.
+	@GameTest(maxTicks = 320)
+	public void theOldestAdultsOverTheCapAreKilled(GameTestHelper helper) {
+		List<Cow> old = new ArrayList<>();
+		List<Cow> young = new ArrayList<>();
+		for (int x = 1; x <= 4; x++) {
+			Cow cow = animal(helper, EntityTypes.COW, x + 1, 6, false);
+			if (x % 2 == 0) {
+				cow.tickCount = 5000 + x;
+				old.add(cow);
+			} else {
+				young.add(cow);
+			}
+		}
+		ranch(helper, 2, new ItemStack(Items.STONE_AXE));
+		helper.onEachTick(() -> {
+			if (young.stream().anyMatch(c -> !c.isAlive())) {
+				helper.fail("a young cow was killed");
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(old.stream().noneMatch(Cow::isAlive), "an old cow lives"));
+	}
+
+	/**
 	 * Four adult cows at a cap of 4, wheat and an axe in the chest: the ranch still breeds them, and once the calves are
 	 * grown (aged up by the test 40 ticks after birth, as growing takes 20 minutes) it kills the adults past the cap and
 	 * stores the beef (#864).

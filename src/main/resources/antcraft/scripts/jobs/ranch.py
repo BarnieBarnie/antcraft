@@ -121,7 +121,8 @@ def lure(kind, animals, low, high, cap, radius):
 
 
 def cull(adults, cap, radius):
-    """Kills the adults past the first cap, with an axe or sword where the bot has or can take one."""
+    """Kills the adults past the first cap (tend sorts them youngest first, so the oldest), with an axe or sword where
+    the bot has or can take one."""
     if len(adults) <= cap:
         return
     if not any([equip(w) for w in WEAPONS]):
@@ -174,7 +175,8 @@ def tend(low, high, cap, radius):
     for kind in FOOD:
         lure(kind, herd(kind, low, high), low, high, cap, radius)
         animals = herd(kind, low, high)
-        adults = [a for a in animals if not a.baby]
+        # Youngest first, so cull kills the oldest past the cap (#871).
+        adults = sorted([a for a in animals if not a.baby], key=lambda a: a.age)
         cull(adults, cap, radius)
         breed(kind, animals, adults[:cap], cap, radius)
         if kind == "minecraft:sheep":
