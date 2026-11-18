@@ -106,9 +106,13 @@ public final class KiteGoal extends Goal {
 	 */
 	private @Nullable Path away(Creeper creeper) {
 		this.bot.kitePlans++;
+		return TickProfiler.time("bot.kite.plan", () -> this.plan(creeper));
+	}
+
+	private @Nullable Path plan(Creeper creeper) {
 		List<Creeper> creepers = this.bot.entitiesNear(Creeper.class, this.bot.getBoundingBox().inflate(CREEPERS_RANGE), Creeper::isAlive);
 		double now = nearest(creepers, this.bot.position());
-		Path out = this.outOfReach(creepers, now);
+		Path out = TickProfiler.time("bot.kite.ring", () -> this.outOfReach(creepers, now));
 		if (out != null) {
 			return out;
 		}

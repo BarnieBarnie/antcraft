@@ -326,6 +326,9 @@ public class BenchmarkGameTest {
 		new Case("build", BUILD, 600),
 		new Case("creepers", IDLE, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, SWORD,
 			helper -> topUp(helper, EntityTypes.CREEPER, 8, false)),
+		// A creeper for each bot and only fists, so each creeper takes many blows and the bots kite most of the time (#900).
+		new Case("kiting", IDLE, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, bot -> {
+		}, helper -> topUp(helper, EntityTypes.CREEPER, BOTS, false)),
 		new Case("guard", GUARD, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, GUARD_KIT, helper -> {
 			topUp(helper, EntityTypes.HUSK, 8, false);
 			topUp(helper, EntityTypes.BLAZE, 8, true);
