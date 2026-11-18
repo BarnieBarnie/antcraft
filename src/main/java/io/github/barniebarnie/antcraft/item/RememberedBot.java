@@ -38,12 +38,17 @@ public record RememberedBot(String name, Optional<UUID> id, CompoundTag memory) 
 
 	/** Remembers the bot named {@code name}, keeping its {@code memory} on the server (#927). */
 	public static RememberedBot remember(MinecraftServer server, String name, CompoundTag memory) {
-		return new RememberedBot(name, Optional.of(CoreMemories.get(server).put(memory)), new CompoundTag());
+		return new RememberedBot(name, Optional.of(CoreMemories.get(server).put(memory, server.overworld().getGameTime())), new CompoundTag());
 	}
 
 	/** The bot's memory, which the server stops keeping, for the core is placed and gives it back. */
 	public CompoundTag takeMemory(MinecraftServer server) {
 		return this.id.map(key -> CoreMemories.get(server).take(key)).orElse(this.memory);
+	}
+
+	/** Drops the bot's memory from the server, for the core is used up, as by wiping it (#939). */
+	public void forget(MinecraftServer server) {
+		this.id.ifPresent(key -> CoreMemories.get(server).take(key));
 	}
 
 	/** The bot's memory, still kept. */

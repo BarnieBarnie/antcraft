@@ -38,6 +38,7 @@ import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.Item;
@@ -388,6 +389,25 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 			.map(recipe -> recipe.value().assemble(input)).orElse(ItemStack.EMPTY);
 		helper.assertTrue(ItemStack.isSameItemSameComponents(result, new ItemStack(ModItems.BOT_CORE)),
 			"crafted " + result + " " + result.getComponentsPatch());
+		helper.succeed();
+	}
+
+	/** Wiping a core in a crafting grid drops the memory the server kept for it (#939). */
+	@GameTest(maxTicks = 5)
+	public void wipingACoreDropsTheMemoryTheServerKept(GameTestHelper helper) {
+		MinecraftServer server = helper.getLevel().getServer();
+		CompoundTag memory = new CompoundTag();
+		memory.putString("job", "cane");
+		RememberedBot remembered = RememberedBot.remember(server, "Ant 1234", memory);
+		ItemStack core = new ItemStack(ModItems.BOT_CORE);
+		core.set(ModComponents.REMEMBERED_BOT, remembered);
+		ServerPlayer player = helper.makeMockServerPlayerInLevel();
+		player.inventoryMenu.getSlot(1).set(core);
+		player.inventoryMenu.slotsChanged(player.inventoryMenu.getCraftSlots());
+		player.inventoryMenu.clicked(0, 0, ContainerInput.QUICK_MOVE, player);
+		ItemStack wiped = core(player);
+		helper.assertTrue(wiped != null && !wiped.has(ModComponents.REMEMBERED_BOT), "crafted " + wiped);
+		helper.assertValueEqual(remembered.memory(server), new CompoundTag(), "the memory the server kept");
 		helper.succeed();
 	}
 
