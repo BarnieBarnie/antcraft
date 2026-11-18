@@ -1004,6 +1004,11 @@ public final class WorkApi {
 		 * them, so also from scaffold over the liquid, where a walk of a cane farm's harvest left the bot (#904).
 		 */
 		private static final double REACH_DOWN = 2.0;
+		/**
+		 * How long it waits for an item to land before it leaves it: an item falls from far higher in that time, but one with
+		 * no gravity never lands (#913).
+		 */
+		private static final int LANDING_TICKS = 40;
 
 		private final ScriptRun run;
 		private final AntBot bot;
@@ -1022,6 +1027,8 @@ public final class WorkApi {
 		 * fallen into a cane farm cell's water, which the farm keeps from scaffold (#869), so it reaches in (#904).
 		 */
 		private boolean beside;
+		/** How many ticks it has waited for the current goal to land. */
+		private int falling;
 		/** How many of the items the bot carried when it started, to tell how many it took, also by walking over them. */
 		private final long before;
 		private long taken;
@@ -1101,11 +1108,16 @@ public final class WorkApi {
 				this.goal = fitting.getFirst();
 				this.arrivals = 0;
 				this.beside = false;
+				this.falling = 0;
 			}
 			if (this.walk == null) {
 				if (this.arrivals == 0 && this.goal instanceof ItemEntity dropped && !dropped.onGround() && !dropped.isInLiquid()) {
 					// Still falling: a walk to where it is now heads for a block in the air, which a path pillars up to, as
 					// it did over cane just cut, putting scaffold in place of the cane under it (#853). It lands first.
+					if (++this.falling > LANDING_TICKS) {
+						this.unreachable.add(this.goal.getId());
+						this.goal = null;
+					}
 					return false;
 				}
 				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && (dropped.hasPickUpDelay() || !dropped.onGround() && !this.beside)) {

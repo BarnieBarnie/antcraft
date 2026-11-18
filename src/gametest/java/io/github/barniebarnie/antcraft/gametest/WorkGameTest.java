@@ -852,7 +852,22 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 12 (red: printed [False out_of_reach 0] on tick 11).
 	@GameTest(maxTicks = 30)
 	public void pickUpTakesAnItemFloatingInACellsWater(GameTestHelper helper) {
-		pickUpCaneInACellsWater(helper, helper.spawn(ModEntities.ANT_BOT, 4, 1, 6));
+		pickUpCaneInACellsWater(helper, helper.spawn(ModEntities.ANT_BOT, 4, 1, 6), 0);
+	}
+
+	/**
+	 * The same with stone under the water, as in a farm on real ground: the floor is raised a block, so the water stands
+	 * on the test area's stone floor, not on the barrier below the area (#913).
+	 */
+	// Measured: passes at tick 12, as over barrier (written to check, not red).
+	@GameTest(maxTicks = 30)
+	public void pickUpTakesAnItemFloatingInACellsWaterOverStone(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				helper.setBlock(x, 1, z, Blocks.STONE);
+			}
+		}
+		pickUpCaneInACellsWater(helper, helper.spawn(ModEntities.ANT_BOT, 4, 2, 6), 1);
 	}
 
 	/** The same from the bot's scaffold over the water, where a walk of the harvest left the bot (#904). */
@@ -860,23 +875,35 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 30)
 	public void pickUpTakesAnItemFloatingInACellsWaterFromScaffoldOverIt(GameTestHelper helper) {
 		helper.setBlock(4, 1, 4, Blocks.COBBLESTONE);
-		pickUpCaneInACellsWater(helper, helper.spawn(ModEntities.ANT_BOT, 4, 2, 4));
+		pickUpCaneInACellsWater(helper, helper.spawn(ModEntities.ANT_BOT, 4, 2, 4), 0);
 	}
 
-	/** A cane cell along x at z 4, water at (4, 0, 4) with its floor kept, a cane resting at the water's bottom. */
-	private static void pickUpCaneInACellsWater(GameTestHelper helper, AntBot bot) {
-		helper.setBlock(3, 0, 4, Blocks.DIRT);
-		helper.setBlock(4, 0, 4, Blocks.WATER);
-		helper.setBlock(5, 0, 4, Blocks.DIRT);
-		helper.setBlock(3, 1, 4, Blocks.SUGAR_CANE);
-		helper.setBlock(5, 1, 4, Blocks.SUGAR_CANE);
-		ItemEntity cane = helper.spawnItem(Items.SUGAR_CANE, new BlockPos(4, 0, 4));
-		Vec3 in = helper.absoluteVec(new Vec3(4.125, 0, 4.125));
+	/** An item with no gravity hangs in the air and never lands: pick_up gives up waiting for it to (#913). */
+	// Measured: passes at tick 43 (red: script RUNNING on tick 102 of 100).
+	@GameTest(maxTicks = 100)
+	public void pickUpLeavesAnItemThatNeverLands(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		ItemEntity cane = helper.spawnItem(Items.SUGAR_CANE, new BlockPos(4, 4, 4));
+		cane.setNoGravity(true);
+		cane.setDeltaMovement(Vec3.ZERO);
+		expect(helper, bot, "r = pick_up('sugar_cane', radius=6)\nprint(r.ok, r.reason, count('sugar_cane'))\n",
+			List.of("False out_of_reach 0"));
+	}
+
+	/** A cane cell along x at z 4, water at (4, y, 4) with its floor kept, a cane resting at the water's bottom. */
+	private static void pickUpCaneInACellsWater(GameTestHelper helper, AntBot bot, int y) {
+		helper.setBlock(3, y, 4, Blocks.DIRT);
+		helper.setBlock(4, y, 4, Blocks.WATER);
+		helper.setBlock(5, y, 4, Blocks.DIRT);
+		helper.setBlock(3, y + 1, 4, Blocks.SUGAR_CANE);
+		helper.setBlock(5, y + 1, 4, Blocks.SUGAR_CANE);
+		ItemEntity cane = helper.spawnItem(Items.SUGAR_CANE, new BlockPos(4, y, 4));
+		Vec3 in = helper.absoluteVec(new Vec3(4.125, y, 4.125));
 		cane.setPos(in.x, in.y, in.z);
 		cane.setDeltaMovement(Vec3.ZERO);
-		expect(helper, bot, "keep_blocks([(Pos" + at(helper, 3, 0, 4) + ", Pos" + at(helper, 5, 0, 4) + ")])\n"
+		expect(helper, bot, "keep_blocks([(Pos" + at(helper, 3, y, 4) + ", Pos" + at(helper, 5, y, 4) + ")])\n"
 				+ "r = pick_up('sugar_cane', radius=4)\nprint(r.ok, r.reason, count('sugar_cane'))\n", List.of("True None 1"),
-			() -> helper.assertBlockPresent(Blocks.WATER, 4, 0, 4));
+			() -> helper.assertBlockPresent(Blocks.WATER, 4, y, 4));
 	}
 
 	// equip
