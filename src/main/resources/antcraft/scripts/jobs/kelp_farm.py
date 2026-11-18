@@ -132,7 +132,13 @@ def dry(radius=32, food=0, name=NAME, spare=0):
 # The water-cell farm (#857). A cell is one column of the ground, low its top block: dug out depth deep (layers), so
 # the kelp stands on the block depth under low, low.down(depth - 1) its bottom block, low its top, grown up to the
 # surface. Kelp grows only into a water source, so each layer over the bottom one holds a source (#877).
-# ponytail: the depth is not kept with the farm; run it again with another and its built cells are farmed as that deep.
+
+
+def kept_depth(depth):
+    """The farm's cell depth: the one kept with its layout (lib.cells), else depth, kept there from now on, so a rerun
+    with another depth farms the cells as deep as they were built; a moved farm, laid out afresh, takes the run's (#914).
+    Called once the farm is laid out (lib.cellfarm.run)."""
+    return lib.cells.farm(CELLS).setdefault("depth", depth)
 
 
 def layers(low, depth=2):
@@ -211,14 +217,14 @@ def dry_cells(radius, food):
 
 def cell_spec(radius=32, dried=False, food=0, depth=2):
     """The lib.cellfarm spec of the kelp water-cell farm, its cells depth deep; with dried, its kelp dried each round
-    (dry_cells)."""
+    (dry_cells). The depth kept with the farm's layout wins over depth (kept_depth, #914)."""
     f = {"size": (1, 1), "categories": {"kelp": [KELP], "dried": [DRIED, BLOCK]}, "corners": "kelp_farms", "keep": KEEP,
             "materials": lambda: {KELP: 1}, "gets": lib.treefarm.get_outside,
-            "tools": lambda low, high: cell_tools(low, high, depth),
-            "build_cell": lambda low, high: build_water_cell(low, high, radius, depth),
+            "tools": lambda low, high: cell_tools(low, high, kept_depth(depth)),
+            "build_cell": lambda low, high: build_water_cell(low, high, radius, kept_depth(depth)),
             "ripe": lambda low, high: block(low).id in STALK,
-            "harvest": lambda low, high, told: harvest_cell(low, high, told, depth),
-            "tend": lambda boxes, told: [plant_cell(b[0], radius, depth) for b in boxes],
+            "harvest": lambda low, high, told: harvest_cell(low, high, told, kept_depth(depth)),
+            "tend": lambda boxes, told: [plant_cell(b[0], radius, kept_depth(depth)) for b in boxes],
             "most": lambda: lib.cellfarm.most(CELLS, GROWTH, HARVEST)}
     if dried:
         f["chores"] = lambda keep, told: dry_cells(radius, food)

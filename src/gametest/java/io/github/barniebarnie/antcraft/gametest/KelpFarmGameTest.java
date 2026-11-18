@@ -325,13 +325,18 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(7, 3, 4, Blocks.CRAFTING_TABLE);
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, top, 6);
+		grow(helper, bot, top, size, dry, depth);
+		BotScripts.failOnError(helper, bot);
+		return bot;
+	}
+
+	/** Runs jobs.kelp_farm.grow on bot, its corner at (1, top, 3), up to size cells, depth deep. */
+	private static void grow(GameTestHelper helper, AntBot bot, int top, int size, boolean dry, int depth) {
 		BlockPos at = helper.absolutePos(new BlockPos(1, top, 3));
 		BotScripts.run(bot, """
 			import jobs.kelp_farm
 			jobs.kelp_farm.grow(Pos(%d, %d, %d), %d, 8, %s%s)
 			""".formatted(at.getX(), at.getY(), at.getZ(), size, dry ? "True" : "False", depth == 2 ? "" : ", depth=" + depth));
-		BotScripts.failOnError(helper, bot);
-		return bot;
 	}
 
 	/** The blocks of the cell at (x, 3), y 0 to 3. */
@@ -472,6 +477,34 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 			}
 			if (!grown[0] && BotScripts.log(bot, Output.Level.PRINT).contains("built cell 1") && helper.getBlockState(new BlockPos(1, 1, 3)).is(Blocks.KELP)
 				&& source(helper, 1, 2, 3) && source(helper, 1, 3, 3)) {
+				helper.setBlock(1, 1, 3, Blocks.KELP_PLANT);
+				helper.setBlock(1, 2, 3, Blocks.KELP_PLANT);
+				helper.setBlock(1, 3, 3, Blocks.KELP);
+				grown[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grown[0], "not built, filled and planted; " + column(helper, 1, 4) + "; " + said(bot));
+			helper.assertTrue(helper.getBlockState(new BlockPos(1, 1, 3)).is(Blocks.KELP), "bottom block gone; " + column(helper, 1, 4));
+			int stored = inCellDepot(helper, Items.KELP, 4);
+			helper.assertTrue(stored >= 2, "kelp in the depot " + stored + "; " + column(helper, 1, 4) + "; " + said(bot));
+		});
+	}
+
+	/**
+	 * A farm of a water cell three deep, stopped once the cell is built and run again with the default depth (2), keeps
+	 * the cell three deep: grown up to its top block, a cut gives two kelp, not one (#914).
+	 */
+	// Measured: passes at tick 210 to 214 (red: a cut as two deep, bottom block gone, Stone Kelp Plant Kelp Water Air).
+	@GameTest(maxTicks = 480)
+	public void aRerunWithAnotherDepthKeepsTheBuiltCellsDepth(GameTestHelper helper) {
+		AntBot bot = cells(helper, 1, false, 3);
+		boolean[] grown = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!grown[0] && BotScripts.log(bot, Output.Level.PRINT).contains("built cell 1") && helper.getBlockState(new BlockPos(1, 1, 3)).is(Blocks.KELP)
+				&& source(helper, 1, 2, 3) && source(helper, 1, 3, 3)) {
+				bot.stopScript();
+				grow(helper, bot, 4, 1, false, 2);
 				helper.setBlock(1, 1, 3, Blocks.KELP_PLANT);
 				helper.setBlock(1, 2, 3, Blocks.KELP_PLANT);
 				helper.setBlock(1, 3, 3, Blocks.KELP);
