@@ -16,12 +16,14 @@ import io.github.barniebarnie.antcraft.script.lang.VmState;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
@@ -156,14 +158,16 @@ public final class ScriptRun {
 	 * beside its progress ({@link Action#progressData}), empty in saves from before it. {@code placed} is where the run's
 	 * walks placed scaffold ({@link #takePlaced}), stored as {@link BlockPos#asLong} under {@code placed} with their dimensions
 	 * under {@code placedDimensions}; a save from before that has none, and they are the bot's when it loads (#550).
+	 * {@code kept} is what {@code keep_blocks} kept ({@link #keepBlocks}), stored the same under {@code kept} (#906).
 	 */
 	public record Saved(String name, List<String> args, byte @Nullable [] vm, long progress, long[] progressData, @Nullable String problem,
-			@Nullable String lastResult, List<Pos> placed) {
+			@Nullable String lastResult, List<Pos> placed, List<Pos> kept) {
 		private static final String KEY = "Script";
 
 		public Saved {
 			args = List.copyOf(args);
 			placed = List.copyOf(placed);
+			kept = List.copyOf(kept);
 		}
 
 		/** Stores it with the bot. */
@@ -186,13 +190,31 @@ public final class ScriptRun {
 			if (lastResult != null) {
 				tag.putString("lastResult", lastResult);
 			}
-			if (!placed.isEmpty()) {
-				tag.putLongArray("placed", placed.stream().mapToLong(ScriptRun::asLong).toArray());
-				ListTag dimensions = new ListTag();
-				placed.forEach(pos -> dimensions.add(StringTag.valueOf(Objects.requireNonNullElse(pos.dimension(), ""))));
-				tag.put("placedDimensions", dimensions);
-			}
+			store(tag, "placed", placed);
+			store(tag, "kept", kept);
 			output.store(KEY, CompoundTag.CODEC, tag);
+		}
+
+		/** Stores {@code positions} under {@code key} as {@link BlockPos#asLong}, their dimensions under {@code key}Dimensions. */
+		private static void store(CompoundTag tag, String key, List<Pos> positions) {
+			if (!positions.isEmpty()) {
+				tag.putLongArray(key, positions.stream().mapToLong(ScriptRun::asLong).toArray());
+				ListTag dimensions = new ListTag();
+				positions.forEach(pos -> dimensions.add(StringTag.valueOf(Objects.requireNonNullElse(pos.dimension(), ""))));
+				tag.put(key + "Dimensions", dimensions);
+			}
+		}
+
+		/** The positions {@link #store(CompoundTag, String, List)} stored under {@code key}. */
+		private static List<Pos> positions(CompoundTag tag, String key) {
+			long[] at = tag.getLongArray(key).orElse(new long[0]);
+			ListTag dimensions = tag.getListOrEmpty(key + "Dimensions");
+			List<Pos> positions = new ArrayList<>();
+			for (int i = 0; i < at.length; i++) {
+				String dimension = dimensions.getStringOr(i, "");
+				positions.add(new Pos(BlockPos.getX(at[i]), BlockPos.getY(at[i]), BlockPos.getZ(at[i]), dimension.isEmpty() ? null : dimension));
+			}
+			return positions;
 		}
 
 		/** The script saved with the bot, if it ran one. */
@@ -203,16 +225,9 @@ public final class ScriptRun {
 				for (int i = 0; i < list.size(); i++) {
 					args.add(list.getStringOr(i, ""));
 				}
-				long[] at = tag.getLongArray("placed").orElse(new long[0]);
-				ListTag dimensions = tag.getListOrEmpty("placedDimensions");
-				List<Pos> placed = new ArrayList<>();
-				for (int i = 0; i < at.length; i++) {
-					String dimension = dimensions.getStringOr(i, "");
-					placed.add(new Pos(BlockPos.getX(at[i]), BlockPos.getY(at[i]), BlockPos.getZ(at[i]), dimension.isEmpty() ? null : dimension));
-				}
 				return new Saved(tag.getStringOr("name", ""), args, tag.getByteArray("vm").orElse(null),
 						tag.getLongOr("progress", 0), tag.getLongArray("progressData").orElse(new long[0]), tag.getString("problem").orElse(null),
-						tag.getString("lastResult").orElse(null), placed);
+						tag.getString("lastResult").orElse(null), positions(tag, "placed"), positions(tag, "kept"));
 			});
 		}
 	}
@@ -246,7 +261,11 @@ public final class ScriptRun {
 	/** Where the run's walks placed scaffold, oldest first, until {@code placed_scaffold()} takes them ({@link #takePlaced}). Saved. */
 	private final LinkedHashSet<Pos> placed = new LinkedHashSet<>();
 	/** Whether the script kept blocks with {@code keep_blocks}, which its end lets go again (#856). */
-	private boolean keepsBlocks;
+	/**
+	 * What {@code keep_blocks} keeps: (low, high) pairs, a block as low == high, in the dimension the bot was in. Saved,
+	 * so a resumed run keeps them (#906).
+	 */
+	private List<Pos> kept = List.of();
 	/** How many {@link #placed} positions a run keeps, the last placed, for a script that never takes them. */
 	static final int PLACED_MAX = 4096;
 	/**
@@ -330,6 +349,10 @@ public final class ScriptRun {
 		for (Pos at : saved.placed()) {
 			run.notePlaced(at.dimension() == null ? at.in(host.pos().dimension()) : at);
 		}
+		// ponytail: a run resumed in another dimension, through a portal, keeps none, nor again once it comes back.
+		if (!saved.kept().isEmpty() && Objects.equals(saved.kept().getFirst().dimension(), host.body().dimension())) {
+			run.keepBlocks(saved.kept());
+		}
 		return run;
 	}
 
@@ -340,9 +363,9 @@ public final class ScriptRun {
 		List<Pos> savePlaced = this.placed.stream().filter(this::owns).toList();
 		try {
 			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity, this.host::colonyMemory)), saveProgress, saveData,
-					null, this.lastResult, savePlaced);
+					null, this.lastResult, savePlaced, this.kept);
 		} catch (VmState.NotSaveable e) {
-			return new Saved(this.name, this.args, null, 0, new long[0], e.getMessage(), this.lastResult, savePlaced);
+			return new Saved(this.name, this.args, null, 0, new long[0], e.getMessage(), this.lastResult, savePlaced, this.kept);
 		}
 	}
 
@@ -395,15 +418,28 @@ public final class ScriptRun {
 	private void ended() {
 		this.placed.forEach(this::disown);
 		this.placed.clear();
-		if (this.keepsBlocks) {
-			this.keepsBlocks = false;
-			this.host.body().setKeptBlocks(pos -> false);
+		if (!this.kept.isEmpty()) {
+			this.keepBlocks(List.of());
 		}
 	}
 
-	/** Notes whether the script keeps blocks ({@code keep_blocks}), so its end lets them go. */
-	void keepsBlocks(boolean keeps) {
-		this.keepsBlocks = keeps;
+	/**
+	 * Keeps {@code boxes}, (low, high) pairs with low the lower corner, from the bot's walks ({@code keep_blocks}) until the
+	 * run ends: a block as low == high, by its position, a box by its bounds (#891).
+	 */
+	void keepBlocks(List<Pos> boxes) {
+		this.kept = List.copyOf(boxes);
+		Set<Pos> blocks = new HashSet<>();
+		List<Pos[]> areas = new ArrayList<>();
+		for (int i = 0; i + 1 < boxes.size(); i += 2) {
+			if (boxes.get(i).equals(boxes.get(i + 1))) {
+				blocks.add(boxes.get(i));
+			} else {
+				areas.add(new Pos[] {boxes.get(i), boxes.get(i + 1)});
+			}
+		}
+		this.host.body().setKeptBlocks(p -> blocks.contains(p) || areas.stream().anyMatch(box -> box[0].x() <= p.x() && p.x() <= box[1].x()
+			&& box[0].y() <= p.y() && p.y() <= box[1].y() && box[0].z() <= p.z() && p.z() <= box[1].z()));
 	}
 
 	/** Whether any run's scaffold is noted, so {@link #blockChanged} has something to do. */

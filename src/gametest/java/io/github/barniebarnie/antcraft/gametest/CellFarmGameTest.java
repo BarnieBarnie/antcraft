@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -212,6 +213,99 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			.filter(l -> !l.endsWith(": farm")).toList(),
 			List.of("cell not built: blocked at Pos(" + at.below().toShortString() + ")", "[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2]"),
 			"said"));
+	}
+
+	/**
+	 * The farm keeps its cells (keep_cells) when it starts and once it built a cell, not each round (#906): the kept
+	 * blocks stay kept till the script ends, also across a reload (ScriptRun saves them). Here one cell is built and
+	 * twelve rounds go by; keep_cells is counted.
+	 */
+	// Measured: passes at tick 30 (red: keeps 14, once a round).
+	@GameTest(maxTicks = 90)
+	public void theCellsAreKeptOnStartAndAfterABuildOnly(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.TORCH));
+		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3));
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			from lib.project import Step
+			from lib.result import result
+			T = "minecraft:torch"
+			keeps = [0]
+			rounds = [0]
+			keep_cells = lib.cellfarm.keep_cells
+			def counted(f, name):
+			    keeps[0] += 1
+			    keep_cells(f, name)
+			def build_cell(low, high):
+			    r = place(low.up(), T)
+			    return result() if r else result(r.reason, low.up())
+			def waited(ticks):
+			    rounds[0] += 1
+			    if rounds[0] == 12:
+			        print("keeps", keeps[0])
+			        stop()
+			lib.cellfarm.keep_cells = counted
+			lib.cellfarm.wait = waited
+			f = {"size": (1, 1), "categories": {"torch": [T]}, "corners": "test_farms", "keep": [T],
+			     "materials": lambda: {T: 1}, "build_cell": build_cell, "ripe": lambda low, high: False,
+			     "harvest": lambda low, high, told: result(), "tend": lambda boxes, told: None, "most": lambda: 1,
+			     "kept": lambda low, high: [low]}
+			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
+			""".formatted(at.getX(), at.getY(), at.getZ()));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT).stream()
+			.filter(l -> l.startsWith("keeps")).toList(), List.of("keeps 2"), "said"));
+	}
+
+	/**
+	 * A farm's bot that dies keeps its cells once it respawns (#906): it runs its script again from the top, and
+	 * lib.cellfarm.run keeps them before its first walk. After the respawn, tend walks into cell 1's floor block, which
+	 * it may not break: the walk is unreachable.
+	 */
+	// Measured: passes at tick 364, most of it the respawn wait (botRespawnTicks), as DeathGameTest's.
+	@GameTest(maxTicks = 440)
+	public void theCellsAreStillKeptAfterARespawn(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		UUID id = bot.getUUID();
+		bot.getInventory().addItem(new ItemStack(Items.TORCH));
+		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3));
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			from lib.project import Step
+			from lib.result import result
+			T = "minecraft:torch"
+			def build_cell(low, high):
+			    r = place(low.up(), T)
+			    return result() if r else result(r.reason, low.up())
+			def tend(boxes, told):
+			    if deaths():
+			        r = goto(boxes[0][0])
+			        print(r.ok, r.reason)
+			        stop()
+			f = {"size": (1, 1), "categories": {"torch": [T]}, "corners": "test_farms", "keep": [T],
+			     "materials": lambda: {T: 1}, "build_cell": build_cell, "ripe": lambda low, high: False,
+			     "harvest": lambda low, high, told: result(), "tend": tend, "most": lambda: 1,
+			     "kept": lambda low, high: [low]}
+			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
+			""".formatted(at.getX(), at.getY(), at.getZ()));
+		BotScripts.failOnError(helper, bot);
+		boolean[] killed = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!killed[0] && BotScripts.log(bot, Output.Level.PRINT).contains("farm full")) {
+				bot.kill(helper.getLevel());
+				killed[0] = true;
+			}
+			if (!helper.getBlockState(new BlockPos(1, 0, 3)).is(Blocks.STONE)) {
+				helper.fail("cell 1's floor at (1, 0, 3) broke: " + helper.getBlockState(new BlockPos(1, 0, 3)));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getLevel().getEntity(id) instanceof AntBot again && again != bot && again.isAlive(), "not respawned");
+			AntBot again = (AntBot) helper.getLevel().getEntity(id);
+			helper.assertValueEqual(BotScripts.log(again, Output.Level.PRINT).stream().filter(l -> l.startsWith("True") || l.startsWith("False"))
+				.toList(), List.of("False unreachable"), "said");
+		});
 	}
 
 	/**

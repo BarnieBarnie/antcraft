@@ -14,6 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -245,6 +249,27 @@ class MoveApiTest {
 		assertFalse(bot.kept.test(new Pos(1, 2, 4)));
 		run.stop();
 		assertFalse(bot.kept.test(new Pos(1, 2, 3)));
+	}
+
+	/**
+	 * What keep_blocks kept is saved with the run: a run resumed after a reload, in a body of its own, still keeps it, so a
+	 * farm keeps its cells only when it starts and builds one (#906).
+	 */
+	@Test
+	void keptBlocksAreKeptByTheResumedRun() {
+		Code code = Compiler.compile(Parser.parse("t.py", "keep_blocks([Pos(1, 2, 3), (Pos(0, 64, 0), Pos(2, 64, 2))])\nwait(10)\n"));
+		ScriptRun run = new ScriptRun("t", code, List.of(), bot, log);
+		tick(run);
+		TagValueOutput output = TagValueOutput.createWithoutContext(ProblemReporter.DISCARDING);
+		run.save().store(output);
+		ScriptRun.Saved saved = ScriptRun.Saved.read(TagValueInput.create(ProblemReporter.DISCARDING, RegistryAccess.EMPTY, output.buildResult()))
+			.orElseThrow();
+		FakeBot loaded = new FakeBot();
+		ScriptRun resumed = ScriptRun.resume(saved, code, loaded, log, Memory.create(), ScriptLibrary.empty());
+		assertTrue(loaded.kept.test(new Pos(1, 2, 3)) && loaded.kept.test(new Pos(1, 64, 1)), log.last(100, Level.DEBUG).toString());
+		assertFalse(loaded.kept.test(new Pos(3, 64, 1)));
+		resumed.stop();
+		assertFalse(loaded.kept.test(new Pos(1, 2, 3)));
 	}
 
 	/** A (low, high) box keeps every block in it, its corners either way round (#891). */

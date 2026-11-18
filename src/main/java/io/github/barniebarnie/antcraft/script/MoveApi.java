@@ -242,26 +242,26 @@ public final class MoveApi {
 				throw new ScriptError("keep_blocks() takes a list of positions");
 			}
 			// A (low, high) box is kept as its bounds, not its blocks: a farm's cell floors cost the script little (#891).
-			Set<Pos> kept = new HashSet<>();
-			List<Pos[]> boxes = new ArrayList<>();
+			// Each block or box goes as a (low, high) pair, a block as low == high, in the bot's dimension.
+			String dimension = run.host().body().dimension();
+			List<Pos> boxes = new ArrayList<>();
 			for (Object b : list.items) {
 				if (b instanceof PyTuple box && box.items().size() == 2) {
 					Pos low = Pos.of(box.items().get(0));
 					Pos high = Pos.of(box.items().get(1));
 					if (!run.elsewhere(low)) {
-						boxes.add(new Pos[] {new Pos(Math.min(low.x(), high.x()), Math.min(low.y(), high.y()), Math.min(low.z(), high.z())),
-							new Pos(Math.max(low.x(), high.x()), Math.max(low.y(), high.y()), Math.max(low.z(), high.z()))});
+						boxes.add(new Pos(Math.min(low.x(), high.x()), Math.min(low.y(), high.y()), Math.min(low.z(), high.z()), dimension));
+						boxes.add(new Pos(Math.max(low.x(), high.x()), Math.max(low.y(), high.y()), Math.max(low.z(), high.z()), dimension));
 					}
 					continue;
 				}
 				Pos p = Pos.of(b);
 				if (!run.elsewhere(p)) { // another dimension's coordinates are another block here (#360)
-					kept.add(p);
+					boxes.add(p.in(dimension));
+					boxes.add(p.in(dimension));
 				}
 			}
-			run.host().body().setKeptBlocks(p -> kept.contains(p) || boxes.stream().anyMatch(box -> box[0].x() <= p.x() && p.x() <= box[1].x()
-				&& box[0].y() <= p.y() && p.y() <= box[1].y() && box[0].z() <= p.z() && p.z() <= box[1].z()));
-			run.keepsBlocks(!kept.isEmpty() || !boxes.isEmpty());
+			run.keepBlocks(boxes);
 			return PyNone.NONE;
 		});
 		natives.register("travel", call -> {

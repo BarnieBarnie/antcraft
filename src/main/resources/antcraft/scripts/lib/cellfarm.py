@@ -295,7 +295,6 @@ def farm(f, name, size, radius):
         # build's own taken back by them, idle, tend, get) comes down at its end (#654).
         placed_scaffold()
         own()
-        keep_cells(f, name)
         cells = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
         far = [b for b in cells if not loaded(f, b[0], b[1])]
         visited = far[visits % len(far)] if far else None
@@ -433,7 +432,9 @@ def run(f, name, key, at, steps, radius=32):
         lib.project.reset(name)
         say(f"farm moved to {at.x} {at.y} {at.z}")
     lib.cells.layout(name, at.down(), f["size"])
-    keep_cells(f, name)  # a run resumed after a reload keeps them before its first walk, not from its first round on
+    # Kept till the script ends, also across a reload; a respawn runs the script again from the top, so they are kept
+    # here and once a cell is built, not each round (#906).
+    keep_cells(f, name)
     if new or moved:
         hint(f, name, at)
     lib.depot.depot(name, at + (0, 0, -2), "east", f["categories"])
