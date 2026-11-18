@@ -587,10 +587,13 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             itself = key(raw) == key(item)
             if s is None or not itself and key(raw) in GETTING:
                 return None
+            what = key(raw)
+            if what == LOGS and raw != LOGS and not itself and only_kind(item, n, p, raw, k, radius):
+                what, s = raw, logs_of(raw)
             # get takes a raw item from the chests first: the walk to the nearest, for as much as they hold (#555, #661).
             if "chests" not in tools:
                 tools["chests"] = lib.stock.chests(radius)
-            chests, held = chest_held(key(raw), radius, tools["chests"])
+            chests, held = chest_held(what, radius, tools["chests"])
             if chests:
                 ticks += lib.cost.walk(pos(), chests[0])
                 back = chests[0]
@@ -598,7 +601,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
                 if k <= 0:
                     continue
             # A station's raw items too: get cannot make the furnace or table without them (#729).
-            if (itself or key(raw) not in own) and not s.there(radius):
+            # And a log of the one kind the recipe takes, as get fails no_logs for it (#938).
+            if (itself or key(raw) not in own or what != key(raw)) and not s.there(radius):
                 return None
             # Coal may come as charcoal for less than its least.
             if limit is not None and ticks + (0 if key(raw) == COAL else s.least(k) + smelted_pickaxe(s, tools)) > limit:
@@ -625,6 +629,17 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         return ticks
     finally:
         GETTING.pop()
+
+
+def only_kind(item, n, p, raw, k, radius):
+    """Whether make_cost is to cost raw, a log of one kind that p, the plan for n of item, gathers k of, as that kind,
+    not as any log (key), as get gathers it once any log did not do (#933, #938): where logs are within radius but none
+    of raw, and the plan made with k logs of another kind carried still asks for raw, as oak slabs take oak planks.
+    ponytail: where no log is within radius any log costs as raw would, so the needs (3000 instructions) is left out."""
+    if lib.find.nearest(LOGS, radius) is None or lib.find.nearest(raw, radius) is not None:
+        return False
+    other = "minecraft:oak_log" if raw == "minecraft:birch_log" else "minecraft:birch_log"
+    return raw in needs(item, n, also=p["also"], extra={other: k})["gather"]
 
 
 def planned(item, n, p, tools):

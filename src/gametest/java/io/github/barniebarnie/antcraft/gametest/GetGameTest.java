@@ -1770,6 +1770,24 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A birch tree, a crafting table and no oak (#938): make_cost of oak slabs, which take oak planks, is None, as get
+	 * fails no_logs for the oak log there (oakSlabsWithOnlyBirchAroundFailForTheOakLog); it costed the log as any log.
+	 * Sticks, which take any planks, still cost the birch.
+	 */
+	// Measured: passes at tick 15.
+	@GameTest(maxTicks = 30)
+	public void makeCostOfOakSlabsWithOnlyBirchAroundIsNone(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
+		helper.setBlock(2, 1, 5, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import make_cost
+			print(make_cost("oak_slab", 6), make_cost("stick", 4) is not None)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "None True"));
+	}
+
+	/**
 	 * A birch leaves block at y 7 on a log on a stone column, out of reach from the floor (#654): the bot pillars with
 	 * its dirt to break it for a sapling, and takes the pillar back, so no dirt stands in the area after.
 	 */
