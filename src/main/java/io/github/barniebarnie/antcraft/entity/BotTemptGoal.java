@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.entity;
 
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import java.util.Comparator;
 import java.util.EnumSet;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
@@ -43,12 +44,14 @@ public final class BotTemptGoal extends Goal {
 
 	@Override
 	public boolean canUse() {
-		// ponytail: an entity query round each animal every other tick, as TemptGoal looks through the players; skip
-		// animals far from any bot first if pens of hundreds show in the tick profile.
+		// An entity query round each animal every other tick, as TemptGoal looks through the players: 200 cows in one
+		// place cost 0.04 to 0.07 ms a tick, with or without a bot by them (#855), so nothing skips far animals.
+		long begin = TickProfiler.SERVER.begin();
 		double range = this.animal.getAttributeValue(Attributes.TEMPT_RANGE);
 		this.bot = this.animal.level().getEntitiesOfClass(AntBot.class, this.animal.getBoundingBox().inflate(range),
 				b -> b.isAlive() && this.animal.isFood(b.getMainHandItem())).stream()
 			.min(Comparator.comparingDouble(this.animal::distanceToSqr)).orElse(null);
+		TickProfiler.SERVER.end("animal.tempt", begin);
 		return this.bot != null;
 	}
 

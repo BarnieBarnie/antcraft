@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -26,6 +27,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * {@code jobs/ranch.py} (#837; docs/cookbook/ranch.md): a pen of oak fence round x 0 to 7, z 3 to 7 with a gate at
@@ -249,6 +251,40 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			List<Cow> cows = inPen(helper, Cow.class);
 			helper.assertTrue(cows.stream().anyMatch(Cow::isBaby), "no calf among " + cows.size() + " cows");
+		});
+	}
+
+	/**
+	 * A pig outside the pen, south of its fence, carrots in the chest, and animals in the pen that do not follow carrots:
+	 * a chicken on each block of the row along the far fence and a cow. The bot lures the pig in, and none of the
+	 * penned animals gets past the fence, not even while the gate stands open: none is beyond the middle of the fence or
+	 * gate. Fails at once where one is.
+	 */
+	// Measured: passes at tick 262 to 289, the gate open some 53 ticks. Already green with #843's lure. With the chickens
+	// crowded against the gate instead, one in two runs failed: the bot walking out through the gate shoved one out ahead.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 600)
+	public void aLureLetsNoPennedAnimalOut(GameTestHelper helper) {
+		List<Animal> penned = new ArrayList<>();
+		for (int x = 1; x <= 6; x++) {
+			penned.add(animal(helper, EntityTypes.CHICKEN, x, 6, false));
+		}
+		penned.add(animal(helper, EntityTypes.COW, 5, 5, false));
+		Pig stray = animal(helper, EntityTypes.PIG, 3, 10, false);
+		AntBot bot = ranch(helper, 8, new ItemStack(Items.CARROT, 4));
+		helper.onEachTick(() -> {
+			for (Animal a : penned) {
+				Vec3 at = TestPositions.relative(helper, a.position());
+				if (!a.isAlive() || at.x <= 0.5 || at.x >= 7.5 || at.z <= 3.5 || at.z >= 7.5) {
+					helper.fail("a penned " + a.getType().getDescription().getString() + " got out, at " + at + ", the bot at "
+						+ TestPositions.relative(helper, bot.position()) + ", doing " + (bot.getScript() == null ? null : bot.getScript().action())
+						+ ", the gate " + (helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN) ? "open" : "shut"));
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(inPen(helper, Pig.class).contains(stray), "the pig is not in the pen but at "
+				+ TestPositions.relative(helper, stray.position()) + ", the bot at " + TestPositions.relative(helper, bot.position()));
+			helper.assertTrue(!helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the gate is open");
 		});
 	}
 }

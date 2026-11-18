@@ -11,6 +11,8 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -101,6 +103,42 @@ public class CropFarmGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.WHEAT, x, 1, z);
 				helper.assertTrue(helper.getBlockState(new BlockPos(x, 1, z)).getValue(CropBlock.AGE) < 7, "not replanted at " + x + " " + z);
 			});
+		});
+	}
+
+	/**
+	 * As above, with three cows, three chickens and two pigs beside the cell, which follow a bot holding wheat, seeds or
+	 * carrots (BotTemptGoal, #855): the bot still harvests, replants and stores the cell, and no farmland is trampled.
+	 */
+	// Measured: passes at tick 1487 to 1512, as without the animals (1488), an animal by the bot on some 930 ticks.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 3000)
+	public void animalsFollowingTheBotLetItFinishItsRound(GameTestHelper helper) {
+		AntBot bot = farm(helper, Items.WHEAT_SEEDS, 80, 0);
+		for (int i = 0; i < 3; i++) {
+			helper.spawn(EntityTypes.COW, 4 + 3 * i, 1, 15);
+			helper.spawn(EntityTypes.CHICKEN, 4 + 3 * i, 1, 17);
+		}
+		helper.spawn(EntityTypes.PIG, 12, 1, 14);
+		helper.spawn(EntityTypes.PIG, 14, 1, 14);
+		run(helper, bot, "wheat", 1);
+		boolean[] ripe = new boolean[1];
+		int[] followed = new int[1];
+		helper.onEachTick(() -> {
+			if (!ripe[0] && BotScripts.log(bot, Output.Level.PRINT).contains("built cell 1")) {
+				forEachSpot(1, (x, z) -> helper.setBlock(x, 1, z, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7)));
+				ripe[0] = true;
+			}
+			if (!helper.getLevel().getEntitiesOfClass(Animal.class, bot.getBoundingBox().inflate(2.5)).isEmpty()) {
+				followed[0]++;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(ripe[0], "cell 1 not built; said " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertTrue(followed[0] > 300, "an animal was by the bot on only " + followed[0] + " ticks");
+			helper.assertValueEqual(depot(helper, Items.WHEAT), 80, "wheat in the depot");
+			assertCell(helper, 1, Blocks.WHEAT);
+			forEachSpot(1, (x, z) ->
+				helper.assertTrue(helper.getBlockState(new BlockPos(x, 1, z)).getValue(CropBlock.AGE) < 7, "not replanted at " + x + " " + z));
 		});
 	}
 

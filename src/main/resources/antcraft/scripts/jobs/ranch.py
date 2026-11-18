@@ -1,6 +1,6 @@
 # A job: keeps animals in a fenced pen until a player stops it, for meat, leather, wool, eggs and milk. Run it as
 # /antcraft bot run jobs.ranch x1 y1 z1 x2 y2 z2 [cap [radius]]: the pen's inside from one corner to the other (its floor
-# level y1), the most adults of each kind it keeps (CAP by default) and how far to look for chests (32 by default). Each
+# level y1), the most adults of each kind it keeps (default_cap by default) and how far to look for chests (32 by default). Each
 # round, for cows, sheep, pigs and chickens, it lures one of a kind that is outside the pen in with its food while the
 # kind is under the cap, kills the adults over it (attack; babies never), breeds pairs with their food (use), shears the
 # sheep and milks the cows with the buckets in the chests; then it picks up what lies in the pen, such as eggs, and stores
@@ -24,9 +24,11 @@ SHEARS = "minecraft:shears"
 BUCKET = "minecraft:bucket"
 WEAPONS = ["#minecraft:axes", "#minecraft:swords"]  # an axe first: a sword's sweep hurts the babies beside
 GATES = "#minecraft:fence_gates"
-# ponytail: 4 adults of a kind is a guess; measure how many a bot keeps up with (#843).
-CAP = 4
-REST = 100  # ticks between rounds: a parent breeds again after 6000, a baby grows up in 24000
+REST = 100  # ticks between rounds
+BREED = 6000  # ticks before a parent breeds again; a baby grows up in 24000
+# Ticks a round spends on each adult, measured (#855): in a 6 by 3 pen with 4 adults of each kind (8 a kind cap) the
+# second round took 870 ticks, with 8 each (cap 16) 1976: 54 and 62 an adult, feeding, shearing and milking.
+TEND = 62
 LURE = 300  # ticks the bot waits in the pen for a lured animal to come in
 PRODUCE = ["minecraft:beef", "minecraft:porkchop", "minecraft:mutton", "minecraft:chicken", "minecraft:leather",
            "#minecraft:wool", "minecraft:feather", "minecraft:egg", "minecraft:milk_bucket"]
@@ -36,6 +38,14 @@ KEEP = list(FOOD.values()) + [SHEARS, BUCKET] + WEAPONS
 def inside(p, low, high):
     """Whether the block p is in the pen from low to high, a block of leeway up and down."""
     return low.x <= p.x <= high.x and low.z <= p.z <= high.z and low.y - 1 <= p.y <= high.y + 1
+
+
+def default_cap(low, high):
+    """The most adults of each kind kept in the pen from low to high: as many as the bot tends in one round before a
+    parent can breed again (BREED, TEND), and no more than the kinds can share the pen's floor, a block an animal; at
+    least a pair."""
+    area = (high.x - low.x + 1) * (high.z - low.z + 1)
+    return max(2, min((BREED - REST) // (len(FOOD) * TEND), area // len(FOOD)))
 
 
 def middle(low, high):
@@ -92,7 +102,8 @@ def lure(kind, animals, low, high, cap, radius):
     goto(stray.pos, near=3)
     out = Pos(g.x + (1 if g.x > high.x else -1 if g.x < low.x else 0), g.y, g.z + (1 if g.z > high.z else -1 if g.z < low.z else 0))
     goto(out)
-    # ponytail: the gate stands open while the stray comes in, so another animal may walk out; it is lured back later.
+    # The gate stands open while the stray comes in; the penned animals that follow the food follow the bot to its corner,
+    # and none of a pen full of others walked out in RanchGameTest aLureLetsNoPennedAnimalOut (#855).
     if not block(g).state["open"]:
         use(g)  # the bot's walks shut only the gates they opened, so this one stays open
     corners = [Pos(x, low.y, z) for x in (low.x, high.x) for z in (low.z, high.z)]
@@ -169,9 +180,12 @@ def tend(low, high, cap, radius):
     lib.depot.store(NAME, KEEP, radius)
 
 
-def run(low, high, cap=CAP, radius=32):
-    """Keeps the pen from low to high (its inside, any two opposite corners) round after round. Never returns."""
+def run(low, high, cap=None, radius=32):
+    """Keeps the pen from low to high (its inside, any two opposite corners) round after round, cap adults of each kind
+    (default_cap where None). Never returns."""
     low, high = Pos(min(low.x, high.x), min(low.y, high.y), min(low.z, high.z)), Pos(max(low.x, high.x), max(low.y, high.y), max(low.z, high.z))
+    if cap is None:
+        cap = default_cap(low, high)
     lib.depot.depot(NAME, low + (0, 0, -3), "east", {"produce": PRODUCE})
     while True:
         tend(low, high, cap, radius)
@@ -184,4 +198,4 @@ except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
     run(Pos(int(args[0]), int(args[1]), int(args[2])), Pos(int(args[3]), int(args[4]), int(args[5])),
-        int(args[6]) if len(args) > 6 else CAP, int(args[7]) if len(args) > 7 else 32)
+        int(args[6]) if len(args) > 6 else None, int(args[7]) if len(args) > 7 else 32)

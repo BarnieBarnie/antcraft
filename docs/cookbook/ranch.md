@@ -7,7 +7,7 @@ The job `jobs/ranch` keeps cows, sheep, pigs and chickens in a fenced pen, for m
 /antcraft bot run jobs.ranch 10 64 10 15 64 14 6 16
 ```
 
-The arguments are two opposite corners of the pen's inside `x y z x y z`, at the level the animals stand on, then the most adults of each kind it keeps (4 by default) and how far to look for chests, in blocks (default 32).
+The arguments are two opposite corners of the pen's inside `x y z x y z`, at the level the animals stand on, then the most adults of each kind it keeps (by default as many as one bot keeps up with, below) and how far to look for chests, in blocks (default 32).
 
 ## The pen
 
@@ -34,4 +34,10 @@ Then the bot picks up what lies in the pen or its fence, such as the eggs the ch
 
 The food comes first from the chests of the bot's other depots ([`lib.depot`](../reference/modules/lib/depot.md)), however far: a bot that also runs a [crop farm](crop-farm.md) feeds the pen wheat, seeds and carrots from its harvest. Then it comes from the chests within the radius, such as another bot's crop farm depot nearby.
 
-Not yet done: the cap of 4 adults a kind is a guess, not measured against how many a bot keeps up with.
+## The cap
+
+By default the pen keeps as many adults of each kind as the bot tends in the 5 minutes before a parent can breed again, so each pair is fed as soon as it can be: a round takes some 62 ticks an adult (measured with 4 and 8 adults of each kind, feeding, shearing and milking, #855), so (6000 - 100) / (4 kinds x 62) = 23 a kind. No more than the kinds can share the pen's floor, a block an animal: a pen of 6 by 3 keeps 4 a kind. Never under a pair.
+
+## Animals nearby
+
+Every cow, sheep, pig and chicken follows any bot that holds its food, also a [crop farm](crop-farm.md)'s bot planting seeds or carrots; it still finishes its rounds with animals round it (#855). Penned animals stay in while the gate stands open for a lure: they follow the bot to its corner, away from the gate. A bot walking out through the gate can still shove a crowd of animals pressed against it out ahead of it; the next round lures them back.
