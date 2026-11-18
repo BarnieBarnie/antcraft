@@ -124,6 +124,8 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 	 * A farm's cap from its own harvest times (#844), as the wood farm's (#662): most(name, growth, guess) is growth over
 	 * guess until SAMPLES harvests are learnt, then over their mean; farm learns each round's harvests where the spec has
 	 * no learn of its own. Here a harvest that takes 30 ticks is learnt once, then 200 ticks of 2 and 100 of 1 for "x".
+	 * The corner walk is stubbed out: it ran only where cell 0's chunk was not the bot's, so the test's time and outcome
+	 * hung on where its area fell (#881).
 	 */
 	// Measured: passes at tick 52 (red: module 'lib.cellfarm' has no attribute 'most').
 	// Full runs: passes at up to tick 95 (#861).
@@ -161,6 +163,7 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			        print(len(h), h[0] >= 30)
 			        stop()
 			lib.cellfarm.wait = waited
+			lib.cellfarm.corner = lambda name, told: None
 			f = {"size": (1, 1), "categories": {"torch": [T]}, "corners": "test_farms", "keep": [T],
 			     "materials": lambda: {T: 1}, "build_cell": build_cell, "ripe": lambda low, high: ripe[0],
 			     "harvest": harvest, "tend": lambda boxes, told: None, "most": lambda: 1}
