@@ -227,7 +227,8 @@ def farm(f, name, size, radius):
     """Farms forever. Each round harvests every ripe cell (once the bot has the spec's room(), else it stores first, and
     where it still has too little says so once and harvests nothing, #765), stores what it carries (each round, #766),
     tends the cells, builds the next cell where the farm is below limit and stocked gets what one takes (else says once
-    what it lacks, and tries again BACKOFF rounds later, or in the next round that harvested), and where it harvested
+    what it lacks, and tries again BACKOFF rounds later, or in the next round that harvested; a build that fails it says
+    once a reason, #853, and tries again the next round), and where it harvested
     nothing does the spec's idle and waits in its corner's chunk (corner, #814). Each round takes back the scaffold its
     walks placed (lib.trees.take_back) before it waits. The harvest, store and tending go over the cells the bot can
     read where it stands, then over those it reads at one cell it cannot, in turn, which it walks to (visit, #811), so
@@ -306,7 +307,9 @@ def farm(f, name, size, radius):
                 following(f, name, size)
             r = stocked(f, radius)
             if r["ok"]:
-                build(f, name, size, radius)
+                r = build(f, name, size, radius)
+                if not r["ok"]:
+                    tell(told, f"cell not built: {r['reason']} at {r.get('at')}")
             else:
                 tell(told, f"next cell: {r['reason']}, lacks {r['missing']}")
                 backoff = BACKOFF

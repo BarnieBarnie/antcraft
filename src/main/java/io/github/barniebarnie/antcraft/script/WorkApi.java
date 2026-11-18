@@ -1075,6 +1075,11 @@ public final class WorkApi {
 				this.arrivals = 0;
 			}
 			if (this.walk == null) {
+				if (this.arrivals == 0 && this.goal instanceof ItemEntity dropped && !dropped.onGround() && !dropped.isInLiquid()) {
+					// Still falling: a walk to where it is now heads for a block in the air, which a path pillars up to, as
+					// it did over cane just cut, putting scaffold in place of the cane under it (#853). It lands first.
+					return false;
+				}
 				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && (dropped.hasPickUpDelay() || !dropped.onGround())) {
 					return false; // next to it, waiting for it to land and for its pickup delay to end
 				}

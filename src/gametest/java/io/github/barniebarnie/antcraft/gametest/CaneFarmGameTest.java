@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -143,7 +144,10 @@ public class CaneFarmGameTest implements CustomTestMethodInvoker {
 	 * With cane for one cell only, the farm builds cell 1, then lacks cane for cell 2; cane grown in cell 1 is harvested
 	 * and stored, and cell 2 is planted from the depot's cane, the other 2 left there.
 	 */
-	// Measured: passes at tick 302 to 336.
+	// It fails at once where cell 1's cane or water goes after it is built, or the farm says a cell was not built, with the
+	// bot's call, line and position (#853). Measured: passes at tick 250 to 347 (red: cobblestone in place of the cane
+	// at (3, 1, 3) on tick 183, the bot running pick_up('minecraft:sugar_cane'): its walk headed for a cut cane still
+	// falling, so the path pillared at the cane under it).
 	@GameTest(maxTicks = 600)
 	public void aSecondCellIsPlantedFromStoredCane(GameTestHelper helper) {
 		AntBot bot = farm(helper, 2, "2");
@@ -155,6 +159,14 @@ public class CaneFarmGameTest implements CustomTestMethodInvoker {
 					helper.setBlock(x, 3, 3, Blocks.SUGAR_CANE);
 				}
 				grown[0] = true;
+			}
+			boolean broken = grown[0] && !(helper.getBlockState(new BlockPos(1, 1, 3)).is(Blocks.SUGAR_CANE)
+				&& helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.SUGAR_CANE) && helper.getBlockState(new BlockPos(2, 0, 3)).is(Blocks.WATER));
+			if (broken || said(bot, "cell not built")) {
+				ScriptRun run = bot.getScript();
+				helper.fail((broken ? "cell 1 broken: " + helper.getBlockState(new BlockPos(1, 1, 3)) + ", " + helper.getBlockState(new BlockPos(2, 0, 3))
+					+ ", " + helper.getBlockState(new BlockPos(3, 1, 3)) : "a cell not built") + "; the bot at " + TestPositions.relative(helper, bot.position())
+					+ (run == null ? "" : ", running " + run.action() + " on line " + run.line()) + "; said " + BotScripts.log(bot, Output.Level.PRINT));
 			}
 		});
 		helper.succeedWhen(() -> {
