@@ -187,10 +187,14 @@ public final class KiteGoal extends Goal {
 		return creepers.stream().mapToDouble(creeper -> creeper.position().distanceTo(pos)).min().orElse(Double.MAX_VALUE);
 	}
 
-	/** Whether a hostile mob other than {@code creeper} is within {@link #CROWD} of the bot. */
-	private boolean crowded(Creeper creeper) {
+	/**
+	 * Whether a hostile mob other than a creeper is within {@link #CROWD} of the bot. Not another creeper: two walking at
+	 * the bot side by side light together, and each kept it from stepping in at the other, so it backed off from them
+	 * for good (#898).
+	 */
+	private boolean crowded() {
 		return !this.bot.entitiesNear(Mob.class, this.bot.getBoundingBox().inflate(CROWD),
-			mob -> mob != creeper && mob instanceof Enemy && mob.isAlive() && mob.distanceTo(this.bot) <= CROWD).isEmpty();
+			mob -> !(mob instanceof Creeper) && mob instanceof Enemy && mob.isAlive() && mob.distanceTo(this.bot) <= CROWD).isEmpty();
 	}
 
 	@Override
@@ -237,7 +241,7 @@ public final class KiteGoal extends Goal {
 		}
 		boolean stepIn = ready && creeper.getSwelling(1) < STRIKE_SWELL && creeper.distanceTo(this.bot) <= STEP_IN_RANGE;
 		if (stepIn && !this.crowded) {
-			this.crowded = this.crowded(creeper);
+			this.crowded = this.crowded();
 		}
 		if (stepIn && !this.crowded) {
 			this.away = null;

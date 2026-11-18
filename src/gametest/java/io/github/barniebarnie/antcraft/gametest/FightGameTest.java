@@ -535,6 +535,31 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot kills two creepers that walk at it side by side (#898). Each kept the bot from stepping in at the other, as a
+	 * mob beside it, so it backed off every time their fuses lit and struck neither again, as in about 1 of 200 copies of
+	 * {@link #aBotKillsTwoCreepersAndAHuskUnhurtByABlast}, where it kited two such creepers, at 1 and 7 health, for 1300
+	 * ticks without a blow. Their health as there: one blow kills the first, its sweep leaves the second at 6.
+	 */
+	// Measured: passes at tick 82 alone, 72 to 145 in 100 copies at once (red: times out with the first at 1 health).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 300)
+	public void aBotKillsTwoCreepersWalkingAtItSideBySide(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 4.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper[] creepers = {helper.spawn(EntityTypes.CREEPER, new Vec3(12, 1, 11.5)), helper.spawn(EntityTypes.CREEPER, new Vec3(13, 1, 11.5))};
+		creepers[0].setHealth(1);
+		creepers[1].setHealth(7);
+		for (Creeper creeper : creepers) {
+			creeper.setTarget(bot);
+		}
+		failOnExplosion(helper, bot);
+		helper.succeedWhen(() -> {
+			for (Creeper creeper : creepers) {
+				helper.assertTrue(creeper.isRemoved() || creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health");
+			}
+		});
+	}
+
+	/**
 	 * Succeeds once {@code creeper}'s fuse, lit at some point, has gone out again, the bot having backed out of its reach;
 	 * fails as soon as the fuse burns past {@code most}, as it does where the bot wastes its time.
 	 */
