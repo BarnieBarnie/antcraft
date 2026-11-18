@@ -937,6 +937,30 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * As {@link #pillaringGoesRoundACane}, with a brown mushroom on podzol in the other half, as a mushroom farm grows
+	 * (#870): the path pillars up its own half and the mushroom stays.
+	 */
+	// Measured: passes at tick 23 (red: the mushroom became dirt on tick 3).
+	@GameTest(maxTicks = 50)
+	public void pillaringGoesRoundAMushroom(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 6, 7, 6, Blocks.BEDROCK);
+		fill(helper, 2, 1, 3, 3, 7, 3, Blocks.AIR);
+		helper.setBlock(3, 0, 3, Blocks.PODZOL);
+		helper.setBlock(3, 1, 3, Blocks.BROWN_MUSHROOM);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		BotScripts.failOnError(helper, bot);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.BROWN_MUSHROOM)) {
+				helper.fail("the mushroom became " + helper.getBlockState(new BlockPos(3, 1, 3)));
+			}
+		});
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 4, 3)));
+		succeedWhenAt(helper, bot, new BlockPos(3, 4, 3));
+	}
+
+	/**
 	 * A bot on a block, its body over the block's edge into the air beside it, steps up onto a block it bridges there
 	 * (#656): it steps back off the edge to place it, as its own body was in the way, where it waited till it gave up
 	 * unreachable, such as beside a felled poplar's trunk.

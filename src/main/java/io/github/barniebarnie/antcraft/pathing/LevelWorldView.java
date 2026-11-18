@@ -85,13 +85,16 @@ public class LevelWorldView implements WorldView {
 	}
 
 	/**
-	 * A crop, sapling, sugar cane, sweet berry bush or nether wart, such as a farm grows: paths treat it as air but never
-	 * put scaffold in its place, so they go round it (#865). Grass and flowers are not: scaffold breaks them with their
-	 * drops (#608).
+	 * A crop, sapling, sugar cane, sweet berry bush, nether wart, mushroom or kelp, such as a farm grows: paths treat it
+	 * as air (kelp as water) but never put scaffold in its place, so they go round it (#865, #870). Grass and flowers are
+	 * not: wild terrain is full of them, and scaffold breaks them with their drops (#608). Kelp is under water, which
+	 * bridges never cross, so only a pillar from the kelp bed would replace it.
 	 */
 	static boolean isPlant(BlockState state) {
 		return state.is(BlockTags.CROPS) || state.is(BlockTags.SAPLINGS) || state.is(Blocks.SUGAR_CANE)
-			|| state.is(Blocks.SWEET_BERRY_BUSH) || state.is(Blocks.NETHER_WART);
+			|| state.is(Blocks.SWEET_BERRY_BUSH) || state.is(Blocks.NETHER_WART)
+			|| state.is(Blocks.BROWN_MUSHROOM) || state.is(Blocks.RED_MUSHROOM)
+			|| state.is(Blocks.KELP) || state.is(Blocks.KELP_PLANT);
 	}
 
 	@Override
