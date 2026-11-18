@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.work;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -194,14 +195,24 @@ public final class Storage {
 		return true;
 	}
 
-	/** Shrinks the stacks by the ingredients of one craft, first slots first. */
+	/**
+	 * Shrinks the stacks by the ingredients of one craft: of interchangeable items, the one there is most of first, as
+	 * the planner takes them (TaskPlanner needAny), so a craft leaves what the plan keeps for a later step (#925); each
+	 * from the first slots first.
+	 */
 	private static void takeIngredients(List<ItemStack> slots, TaskPlanner.Recipe<Item> recipe) {
+		Map<Item, Integer> stock = new HashMap<>();
+		slots.forEach(stack -> stock.merge(stack.getItem(), stack.getCount(), Integer::sum));
 		for (Map.Entry<Set<Item>, Integer> ingredient : recipe.ingredients().entrySet()) {
 			int needed = ingredient.getValue();
-			for (int i = 0; i < slots.size() && needed > 0; i++) {
-				ItemStack stack = slots.get(i);
-				if (ingredient.getKey().contains(stack.getItem())) {
-					needed -= stack.split(needed).getCount();
+			List<Item> byStock = new ArrayList<>(ingredient.getKey());
+			byStock.sort(Comparator.comparingInt((Item option) -> stock.getOrDefault(option, 0)).reversed());
+			for (Item option : byStock) {
+				for (int i = 0; i < slots.size() && needed > 0; i++) {
+					ItemStack stack = slots.get(i);
+					if (stack.is(option)) {
+						needed -= stack.split(needed).getCount();
+					}
 				}
 			}
 		}

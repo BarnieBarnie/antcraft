@@ -4,7 +4,7 @@ Crafting and smelting an item through its whole recipe tree, with a crafting tab
 
 ## `craft_all(item, n=1, table=None, furnace=None)`
 
-Makes `n` of `item` from what the bot carries: it asks `needs(item, n)` for the steps and runs each in order, `craft` at `table` or `smelt` in `furnace` (`None`: one within reach, as those actions take it; for a smelting step without `furnace`, `smelt_here` (below), which puts one down where none is in reach), burning the fuel `needs` gives for the step. A smelting step of more than a stack takes several `smelt` calls. It gathers nothing: fetch the raw items first, with [`take`](../../crafting/take.md) from a chest or by mining.
+Makes `n` of `item` from what the bot carries: it asks `needs(item, n)` for the steps and runs each in order, `craft` at `table` or `smelt` in `furnace` (`None`: one within reach, as those actions take it; for a smelting step without `furnace`, `smelt_here` (below), which puts one down where none is in reach), burning the fuel `needs` gives for the step. A smelting step smelts, of the inputs `needs` lists for it, the one the bot carries most of, the first on a tie, as `needs` picks it, not whichever `smelt` finds first: with an oak log and two birch logs, torches smelt a birch log and burn the oak log, as planned (#925). A smelting step of more than a stack takes several `smelt` calls. It gathers nothing: fetch the raw items first, with [`take`](../../crafting/take.md) from a chest or by mining.
 
 - **Returns** a dict as [`dig_shaft`](shaft.md#dig_shaftlevels) gives: `ok`, `reason`, `at` (always `None`) and `missing`.
 - **Pauses** yes, while it walks to the table or furnace and waits for the smelting.
@@ -12,7 +12,7 @@ Makes `n` of `item` from what the bot carries: it asks `needs(item, n)` for the 
 | Reason | When |
 |---|---|
 | `missing_ingredients` | before it crafts anything, the bot lacks raw items; `missing` is `needs`'s `gather`, what to fetch |
-| another reason | the first `craft` or `smelt` step that failed, such as `no_table` (see [`Result`](../../types/result.md)); the steps before it are made |
+| another reason | the first `craft` or `smelt` step that failed, such as `no_table` (see [`Result`](../../types/result.md)); the steps before it are made. A step that fails `missing_ingredients` gives with it what was short: `missing` is what `needs(item, n)` would now gather, else the step's own item and count (#925) |
 
 An item the game does not know, or an `n` outside 1 to 1000000, stops the script with an error, as for `needs`.
 
@@ -31,7 +31,7 @@ Before it crafts anything it asks `plan(item, n)` (below) what to gather, the ta
 
 Mining the furnace back takes a pickaxe: where it would put one down and the bot carries no `#minecraft:pickaxes`, it places and crafts none and gives `no_tool`, with the inventory as it was.
 
-- **Returns** a dict as `craft_all` gives: `ok`, or `smelt`'s reason (see [`Result`](../../types/result.md)), `no_tool` where the bot carries no pickaxe to mine the furnace back, `missing_ingredients` before it crafts anything, or `no_furnace` where the bot could not craft a furnace or no spot beside it took one.
+- **Returns** a dict as `craft_all` gives: `ok`, or `smelt`'s reason (see [`Result`](../../types/result.md)), `no_tool` where the bot carries no pickaxe to mine the furnace back, `missing_ingredients` before it crafts anything, or where `smelt` fails so, with `missing` what it lacked: the `n` of `item` where none is carried, else one of `fuel` (coal where `fuel` is `None`) (#925), or `no_furnace` where the bot could not craft a furnace or no spot beside it took one.
 - **Pauses** yes, as `smelt` does, and while it crafts, places and mines the furnace.
 
 ## Kept for old scripts

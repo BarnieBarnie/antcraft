@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.world.SimpleContainer;
@@ -64,6 +66,20 @@ class StorageTest {
 		// Topped up to 64: no room for four more.
 		container.setItem(1, new ItemStack(Items.OAK_PLANKS, 61));
 		assertFalse(Storage.fits(container, PLANKS));
+	}
+
+	/** As the planner takes them (#925): the option there is most of, the first one of the recipe's set on a tie, not the first slot. */
+	@Test
+	void aCraftTakesTheInterchangeableItemThereIsMostOf() {
+		TaskPlanner.Recipe<Item> sticks = new TaskPlanner.Recipe<>(Items.STICK, 4, Map.of(new LinkedHashSet<>(List.of(Items.OAK_PLANKS, Items.BIRCH_PLANKS)), 2));
+		SimpleContainer container = full(new ItemStack(Items.OAK_PLANKS, 3), new ItemStack(Items.BIRCH_PLANKS, 4), ItemStack.EMPTY);
+		assertTrue(Storage.craft(container, sticks));
+		assertEquals(3, container.countItem(Items.OAK_PLANKS));
+		assertEquals(2, container.countItem(Items.BIRCH_PLANKS));
+		SimpleContainer tie = full(new ItemStack(Items.BIRCH_PLANKS, 2), new ItemStack(Items.OAK_PLANKS, 2), ItemStack.EMPTY);
+		assertTrue(Storage.craft(tie, sticks));
+		assertEquals(0, tie.countItem(Items.OAK_PLANKS));
+		assertEquals(2, tie.countItem(Items.BIRCH_PLANKS));
 	}
 
 	@Test

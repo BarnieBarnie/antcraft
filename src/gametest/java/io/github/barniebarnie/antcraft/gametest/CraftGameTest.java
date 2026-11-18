@@ -363,6 +363,53 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			"oak_log", "oak_planks"), List.of("{'minecraft:charcoal': ['minecraft:oak_planks']}", "True None {} 8 0 0 0 3"));
 	}
 
+	/**
+	 * Four torches from an oak log and two birch logs (#925): the plan smelts a birch log, the log it has most of, burns
+	 * the oak log and makes the sticks of the other birch log, so the smelt takes a birch log too, not the oak log in the
+	 * first slot, which left it no fuel and failed missing_ingredients with nothing missing.
+	 */
+	@GameTest(maxTicks = 420)
+	public void craftAllSmeltsTheInputThePlanPicked(GameTestHelper helper) {
+		furnace(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_LOG, 2));
+		expect(helper, bot, craftAll("'torch', 4, furnace=" + furnaceAt(helper), "torch", "oak_log", "birch_log"), List.of("True None {} 4 0 0"));
+	}
+
+	/**
+	 * Sticks, then oak slabs, from three oak and four birch planks (#925): craft takes the planks the plan takes, those it
+	 * has most of (birch), not the oak planks in the first slot that the slabs need.
+	 */
+	@GameTest(maxTicks = 20)
+	public void craftTakesTheInterchangeableItemThePlanTakes(GameTestHelper helper) {
+		helper.setBlock(5, 1, 4, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 3));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 4));
+		expect(helper, bot, "s = craft('stick', 4)\n" + craftAll("'oak_slab', 6", "oak_slab", "stick", "oak_planks", "birch_planks")
+			.replace("print(", "print(s.ok, "), List.of("True True None {} 6 4 0 2"));
+	}
+
+	/** Nothing to smelt (#925): smelt_here's missing_ingredients names the item. */
+	@GameTest(maxTicks = 20)
+	public void smeltHereWithNothingToSmeltNamesIt(GameTestHelper helper) {
+		furnace(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, "import lib.craft\nr = lib.craft.smelt_here('raw_iron', 2)\nprint(r['reason'], r['missing'])\n",
+			List.of("missing_ingredients {'raw_iron': 2}"));
+	}
+
+	/** Raw iron but no fuel (#925): smelt_here's missing_ingredients names coal, and the raw iron comes back. */
+	@GameTest(maxTicks = 20)
+	public void smeltHereWithoutFuelNamesCoal(GameTestHelper helper) {
+		furnace(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		expect(helper, bot, "import lib.craft\nr = lib.craft.smelt_here('raw_iron')\nprint(r['reason'], r['missing'], count('raw_iron'))\n",
+			List.of("missing_ingredients {'minecraft:coal': 1} 1"));
+	}
+
 	// lib.craft.craft_here
 
 	/** Prints what {@code lib.craft.craft_here(args)} gives and then {@code counts}, the {@code count} of each item. */

@@ -28,7 +28,7 @@ A 2x2 recipe is crafted at once, without pausing. A 3x3 recipe pauses: at a `tab
 
 ## Description
 
-It takes the first crafting recipe for `item` whose ingredients the bot carries, its hand included, and works it again and again until it made at least `n` or runs out. It works that one recipe only, so a bot carrying birch logs and oak logs makes planks from one kind.
+It takes the first crafting recipe for `item` whose ingredients the bot carries, its hand included, and works it again and again until it made at least `n` or runs out. It works that one recipe only, so a bot carrying birch logs and oak logs makes planks from one kind. Where an ingredient may be any of several items (any planks for sticks), it takes the one the bot carries most of, the first of the recipe's on a tie, as [`needs`](needs.md) plans it, so a craft leaves what a plan keeps for a later step: sticks from 3 oak and 4 birch planks take birch planks, and the oak planks are left for oak slabs (#925).
 
 2x2 recipes are crafted anywhere, as in a player's inventory. 3x3 recipes need a crafting table at `table`, or without `table` one the bot sees within 4 blocks of its eyes where it stands; it does not look further. An `n` below 1, or an item the game does not know, stops the script with an error.
 
