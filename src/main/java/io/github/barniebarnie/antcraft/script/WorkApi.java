@@ -1029,7 +1029,8 @@ public final class WorkApi {
 	 * player's rod does ({@link Fishing#pitch}), reels it in as soon as a fish bites and waits for the catch to fly to it,
 	 * until it caught {@code n} items: ok with how many. It fails with {@code no_rod} when it carries no fishing rod,
 	 * {@code no_water} when it finds no open water or its casts keep landing out of it, {@code rod_broke} when its last
-	 * rod broke first, and with the walk's reason; each with how many it caught so far.
+	 * rod broke first, {@code no_space} when it has no room for a catch, which counts only once picked up (#969), and with
+	 * the walk's reason; each with how many it caught so far.
 	 */
 	private static final class Fish implements ScriptRun.Action {
 		static final Predicate<ItemStack> ROD = stack -> stack.is(Items.FISHING_ROD);
@@ -1061,6 +1062,9 @@ public final class WorkApi {
 		private boolean broke;
 		private List<ItemEntity> flying = List.of();
 		private int flyingTicks;
+		/** Matches the catch that flies to the bot, and how many such items it carried once it reeled in (#969). */
+		private Predicate<ItemStack> catchLike = stack -> false;
+		private long carried;
 		private long caught;
 		private @Nullable Result result;
 
@@ -1128,7 +1132,13 @@ public final class WorkApi {
 					return false;
 				}
 				this.flying.stream().filter(item -> item.distanceTo(this.bot) < REACH).forEach(item -> BotHands.collect(this.bot, item));
+				// A catch counts once picked up (#969): one it has no room for lies where it landed.
+				this.caught += Math.max(0, BotHands.count(this.bot, this.catchLike) - this.carried);
+				boolean noRoom = this.flying.stream().anyMatch(item -> item.isAlive() && !this.bot.getInventory().canAddItem(item.getItem()));
 				this.flying = List.of();
+				if (noRoom) {
+					return this.finish(Result.fail(Result.NO_SPACE, this.caught));
+				}
 				if (this.caught >= this.n) {
 					return this.finish(Result.ok(this.caught));
 				}
@@ -1195,10 +1205,12 @@ public final class WorkApi {
 			int damage = hook.retrieve(rod);
 			this.flying = this.level.getEntitiesOfClass(ItemEntity.class, hook.getBoundingBox().inflate(1), item -> item.tickCount == 0);
 			this.flyingTicks = 0;
-			this.caught += this.flying.stream().mapToInt(item -> item.getItem().getCount()).sum();
 			this.misses = 0;
 			rod.hurtAndBreak(damage, this.bot, EquipmentSlot.MAINHAND);
 			this.broke = rod.isEmpty();
+			List<ItemStack> stacks = this.flying.stream().map(item -> item.getItem().copy()).toList();
+			this.catchLike = stack -> stacks.stream().anyMatch(fished -> ItemStack.isSameItemSameComponents(fished, stack));
+			this.carried = BotHands.count(this.bot, this.catchLike);
 			this.hook = null;
 		}
 

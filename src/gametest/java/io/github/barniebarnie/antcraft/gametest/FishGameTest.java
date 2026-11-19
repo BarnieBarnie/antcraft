@@ -12,6 +12,7 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -82,6 +83,25 @@ public class FishGameTest implements CustomTestMethodInvoker {
 			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True 1"), "printed");
 			helper.assertTrue(caught(bot) >= 1, "carries nothing caught");
 			helper.assertValueEqual(bot.getMainHandItem().getDamageValue(), 1, "the rod's damage");
+		});
+	}
+
+	/** A bot with no room for its catch counts none of it and stops with no_space; the catch lies by the pool (#969). */
+	// Measured: passes at tick 166 to 240 (red: printed True None 1); a bite takes up to some 380 ticks with Lure III.
+	@GameTest(maxTicks = 900, skyAccess = true)
+	public void aFullBotCountsNoCatchItHasNoRoomFor(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, rod(helper));
+		for (int i = 0; i < bot.getInventory().getContainerSize(); i++) {
+			bot.getInventory().setItem(i, new ItemStack(Items.STONE, 64));
+		}
+		int full = caught(bot);
+		ScriptRun run = BotScripts.run(bot, "r = fish()\nprint(r.ok, r.reason, r.value)\n");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("False no_space 0"), "printed");
+			helper.assertValueEqual(caught(bot), full, "items carried");
 		});
 	}
 

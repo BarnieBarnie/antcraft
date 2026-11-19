@@ -31,7 +31,7 @@ Without `at`, the bot looks for open water, a water source with air over it, amo
 
 Then it fishes as a player does (#962): it faces the water and casts a real fishing hook of its own, as the rod casts a player's, at the pitch that lands it on the block. A fish bites as for a player, sooner with Lure and in the rain; as soon as one bites, the bot reels in and the catch, from the game's fishing loot table (fish, junk or treasure, with Luck of the Sea on the rod as for a player), flies to the bot, which picks it up. Each catch wears the rod by one, as a player's. It casts again until it caught `n` items. A hook that has not landed in water after 2 seconds it takes back without wearing the rod and casts again; after 3 casts in a row that miss, it gives up with `no_water`.
 
-A rod that breaks is replaced by the next one the bot carries; when it carries none, the action fails with `rod_broke`. A catch the bot has no room for stays where it lands, though it counts as caught. A bot gets no experience, statistics or advancements from fishing. A hook the bot reeled in out of a mob (the hook caught on it) pulls it, as a player's.
+A rod that breaks is replaced by the next one the bot carries; when it carries none, the action fails with `rod_broke`. A catch counts once the bot picked it up; one it has no room for stays where it lands, and the action fails with `no_space` (#969). A bot gets no experience, statistics or advancements from fishing. A hook the bot reeled in out of a mob (the hook caught on it) pulls it, as a player's.
 
 A bot at or below `botFleeHealth` with a hostile mob near it flees instead: the action ends with `interrupted` (see [Reflexes](../../features/bots.md#reflexes)).
 
@@ -52,6 +52,7 @@ if not r:
 | `no_rod` | the bot carries no fishing rod |
 | `no_water` | no open water within 16 blocks, `at` is no water, or 3 casts in a row missed the water |
 | `rod_broke` | its last rod broke before it caught `n` items |
+| `no_space` | the bot has no room for a catch, which stays where it landed |
 | `wrong_dimension` | `at` is in another dimension than the bot |
 | `unreachable`, `not_loaded`, `timeout` | the walk to the water stopped with it, as `goto` does |
 | `interrupted` | a reflex took over, such as fleeing at low health |
