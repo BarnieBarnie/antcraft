@@ -806,6 +806,53 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> printed(helper, bot, "['minecraft:coal']"));
 	}
 
+	/**
+	 * A big smelt with no axe, an oak 4 blocks off and no coal ore in sight (#966): 64 iron ingots plan 11 logs for
+	 * planks, and make_cost costs them with a wooden axe made, as get makes one where that is cheaper (ensure_tool): the
+	 * axe (some 260) and 30 a log beat 60 a log by hand. Before, a log cost the hand's 60 with no axe carried.
+	 */
+	// Measured: passes at tick 118 alone, 241 in a class run (red: printed 60 False False).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 480)
+	public void aBigSmeltWithNoAxeCostsTheLogsWithAnAxeMade(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(5, 1, 1), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 64));
+		run(helper, bot, """
+			import lib.cost
+			import lib.find
+			from lib.get import make_cost, LOGS
+			tools = {}
+			make_cost("iron_ingot", 64, tools=tools)
+			once, each = tools["fuel"][LOGS]
+			print(each, once > lib.cost.walk(pos(), lib.find.nearest(LOGS, 32)), tools.get("minecraft:wooden_axe") is not None)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "30 True True"));
+	}
+
+	/**
+	 * The costs a big smelt plans with weigh every raw item in ticks, not only the fuels (#966): cobblestone and raw iron
+	 * their source's estimate, a gatherable item get has no source for, such as string, DEEP, so the plan never picks it
+	 * over one get can gather. Before, every raw item but coal and logs cost 1, a count beside the fuels' ticks.
+	 */
+	// Measured: passes at tick 16 alone, 32 in a class run (red: printed False False False).
+	@GameTest(maxTicks = 80)
+	public void aBigSmeltWeighsEveryRawItemInTicks(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 64));
+		run(helper, bot, """
+			from lib.get import make_cost, SOURCES, DEEP
+			tools = {}
+			make_cost("iron_ingot", 64, tools=tools)
+			c = tools["fuel"]
+			print(c.get("minecraft:cobblestone") == (0, SOURCES["minecraft:cobblestone"].estimate),
+			      c.get("minecraft:raw_iron") == (0, SOURCES["minecraft:raw_iron"].estimate), c.get("#antcraft:gatherable") == (0, DEEP))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True True True"));
+	}
+
 	/** How far make_cost may be from the ticks get takes, either way. */
 	private static final double COST_FACTOR = 1.5;
 
