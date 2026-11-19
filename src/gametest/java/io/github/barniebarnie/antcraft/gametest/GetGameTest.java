@@ -848,9 +848,35 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			make_cost("iron_ingot", 64, tools=tools)
 			c = tools["fuel"]
 			print(c.get("minecraft:cobblestone") == (0, SOURCES["minecraft:cobblestone"].estimate),
-			      c.get("minecraft:raw_iron") == (0, SOURCES["minecraft:raw_iron"].estimate), c.get("#antcraft:gatherable") == (0, DEEP))
+			      c.get("minecraft:raw_iron") == (0, SOURCES["minecraft:raw_iron"].estimate), c.get("minecraft:string") == (0, DEEP))
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True True True"));
+	}
+
+	/**
+	 * As {@link #withNoFuelCoalBesideBeatsAFarTreeForFuel}, with a script's SOURCES entry of an item the game does not
+	 * know, such as a typo or a mod not loaded (#966): get of an iron ingot still mines the coal and smelts it, as
+	 * fuel_costs gives needs only items of the antcraft:gatherable tag. Costing every item of SOURCES stopped the script
+	 * on needs' unknown item.
+	 */
+	// Measured: passes at tick 429 alone, 589 in a class run, as withNoFuelCoalBesideBeatsAFarTreeForFuel's 560 (red:
+	// script error, unknown item 'antcraft:no_such_item').
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 850)
+	public void anUnknownItemInSourcesBreaksNoSmelt(GameTestHelper helper) {
+		helper.setBlock(2, 1, 1, Blocks.COAL_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON));
+		BotScripts.failOnError(helper, bot);
+		run(helper, bot, """
+			from lib.get import get, Source, SOURCES
+			from lib.result import result
+			SOURCES["antcraft:no_such_item"] = Source(lambda n, radius: result())
+			r = get("iron_ingot")
+			print(r["ok"], count("iron_ingot"))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True 1"));
 	}
 
 	/** How far make_cost may be from the ticks get takes, either way. */

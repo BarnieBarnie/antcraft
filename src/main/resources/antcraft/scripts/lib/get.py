@@ -478,10 +478,10 @@ def fuel_costs(radius, tools=None, logs=0):
     pickaxe of the tier it needs (DEEP where none can be had), each the mining of a block (Source.parts); a log, once the
     walk to the nearest log within radius (DEEP where there is none), each its breaking with the best axe carried, else
     by hand, or where no axe is carried and a wooden one made (tool_cost) and logs, the logs the plan may fell, broken
-    with it cost less, once that axe more and each its breaking with it; any other item of SOURCES its estimate each, and
-    any other gatherable item (the antcraft:gatherable tag), which get has no source for, DEEP each. tools as
-    make_cost's. ponytail: no scan for the other raw items, so an ore costs its estimate, not its walk or trip; only a
-    wooden axe is costed; past the nearest vein coal costs as much a block, where get finds the next."""
+    with it cost less, once that axe more and each its breaking with it; any other gatherable item (the
+    antcraft:gatherable tag) the estimate of its SOURCES entry each, or DEEP where get has none. tools as make_cost's.
+    ponytail: no scan for the other raw items, so an ore costs its estimate, not its walk or trip; a SOURCES item outside
+    the tag costs needs' 1, as an id the game does not know would stop needs; only a wooden axe is costed; past the nearest vein coal costs as much a block, where get finds the next."""
     if tools is None:
         tools = {}
     p, tier, walk, mine = SOURCES[COAL].parts(radius)
@@ -496,9 +496,11 @@ def fuel_costs(radius, tools=None, logs=0):
         made = tool_cost("axe", "wooden", logs, radius, tools)
         if made is not None and made + logs * wooden < logs * chop:
             fell, chop = fell + made, wooden
-    costs = {GATHERABLE: (0, DEEP)}
-    for item, s in SOURCES.items():
-        costs[item] = (0, s.estimate)
+    # Only the tag's items, so a script's SOURCES entry of an item the game does not know stops no needs (#966).
+    costs = {}
+    for item in tag_items(GATHERABLE):
+        s = SOURCES.get(key(item))
+        costs[item] = (0, DEEP if s is None else s.estimate)
     costs[COAL] = (walk + (DEEP if pickaxe is None else pickaxe), mine)
     costs[LOGS] = (fell, chop)
     return costs
