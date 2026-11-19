@@ -363,7 +363,8 @@ public final class CraftApi {
 
 	/**
 	 * {@code craft(item, n=1, table=None, use=None)}: works one recipe for {@code item} from carried items until it made at
-	 * least {@code n}, the first recipe whose ingredients the bot carries. A 2x2 recipe is worked at once; a 3x3 one at the
+	 * least {@code n}, the first recipe whose ingredients the bot carries, of those all of whose ingredients are of
+	 * {@code use} if any (#946). A 2x2 recipe is worked at once; a 3x3 one at the
 	 * crafting table at {@code table}, walked to, or at one within reach. Of interchangeable items it takes those of
 	 * {@code use} first (#930).
 	 */
@@ -378,7 +379,11 @@ public final class CraftApi {
 			return run.done(describe, Result.fail(Result.NO_RECIPE));
 		}
 		Container carried = BotHands.carried(bot);
-		Optional<TaskPlanner.Recipe<Item>> recipe = recipes.stream().filter(candidate -> Storage.canCraft(carried, candidate, 1)).findFirst();
+		List<TaskPlanner.Recipe<Item>> makeable = recipes.stream().filter(candidate -> Storage.canCraft(carried, candidate, 1)).toList();
+		// The recipe the plan chose: each of its ingredients one of use (#946); else the first makeable.
+		Optional<TaskPlanner.Recipe<Item>> recipe = makeable.stream()
+			.filter(candidate -> candidate.ingredients().keySet().stream().allMatch(set -> use.stream().anyMatch(set::contains)))
+			.findFirst().or(() -> makeable.stream().findFirst());
 		if (recipe.isEmpty()) {
 			return run.done(describe, Result.fail(Result.MISSING_INGREDIENTS));
 		}

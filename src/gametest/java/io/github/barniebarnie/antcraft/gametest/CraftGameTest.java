@@ -210,6 +210,20 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "r = craft('furnace')\nprint(r.ok, r.value, count('furnace'))\n", List.of("True 1 1"));
 	}
 
+	/**
+	 * Sticks from oak planks and from bamboo, two recipes (#946): craft with the plan's uses crafts that recipe, whichever
+	 * comes first in the recipe book, so the other items are left for a later step.
+	 */
+	@GameTest(maxTicks = 20)
+	public void craftWithUseCraftsTheRecipeOfThoseItems(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 2));
+		bot.getInventory().addItem(new ItemStack(Items.BAMBOO, 2));
+		expect(helper, bot, "r = craft('stick', use=['bamboo'])\nprint(r.ok, count('oak_planks'), count('bamboo'), count('stick'))\n"
+			+ "r = craft('stick', use=['oak_planks'])\nprint(r.ok, count('oak_planks'), count('bamboo'), count('stick'))\n",
+			List.of("True 2 0 1", "True 0 0 5"));
+	}
+
 	@GameTest(maxTicks = 20)
 	public void craftWhatNoRecipeMakesIsNoRecipe(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
