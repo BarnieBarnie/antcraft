@@ -33,14 +33,16 @@ def craft_all(item, n=1, table=None, furnace=None):
     plan = needs(item, n)
     if plan["gather"]:
         return result("missing_ingredients", None, plan["gather"])
-    for (step, k, how), uses in zip(plan["crafts"], plan["uses"]):
+    for (step, k, how), uses, burns in zip(plan["crafts"], plan["uses"], plan["burns"]):
         if how == "craft":
             r = craft(step, k, table=table, use=list(uses))
             if not r:
                 return lacking(result(r.reason), item, n, step, k)
             continue
-        # The fuel the plan burns for the step, so coal it keeps for a later step is not burnt (#577).
-        fuel = plan["fuel"].get(step) or None
+        # The fuel the plan burns for the step and how many of each, so coal it keeps for a later step is not burnt
+        # (#577) and smelt_here keeps back what it burns (#945). ponytail: each call of a step of several inputs or stacks
+        # keeps back the whole step's fuel, more than it burns; split burns per call if a station then lacks it.
+        fuel = burns or None
         # Each input the plan smelts, as many as it smelts of it, not the one in the first slot (#925).
         for what, m in uses.items():
             while m > 0:
@@ -48,7 +50,7 @@ def craft_all(item, n=1, table=None, furnace=None):
                 if furnace is None:
                     r = smelt_here(what, min(m, STACK), fuel=fuel)
                 else:
-                    r = result(smelt(what, min(m, STACK), furnace=furnace, fuel=fuel).reason)
+                    r = result(smelt(what, min(m, STACK), furnace=furnace, fuel=list(fuel) if fuel else None).reason)
                 if not r["ok"]:
                     return lacking(r, item, n, step, k)
                 m -= min(m, STACK)
@@ -161,6 +163,9 @@ def smelt_here(item, n=1, fuel=None):
     no_tool where the bot carries no pickaxe to mine a furnace back (it places and crafts none), missing_ingredients
     with missing, what the stations lack with the input and its fuel kept back, before it crafts anything, or no_furnace where no
     furnace could be crafted or placed."""
+    # fuel as a dict, as needs' burns gives it: how many of each it burns, kept back so, smelt burning any of them (#945).
+    burns = fuel if isinstance(fuel, dict) else None
+    fuel = list(fuel) if burns else fuel
     r = smelt(item, n, fuel=fuel)
     if r or r.reason != "no_furnace":
         return smelt_lacking(r, item, n, fuel)
@@ -182,7 +187,9 @@ def smelt_here(item, n=1, fuel=None):
         kept = [carried[0]] * k
         # The fuel smelt burns: fuel, else the best carried, as smelt picks it once the k it smelts are loaded, so the
         # input burns only where more of it is carried (#530).
-        for f in [fuel] if fuel else ["coal", "charcoal", "#minecraft:logs", "#minecraft:planks"]:
+        for f, c in burns.items() if burns else []:
+            kept = kept + [f] * c
+        for f in [] if burns else [fuel] if fuel else ["coal", "charcoal", "#minecraft:logs", "#minecraft:planks"]:
             burnt = [s.item for s in inventory() if matches(s, f) and count(s.item) > (k if s.item == carried[0] else 0)]
             if burnt:
                 spare = count(burnt[0]) - (k if burnt[0] == carried[0] else 0)

@@ -39,7 +39,7 @@ public final class TaskPlanner {
 	}
 
 	/**
-	 * @param fuel what the furnace burns for a smelting step (empty for crafting)
+	 * @param fuel what the furnace burns for a smelting step, in the order it burns them (empty for crafting)
 	 * @param uses the ingredients the step takes, of interchangeable items those the plan picked, in the order it took
 	 *     them (#935)
 	 */
@@ -571,7 +571,7 @@ public final class TaskPlanner {
 			int count = (int) ((ticks + fuel.burnTicks() - 1) / fuel.burnTicks());
 			this.craft(state, recipe, count, path);
 			used.merge(item, count, Integer::sum);
-			return Map.copyOf(used);
+			return Collections.unmodifiableMap(used);
 		}
 
 		/** Burns fuel from stock, best first, and returns the ticks still to cover. */
@@ -601,7 +601,7 @@ public final class TaskPlanner {
 			Map<I, Integer> used = new LinkedHashMap<>();
 			long ticks = this.burnStock(state, this.book.fuels(), (long) smelts * SMELT_TICKS, used);
 			if (ticks <= 0 || this.book.fuels().isEmpty()) {
-				return Map.copyOf(used);
+				return Collections.unmodifiableMap(used);
 			}
 			int smeltsLeft = (int) ((ticks + SMELT_TICKS - 1) / SMELT_TICKS);
 			for (Fuel<I> fuel : this.book.fuels()) {
@@ -610,7 +610,7 @@ public final class TaskPlanner {
 						int count = fuel.itemsFor(smeltsLeft);
 						state.gather.merge(item, count, Integer::sum);
 						used.merge(item, count, Integer::sum);
-						return Map.copyOf(used);
+						return Collections.unmodifiableMap(used);
 					}
 				}
 			}
@@ -618,7 +618,7 @@ public final class TaskPlanner {
 			I item = best.items().iterator().next();
 			state.missing.merge(item, best.itemsFor(smeltsLeft), Integer::sum);
 			used.merge(item, best.itemsFor(smeltsLeft), Integer::sum);
-			return Map.copyOf(used);
+			return Collections.unmodifiableMap(used);
 		}
 
 		/**

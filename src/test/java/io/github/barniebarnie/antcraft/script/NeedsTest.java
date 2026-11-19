@@ -61,6 +61,7 @@ class NeedsTest {
 		assertEquals("[('planks', 8, 'craft'), ('ingot', 3, 'smelt')]", crafts(needs));
 		assertEquals("{'ingot': ['ore']}", Values.repr(needs.get("inputs")));
 		assertEquals("{'ingot': ['coal']}", Values.repr(needs.get("fuel")));
+		assertEquals("[{}, {'coal': 1}]", Values.repr(needs.get("burns")));
 	}
 
 	@Test
@@ -97,6 +98,14 @@ class NeedsTest {
 		assertEquals("{'minecraft:iron_ingot': ['minecraft:coal']}", Values.repr(needs.get("fuel")));
 		PyList crafts = (PyList) needs.get("crafts");
 		assertEquals(2, crafts.items.size());
+	}
+
+	/** burns gives, for each step of crafts, how many of each fuel it burns: nine ingots burn the coal and a plank (#945). */
+	@Test
+	void burnsSaysHowManyOfEachFuelAStepBurns() {
+		PyDict needs = needs(Items.IRON_INGOT, 9, Map.of(Items.RAW_IRON, 9, Items.COAL, 1, Items.OAK_PLANKS, 5));
+
+		assertEquals("[{'minecraft:coal': 1, 'minecraft:oak_planks': 1}]", Values.repr(needs.get("burns")));
 	}
 
 	/** uses lists, for each step of crafts, the items it takes and how many (#935). */

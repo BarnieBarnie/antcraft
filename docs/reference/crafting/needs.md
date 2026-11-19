@@ -17,7 +17,7 @@ What the bot still has to gather, and what to craft and smelt from it, to make `
 
 ## Returns
 
-A dict with six keys:
+A dict with seven keys:
 
 - `"gather"`: a dict of raw item id to count, what the bot must gather before it can make `item`, given what it carries, its hand included. `{}` when it carries all it needs.
 - `"crafts"`: a list of steps in order, ingredients before what they make, each a tuple `(item, n, how)`: the item id, how many the step makes (a whole number of recipe outputs, so four planks from one log) and `"craft"` or `"smelt"`, so a script can run each one with [`craft`](craft.md) or [`smelt`](smelt.md). `[]` when the bot carries `n` of `item` already.
@@ -25,6 +25,7 @@ A dict with six keys:
 - `"table"`: `True` where a `"craft"` step needs the 3x3 grid of a crafting table, `False` where every recipe fits the bot's own 2x2 grid.
 - `"inputs"`: for each `"smelt"` step, what it smelts, as `smelt` takes it: the step's item id to the list of item ids any of which smelts into it. `smelt` takes the input, not what it makes.
 - `"fuel"`: for each `"smelt"` step, what the plan burns for it, as `smelt`'s `fuel` takes it: the step's item id to the list of fuel item ids. Pass it on, so `smelt` does not burn coal the plan keeps for a later step.
+- `"burns"`: for each step of `"crafts"`, in the same order, a dict of the fuel item ids it burns to how many, in the order it burns them; `{}` for a `"craft"` step. Nine iron ingots from one coal and five oak planks burn `{"minecraft:coal": 1, "minecraft:oak_planks": 1}`. [`smelt_here`](../modules/lib/craft.md#smelt_hereitem-n1-fuelnone) takes it as `fuel`, and keeps that many of each back from the furnace and table it crafts (#945).
 
 ```text
 needs("stone_pickaxe")

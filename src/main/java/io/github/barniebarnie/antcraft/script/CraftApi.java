@@ -161,7 +161,7 @@ public final class CraftApi {
 
 	/**
 	 * A plan as {@code needs} returns it: {@code gather}, what the plan gathers or misses, by id, and {@code crafts}, its
-	 * steps as {@code (item, n, how)} tuples, {@code uses}, for each step the items it takes by id, and {@code table}, whether a crafting step needs a crafting table's 3x3 grid.
+	 * steps as {@code (item, n, how)} tuples, {@code uses}, for each step the items it takes by id, {@code burns}, for each step the fuel it burns by id, and {@code table}, whether a crafting step needs a crafting table's 3x3 grid.
 	 */
 	static <I> PyDict needs(TaskPlanner.Plan<I> plan, Function<I, String> id) {
 		Map<String, Long> gather = new LinkedHashMap<>();
@@ -171,6 +171,7 @@ public final class CraftApi {
 		gather.forEach(gatherDict::put);
 		List<Object> crafts = new ArrayList<>();
 		List<Object> uses = new ArrayList<>();
+		List<Object> burns = new ArrayList<>();
 		PyDict inputs = new PyDict();
 		PyDict fuel = new PyDict();
 		boolean table = false;
@@ -182,21 +183,24 @@ public final class CraftApi {
 			PyDict used = new PyDict();
 			craft.uses().forEach((item, count) -> used.put(id.apply(item), (long) count));
 			uses.add(used);
+			// How many of each fuel the step burns, so a smelt keeps back no more or less than the plan burns (#945).
+			PyDict burnt = new PyDict();
+			craft.fuel().forEach((item, count) -> burnt.put(id.apply(item), (long) count));
+			burns.add(burnt);
 			if (recipe.smelting()) {
 				// What smelt() takes: the input, any of the recipe's one ingredient.
 				List<Object> options = new ArrayList<>();
 				recipe.ingredients().keySet().forEach(set -> set.forEach(item -> options.add(id.apply(item))));
 				inputs.put(id.apply(recipe.output()), new PyList(options));
 				// What the plan burns for it, so smelt(fuel=...) burns that, not coal the plan keeps for a later step (#577).
-				List<Object> burnt = new ArrayList<>();
-				craft.fuel().keySet().forEach(item -> burnt.add(id.apply(item)));
-				fuel.put(id.apply(recipe.output()), new PyList(burnt));
+				fuel.put(id.apply(recipe.output()), new PyList(burnt.keys()));
 			}
 		}
 		PyDict needs = new PyDict();
 		needs.put("gather", gatherDict);
 		needs.put("crafts", new PyList(crafts));
 		needs.put("uses", new PyList(uses));
+		needs.put("burns", new PyList(burns));
 		needs.put("inputs", inputs);
 		needs.put("fuel", fuel);
 		needs.put("table", table);

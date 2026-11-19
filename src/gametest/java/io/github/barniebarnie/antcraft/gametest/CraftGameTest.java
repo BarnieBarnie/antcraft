@@ -761,6 +761,22 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/**
+	 * Nine ingots burn the coal and one of five planks (#945): smelt_here keeps back that one plank, as needs' burns says,
+	 * not as many planks as wood would burn for nine, so the table it crafts takes the other four.
+	 */
+	@GameTest(maxTicks = 4000)
+	public void craftAllKeepsBackHowManyOfEachFuelThePlanBurns(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 5));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 9));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, "print(needs('iron_ingot', 9)['burns'])\n" + craftAll("'iron_ingot', 9", "iron_ingot", "coal", "oak_planks", "furnace",
+			"crafting_table"), List.of("[{'minecraft:coal': 1, 'minecraft:oak_planks': 1}]", "True None {} 9 0 0 1 1"));
+	}
+
 	/** A smoker within reach and no pickaxe or cobblestone: craft_here cooks the beef there and places no furnace. */
 	@GameTest(maxTicks = 220)
 	public void craftHereCooksInASmokerWithinReach(GameTestHelper helper) {
