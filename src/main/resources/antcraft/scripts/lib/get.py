@@ -633,10 +633,17 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
 
 def only_kind(item, n, p, raw, k, radius):
     """Whether make_cost is to cost raw, a log of one kind that p, the plan for n of item, gathers k of, as that kind,
-    not as any log (key), as get gathers it once any log did not do (#933, #938): where logs are within radius but none
-    of raw, and the plan made with k logs of another kind carried still asks for raw, as oak slabs take oak planks.
-    ponytail: where no log is within radius any log costs as raw would, so the needs (3000 instructions) is left out."""
-    if lib.find.nearest(LOGS, radius) is None or lib.find.nearest(raw, radius) is not None:
+    not as any log (key), as get gathers it once any log did not do (#933, #938): where no log of raw is within radius
+    (other logs or none at all, #941), and the plan made with k logs of another kind carried still asks for raw, as oak
+    slabs take oak planks.
+    ponytail: where no log is within radius at all, only an item whose id holds raw's wood (raw less "minecraft:" and
+    "_log", so oak slabs, not a wooden axe or iron one) runs the needs (3000 instructions, which choose cannot spare, and a
+    fuel plan may still ask for raw); one that takes only that kind under another name, or a bamboo block's, costs as
+    any log there."""
+    if lib.find.nearest(LOGS, radius) is None:
+        if raw[10:-4] not in item:
+            return False
+    elif lib.find.nearest(raw, radius) is not None:
         return False
     other = "minecraft:oak_log" if raw == "minecraft:birch_log" else "minecraft:birch_log"
     return raw in needs(item, n, also=p["also"], extra={other: k})["gather"]
