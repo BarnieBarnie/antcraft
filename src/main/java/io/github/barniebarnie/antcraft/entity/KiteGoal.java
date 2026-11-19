@@ -61,7 +61,7 @@ public final class KiteGoal extends Goal {
 	 * How many ticks the bot waits to plan again where a plan found no way off and it is not cornered: a plan, 20 random
 	 * spots and a path, costs about 2 ms, and the next can find a spot this one did not (#759).
 	 */
-	private static final int REPLAN_TICKS = 4;
+	static final int REPLAN_TICKS = 4;
 	/** How fast the bot steps in and backs off, as a factor of its speed: faster than the melee goal's 1.2. */
 	private static final double SPEED = 1.5;
 
@@ -107,9 +107,10 @@ public final class KiteGoal extends Goal {
 	 * creeper within {@link #CREEPERS_RANGE} for each block walked, and the path there, or null where none does or the path
 	 * ends less than a block further from the creepers than the bot stands. One off to the side gains too
 	 * little before the fuse burns out (#717); straight away from one creeper can run into another, or into a corner, where
-	 * only a spot to the side gets out (#725).
+	 * only a spot to the side gets out (#725). The melee goal backs off this way too, from a creeper not yet lit, where a
+	 * wall or a drop is right behind the bot (#964).
 	 */
-	private @Nullable Path away(Creeper creeper) {
+	@Nullable Path away(Creeper creeper) {
 		this.bot.kitePlans++;
 		return TickProfiler.time("bot.kite.plan", () -> this.plan(creeper));
 	}

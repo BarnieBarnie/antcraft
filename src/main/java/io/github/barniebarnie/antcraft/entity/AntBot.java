@@ -258,34 +258,59 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return false;
 	}
 
+	/** Whether the bot can back {@code dir} straight: no wall there, nor a drop (#964). */
+	private boolean room(Vec3 dir) {
+		return this.level().noCollision(this, this.getBoundingBox().move(dir))
+			&& this.getNavigation().isStableDestination(BlockPos.containing(this.position().add(dir)));
+	}
+
 	@Override
 	protected void registerGoals() {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
 		// Before the melee goal, which fights a creeper only while its fuse is out (#706).
-		this.goalSelector.addGoal(1, new KiteGoal(this));
+		KiteGoal kite = new KiteGoal(this);
+		this.goalSelector.addGoal(1, kite);
 		// Before the melee goal: a hostile mob is safer shot than struck or kited, where the bot carries a bow and arrows (#724, #734).
 		this.goalSelector.addGoal(2, new ShootGoal(this));
 		// Holds back from a creeper, outside where its fuse lights, while the weapon cools after another blow: walked up, it
 		// lit the fuse with no blow ready (#949). It stands within a block beyond HOLD_BACK and backs straight away inside
-		// it, as a creeper walking at it would otherwise light anyway (#955).
+		// it, as a creeper walking at it would otherwise light anyway (#955). With a wall or a drop right behind it, it walks
+		// the way off the kite goal plans from a lit creeper instead, such as along the wall (#964).
 		this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.2, true) {
 			private boolean held;
+			private @Nullable Path backOff;
+			private int plannedAt = -KiteGoal.REPLAN_TICKS;
 
 			@Override
 			public void tick() {
 				LivingEntity target = AntBot.this.getTarget();
 				double distance = target == null ? Double.MAX_VALUE : AntBot.this.distanceTo(target);
-				if (target instanceof Creeper && !BotHands.weaponReady(AntBot.this) && distance <= KiteGoal.HOLD_BACK + 1) {
+				if (target instanceof Creeper creeper && !BotHands.weaponReady(AntBot.this) && distance <= KiteGoal.HOLD_BACK + 1) {
 					this.held = true;
-					AntBot.this.getNavigation().stop();
 					AntBot.this.getLookControl().setLookAt(target);
-					if (distance < KiteGoal.HOLD_BACK) {
-						// ponytail: straight away, no path: against a wall it stands, and once the fuse lights the kite goal plans a way off.
-						Vec3 away = AntBot.this.position().add(AntBot.this.position().subtract(target.position()).horizontal().normalize().scale(2));
-						AntBot.this.getMoveControl().setWantedPosition(away.x, AntBot.this.getY(), away.z, 1.2);
+					Vec3 away = AntBot.this.position().subtract(target.position()).horizontal().normalize();
+					boolean room = AntBot.this.room(away);
+					if (distance < KiteGoal.HOLD_BACK && room) {
+						// Straight away, no path, so near.
+						this.backOff = null;
+						AntBot.this.getNavigation().stop();
+						Vec3 to = AntBot.this.position().add(away.scale(2));
+						AntBot.this.getMoveControl().setWantedPosition(to.x, AntBot.this.getY(), to.z, 1.2);
+					} else if (!room && (this.backOff == null || AntBot.this.getNavigation().isDone())
+						&& AntBot.this.tickCount - this.plannedAt >= KiteGoal.REPLAN_TICKS) {
+						// Already from a block beyond HOLD_BACK, as a way to the side starts slower than straight away. Planned
+						// again only every few ticks where it found no way off, as the kite goal does (#759).
+						this.plannedAt = AntBot.this.tickCount;
+						this.backOff = kite.away(creeper);
+						if (this.backOff != null) {
+							AntBot.this.getNavigation().moveTo(this.backOff, 1.2);
+						}
+					} else if (this.backOff == null) {
+						AntBot.this.getNavigation().stop();
 					}
 					return;
 				}
+				this.backOff = null;
 				// The goal's own path waits for its next recalculation, up to a few ticks off.
 				if (this.held && target != null) {
 					AntBot.this.getNavigation().moveTo(target, 1.2);

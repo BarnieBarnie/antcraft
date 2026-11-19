@@ -816,6 +816,49 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * As {@link #aBotWithItsWeaponCoolingBacksAwayFromACreeperWalkingAtIt}, with a wall right behind the bot: it backs off
+	 * along the wall instead, as the kite goal does from a lit creeper (#964). Straight away, it stood against the wall.
+	 * The axe is in hand and the creeper 5 blocks off from the start, and the axe is kept cooling until the creeper sets
+	 * off, so the bot holds back against the wall rather than walk at the creeper first (setNoAi would not stop it: a bot
+	 * sets its AI by the config every tick). Then the axe cools a last 23 ticks. The creeper comes down a 1-wide corridor
+	 * square at the wall, so the bot does not slide along the wall by chance, as it did backing straight away from a
+	 * creeper coming a little askew.
+	 */
+	// Measured: passes at tick 45 in 4 of 4, the bot kept 4.1 to 4.6 blocks off (red, 3 of 3: came 2.8 blocks near with
+	// the weapon not ready, tick 40).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 90)
+	public void aBotWithItsWeaponCoolingAndAWallBehindBacksOffAlongItFromACreeper(GameTestHelper helper) {
+		for (int y = 1; y <= 2; y++) {
+			for (int x = 0; x < 24; x++) {
+				helper.setBlock(x, y, 3, Blocks.STONE);
+			}
+			for (int z = 7; z <= 13; z++) {
+				helper.setBlock(11, y, z, Blocks.STONE);
+				helper.setBlock(13, y, z, Blocks.STONE);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 4.5));
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
+		Pig pig = helper.spawn(EntityTypes.PIG, new Vec3(16.5, 1, 4.5));
+		pig.setNoAi(true);
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 9.5));
+		GameTests.onEnd(helper, creeper::discard);
+		creeper.setTarget(bot);
+		bot.setTarget(creeper);
+		Vec3 start = creeper.position();
+		boolean[] struck = {false};
+		helper.onEachTick(() -> {
+			if (!struck[0]) {
+				bot.setLastHurtMob(pig);
+				struck[0] = creeper.position().distanceTo(start) > 0.1;
+			} else if (struck[0] && !BotHands.weaponReady(bot) && bot.distanceTo(creeper) <= 3) {
+				helper.fail("came " + bot.distanceTo(creeper) + " blocks near with the weapon not ready, tick " + helper.getTick());
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(struck[0] && BotHands.weaponReady(bot), "the weapon is not ready"));
+	}
+
+	/**
 	 * A bot in a 1-wide dead end with a creeper lit in front of it is cornered: it goes at the creeper and strikes it, which
 	 * knocks it back, rather than stand (#725). It cannot back off 7 blocks, and an iron sword does not kill the creeper
 	 * within its 30-tick fuse, so the blast still catches it. It does not go at the creeper again with the fuse far gone
