@@ -74,7 +74,7 @@ Optional:
 
 Sets up the farm `name` of spec `f` and runs its `steps` with [`lib.project.run`](project.md), so a stopped run goes on at the step it was on. Its corner is `at`, else the one `memory[f["corners"]][key]` keeps, else where the bot stands; an `at` other than the kept one moves the farm there (#818): it says `farm moved to x y z`, forgets the old cells, depot and project and lays the farm out afresh, and once the new depot is laid out carries the old depot's stock into it ([`carry`](#carryname-old-radius), #823). The cells go east and south from the block under the corner ([`lib.cells.layout`](cells.md)), the depot north of them, a path's width off, going east; home is the path by the depot, so a bot that dies comes back at the farm and [`lib.trees.recover`](trees.md#recover) fetches what it dropped. A new or moved farm whose corner fits fewer growing cells than a corner nearby says so ([`hint`](#hintf-name-at)).
 
-- **Returns** `lib.project.run`'s `result()` once a step fails, after saying `name stopped: <reason> at <step>`, with `missing <item> xN` for what the step lacks. A farm step never returns otherwise.
+- **Returns** `lib.project.run`'s `result()` once a step fails, after warning `name stopped: <reason> at <step>` (a warning, not `say`, so it shows in the bot's log as one and a game test's `failOnWarning` ends on that tick, #940), with `missing <item> xN` for what the step lacks. A farm step never returns otherwise.
 - **Pauses** yes.
 
 ## `farm(f, name, size, radius)`

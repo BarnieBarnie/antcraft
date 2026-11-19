@@ -108,8 +108,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 1));
 		helper.onEachTick(() -> {
 			AntBot now = helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
-			if (now != null && said(now).stream().anyMatch(l -> l.contains("stopped"))) {
-				helper.fail("said " + said(now));
+			if (now != null && BotScripts.warnings(now).stream().anyMatch(l -> l.contains("stopped"))) {
+				helper.fail("warned " + BotScripts.warnings(now) + "; said " + said(now));
 			}
 			if (!grew[0] && said(bot).contains("birch_farm 4/4: farm") && helper.getBlockState(SPOT).is(Blocks.BIRCH_SAPLING)) {
 				TreesGameTest.plantTree(helper, SPOT.above(4), Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES, false);
@@ -736,20 +736,30 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		int x = Math.floorDiv(s.getX(), 16) * 16 + 15;
 		int z = Math.floorDiv(s.getZ(), 16) * 16 + 15;
 		cornerScript(helper, bot, x, z);
-		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of(
-			"a corner at " + (x + 1) + " " + s.getY() + " " + (z + 1) + " fits 20 growing cells, this one 9",
-			"birch_farm stopped: stub at kit", "birch_farm stopped: stub at kit"), "said"));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of(
+				"a corner at " + (x + 1) + " " + s.getY() + " " + (z + 1) + " fits 20 growing cells, this one 9"), "said");
+			helper.assertValueEqual(BotScripts.warnings(bot), STUB_STOPS, "warned");
+		});
 	}
 
-	/** As aCornerThatFitsFewerCellsSaysWhereMoreFit from chunk-local x and z 0, which fits the most: no hint (#813). */
+	/** What cornerScript's two runs warn: the farm's stop line is a warning (#940). */
+	private static final List<String> STUB_STOPS = List.of("birch_farm stopped: stub at kit", "birch_farm stopped: stub at kit");
+
+	/**
+	 * As aCornerThatFitsFewerCellsSaysWhereMoreFit from chunk-local x and z 0, which fits the most: no hint (#813). The
+	 * farm's stop line is a warning, not said, so failOnWarning ends a red farm test on the tick its farm stops (#940).
+	 */
 	// Measured: passes at tick 5, nothing counted.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
 	public void aCornerThatFitsTheMostCellsSaysNothing(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		BlockPos s = helper.absolutePos(SPOT);
 		cornerScript(helper, bot, Math.floorDiv(s.getX(), 16) * 16, Math.floorDiv(s.getZ(), 16) * 16);
-		helper.succeedWhen(() -> helper.assertValueEqual(said(bot),
-			List.of("birch_farm stopped: stub at kit", "birch_farm stopped: stub at kit"), "said"));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of(), "said");
+			helper.assertValueEqual(BotScripts.warnings(bot), STUB_STOPS, "warned");
+		});
 	}
 
 	/** Runs jobs.wood_farm.run for birch twice, first from x, spot.y, z, its project's steps stubbed. */
@@ -1233,8 +1243,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	private static boolean[] growsWhenWaiting(GameTestHelper helper, AntBot bot) {
 		boolean[] grew = new boolean[1];
 		helper.onEachTick(() -> {
-			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
-				helper.fail("said " + said(bot));
+			if (BotScripts.warnings(bot).stream().anyMatch(l -> l.contains("stopped"))) {
+				helper.fail("warned " + BotScripts.warnings(bot) + "; said " + said(bot));
 			}
 			if (grew[0] || !said(bot).contains("waiting for a tree to grow")) {
 				return;
@@ -1288,8 +1298,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	public void aCellThatLacksFillSaysHowMuch(GameTestHelper helper) {
 		AntBot bot = farm(helper, 2, 2, false);
 		runInPit(helper, bot, "");
-		helper.succeedWhen(() -> helper.assertTrue(said(bot).stream().anyMatch(
-			l -> l.startsWith("birch_farm stopped: ") && l.contains(" at cell, missing minecraft:dirt x")), "said " + said(bot)));
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.warnings(bot).stream().anyMatch(
+			l -> l.startsWith("birch_farm stopped: ") && l.contains(" at cell, missing minecraft:dirt x")), "warned " + BotScripts.warnings(bot)));
 	}
 
 	/** Runs before, then jobs.wood_farm for birch at AT a block up, one cell, radius 12: cell 1's floor a pit at y 1. */
@@ -1380,8 +1390,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		BotScripts.failOnWarning(helper, bot);
 		boolean[] gave = new boolean[2];
 		helper.onEachTick(() -> {
-			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
-				helper.fail("said " + said(bot));
+			if (BotScripts.warnings(bot).stream().anyMatch(l -> l.contains("stopped"))) {
+				helper.fail("warned " + BotScripts.warnings(bot) + "; said " + said(bot));
 			}
 			if (!gave[0] && said(bot).contains("built cell 1")) {
 				helper.getBlockEntity(new BlockPos(3, 1, 16), ChestBlockEntity.class).setItem(3, new ItemStack(Items.SPRUCE_SAPLING, 4));
@@ -1423,8 +1433,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		BotScripts.failOnWarning(helper, bot);
 		boolean[] gave = new boolean[1];
 		helper.onEachTick(() -> {
-			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
-				helper.fail("said " + said(bot));
+			if (BotScripts.warnings(bot).stream().anyMatch(l -> l.contains("stopped"))) {
+				helper.fail("warned " + BotScripts.warnings(bot) + "; said " + said(bot));
 			}
 			if (!gave[0] && said(bot).contains("built cell 1")) {
 				helper.assertTrue(helper.getBlockState(spot).is(sapling), "no one-sapling cell at " + spot.toShortString() + "; said " + said(bot));
@@ -1613,7 +1623,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			""".formatted(old.getX(), old.getY(), old.getZ(), l.getX(), l.getY(), l.getZ(), l.getX(), l.getY(), l.getZ(),
 			s.getX(), s.getY(), s.getZ(), at.getX(), at.getY(), at.getZ()));
 		helper.succeedWhen(() -> {
-			helper.assertTrue(said(bot).contains("birch_farm stopped: stub at farm"), "said " + said(bot));
+			helper.assertTrue(BotScripts.warnings(bot).contains("birch_farm stopped: stub at farm"), "warned " + BotScripts.warnings(bot));
 			int newLogs = 0;
 			int newSaplings = 0;
 			for (int x = 6; x <= 11; x++) {
@@ -2137,7 +2147,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			if (now == null) {
 				return;
 			}
-			if (said(now).stream().anyMatch(l -> l.contains("stopped"))) {
+			if (BotScripts.warnings(now).stream().anyMatch(l -> l.contains("stopped"))) {
 				helper.fail("said " + BotScripts.log(now, Output.Level.DEBUG));
 			}
 			if (killAt > 0 && grewAt[0] >= 0 && !killed[0] && TestPositions.relative(helper, now.blockPosition()).getY() >= killAt) {

@@ -444,5 +444,6 @@ def run(f, name, key, at, steps, radius=32):
     lib.trees.recover()
     r = lib.project.run(name, steps)
     lacks = ", ".join([f"{k} x{v}" for k, v in r.get("lacks", {}).items()])
-    say(f"{name} stopped: {r['reason']} at {r['at']}" + (f", missing {lacks}" if lacks else ""))
+    # A warning, not said, so a game test's failOnWarning ends on the tick the farm stops (#940).
+    warn(f"{name} stopped: {r['reason']} at {r['at']}" + (f", missing {lacks}" if lacks else ""))
     return r
