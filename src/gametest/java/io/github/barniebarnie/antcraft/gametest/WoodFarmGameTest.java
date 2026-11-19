@@ -892,7 +892,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 */
 	// Measured: passes at tick 36 (red: the sapling never grows).
 	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 120)
+	// Class and farm-class runs: passes at tick 35 to 57, but one farm-class run had not printed the second line by tick
+	// 122 (#959), so about twice that.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 250)
 	public void theFarmUsesTheBoneMealStoredInItsDepot(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
