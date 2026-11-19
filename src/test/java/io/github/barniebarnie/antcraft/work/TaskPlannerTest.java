@@ -636,6 +636,30 @@ class TaskPlannerTest {
 	}
 
 	/**
+	 * 64 ingots from nothing, with coal ore 20 blocks off (a walk of 100, then 45 to mine each) and a tree 4 blocks off (20,
+	 * then 60 a log by hand): 8 coal cost 100 + 8 * 45 = 460, 11 logs 20 + 11 * 60 = 680, so the plan gathers coal. With the
+	 * walk counted for each (145 a coal, 80 a log) the logs cost less, 880 to 1160 (#960).
+	 */
+	@Test
+	void aWalkCountedOnceMakesABigSmeltGatherCoalFartherOff() {
+		Map<Item, Integer> each = new HashMap<>(Map.of(Items.COAL, 45));
+		Map<Item, Integer> once = new HashMap<>(Map.of(Items.COAL, 100));
+		Map<Item, Integer> perItem = new HashMap<>(Map.of(Items.COAL, 145));
+		BuiltInRegistries.ITEM.getTagOrEmpty(ItemTags.LOGS).forEach(log -> {
+			each.put(log.value(), 60);
+			once.put(log.value(), 20);
+			perItem.put(log.value(), 80);
+		});
+		Map<Item, Integer> stock = new HashMap<>(Map.of(Items.RAW_IRON, 64));
+
+		TaskPlanner.Plan<Item> plan = TaskPlanner.plan(Items.IRON_INGOT, 64, List.of(), stock, VanillaData.recipeBook(), VanillaData.gatherable(), each, once);
+		assertEquals(Map.of(Items.COAL, 8), plan.toGather(), "plan: " + plan);
+
+		TaskPlanner.Plan<Item> walkEach = TaskPlanner.plan(Items.IRON_INGOT, 64, List.of(), stock, VanillaData.recipeBook(), VanillaData.gatherable(), perItem);
+		assertTrue(walkEach.toGather().keySet().iterator().next().builtInRegistryHolder().is(ItemTags.LOGS), "plan: " + walkEach);
+	}
+
+	/**
 	 * 64 ingots from carried logs: planks burn 11 logs (43 planks), charcoal 10, 8 smelted into charcoal and 2 into the
 	 * planks that smelt them. Charcoal's own smelt burnt logs, 6, so it lost (#944).
 	 */

@@ -103,7 +103,7 @@ public final class TaskPlanner {
 	};
 
 	/** What a plan is made from; the recipe book and gatherables compare as their own objects do, by identity unless they say otherwise. */
-	private record PlanKey(Object item, int count, List<?> first, Map<?, Integer> stock, RecipeBook<?> book, Predicate<?> gatherable, Map<?, Integer> gatherCosts) {
+	private record PlanKey(Object item, int count, List<?> first, Map<?, Integer> stock, RecipeBook<?> book, Predicate<?> gatherable, Map<?, Integer> gatherCosts, Map<?, Integer> gatherOnce) {
 	}
 
 	/**
@@ -126,16 +126,26 @@ public final class TaskPlanner {
 	 * {@code gatherCosts} says (1 for an item it leaves out), so the plan gathers what is cheaper, such as coal from ore
 	 * near rather than a log from a tree far off for planks to burn (#944).
 	 */
-	@SuppressWarnings("unchecked")
 	public static <I> Plan<I> plan(I item, int count, List<I> first, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable, Map<I, Integer> gatherCosts) {
-		PlanKey key = new PlanKey(item, count, List.copyOf(first), Map.copyOf(stock), book, gatherable, Map.copyOf(gatherCosts));
+		return plan(item, count, first, stock, book, gatherable, gatherCosts, Map.of());
+	}
+
+	/**
+	 * Like {@link #plan(Object, int, List, Map, RecipeBook, Predicate, Map)}, but gathering any of an item costs
+	 * {@code gatherOnce} more once (0 for an item it leaves out), such as the walk to its ore, so a big smelt counts that
+	 * walk once and not for each coal (#960).
+	 */
+	@SuppressWarnings("unchecked")
+	public static <I> Plan<I> plan(I item, int count, List<I> first, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable, Map<I, Integer> gatherCosts,
+		Map<I, Integer> gatherOnce) {
+		PlanKey key = new PlanKey(item, count, List.copyOf(first), Map.copyOf(stock), book, gatherable, Map.copyOf(gatherCosts), Map.copyOf(gatherOnce));
 		synchronized (KEPT) {
 			Plan<?> kept = KEPT.get(key);
 			if (kept != null) {
 				return (Plan<I>) kept;
 			}
 		}
-		Plan<I> plan = search(item, count, first, stock, book, gatherable, Map.copyOf(gatherCosts), new long[1]);
+		Plan<I> plan = search(item, count, first, stock, book, gatherable, Map.copyOf(gatherCosts), Map.copyOf(gatherOnce), new long[1]);
 		synchronized (KEPT) {
 			KEPT.put(key, plan);
 		}
@@ -145,13 +155,13 @@ public final class TaskPlanner {
 	/** How many stock entries a search for a plan copies, for checking that a large stock stays cheap. */
 	static <I> long stockEntriesCopied(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
 		long[] copied = {0};
-		search(item, count, List.of(), stock, book, gatherable, Map.of(), copied);
+		search(item, count, List.of(), stock, book, gatherable, Map.of(), Map.of(), copied);
 		return copied[0];
 	}
 
 	private static <I> Plan<I> search(I item, int count, List<I> first, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable,
-		Map<I, Integer> gatherCosts, long[] copied) {
-		State<I> state = new State<>(new Stock<>(stock, copied), gatherCosts);
+		Map<I, Integer> gatherCosts, Map<I, Integer> gatherOnce, long[] copied) {
+		State<I> state = new State<>(new Stock<>(stock, copied), gatherCosts, gatherOnce);
 		Search<I> search = new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0, 0});
 		for (I one : first) {
 			search.need(state, one, 1, new HashSet<>(), true);
@@ -267,14 +277,17 @@ public final class TaskPlanner {
 
 		/** What gathering one of an item costs, 1 for one left out (#944). */
 		final Map<I, Integer> gatherCosts;
+		/** What gathering any of an item costs once, besides each, 0 for one left out (#960). */
+		final Map<I, Integer> gatherOnce;
 
-		State(Stock<I> stock, Map<I, Integer> gatherCosts) {
+		State(Stock<I> stock, Map<I, Integer> gatherCosts, Map<I, Integer> gatherOnce) {
 			this.stock = stock;
 			this.gatherCosts = gatherCosts;
+			this.gatherOnce = gatherOnce;
 		}
 
 		State<I> copy() {
-			State<I> copy = new State<>(this.stock.copy(), this.gatherCosts);
+			State<I> copy = new State<>(this.stock.copy(), this.gatherCosts, this.gatherOnce);
 			copy.crafts.addAll(this.crafts);
 			copy.gather.putAll(this.gather);
 			copy.missing.putAll(this.missing);
@@ -312,12 +325,15 @@ public final class TaskPlanner {
 			return this.pruned;
 		}
 
-		/** Lower is better: missing items are worst, then gathering (each item at its cost), then crafting effort. */
+		/** Lower is better: missing items are worst, then gathering (each item at its cost, and its once cost), then crafting effort. */
 		long[] score() {
 			long missingCount = this.missing.values().stream().mapToLong(Integer::longValue).sum();
 			long gatherCount = 0;
 			for (Map.Entry<I, Integer> gathered : this.gather.entrySet()) {
 				gatherCount += (long) gathered.getValue() * this.gatherCosts.getOrDefault(gathered.getKey(), 1);
+				if (gathered.getValue() > 0) {
+					gatherCount += this.gatherOnce.getOrDefault(gathered.getKey(), 0);
+				}
 			}
 			long craftCount = this.crafts.stream().mapToLong(Craft::times).sum();
 			return new long[] {missingCount, gatherCount, craftCount};

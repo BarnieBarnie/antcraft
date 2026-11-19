@@ -130,26 +130,34 @@ public final class CraftApi {
 				}
 			}
 			// The cost of gathering one of an item, a tag's for each of its items, so the plan gathers the fuel that costs
-			// less (#954); 1 for an item left out.
+			// less (#954); 1 for an item left out. A pair (once, each) costs once more where the plan gathers any (#960).
 			Map<Item, Integer> costs = new HashMap<>();
+			Map<Item, Integer> once = new HashMap<>();
 			if (!Args.absent(args[4])) {
 				if (!(args[4] instanceof PyDict given)) {
 					throw new ScriptError("needs() costs must be a dict of item to cost, not " + args[4]);
 				}
 				for (Map.Entry<Object, Object> entry : given.items()) {
-					long cost = Args.integer(entry.getValue());
-					if (cost < 0) {
-						throw new ScriptError("needs() costs must be at least 0, not " + cost);
+					List<Object> pair = entry.getValue() instanceof PyTuple || entry.getValue() instanceof PyList
+						? Values.elements(entry.getValue()) : List.of(0L, entry.getValue());
+					if (pair.size() != 2) {
+						throw new ScriptError("needs() costs must be a cost or a pair (once, each), not " + Values.repr(entry.getValue()));
 					}
+					int first = cost(pair.get(0));
+					int each = cost(pair.get(1));
 					Selector selector = Selector.parse(entry.getKey());
 					selector.items(); // fails on an unknown item or tag
-					int each = (int) Math.min(cost, Integer.MAX_VALUE);
-					selector.ids().forEach(id -> costs.put(BuiltInRegistries.ITEM.getValue(Identifier.parse(id)), each));
+					List<Item> items = new ArrayList<>();
+					selector.ids().forEach(id -> items.add(BuiltInRegistries.ITEM.getValue(Identifier.parse(id))));
 					selector.tags(BuiltInRegistries.ITEM, Registries.ITEM, "item")
-						.forEach(tag -> BuiltInRegistries.ITEM.getTagOrEmpty(tag).forEach(holder -> costs.put(holder.value(), each)));
+						.forEach(tag -> BuiltInRegistries.ITEM.getTagOrEmpty(tag).forEach(holder -> items.add(holder.value())));
+					for (Item one : items) {
+						costs.put(one, each);
+						once.put(one, first);
+					}
 				}
 			}
-			return needs(item, n, stock, also, costs, GameRecipeBook.of(((ServerLevel) bot.level()).getServer()), GATHERABLE);
+			return needs(item, n, stock, also, costs, once, GameRecipeBook.of(((ServerLevel) bot.level()).getServer()), GATHERABLE);
 		});
 		natives.register("cooks_in", 15, call -> {
 			Object[] args = Args.bind("cooks_in", call, 1, "item");
@@ -179,13 +187,23 @@ public final class CraftApi {
 	/**
 	 * {@code needs(item, n, also)} (docs/reference/crafting/needs.md): what to gather and craft to make one of each of
 	 * {@code also} and then {@code n} of {@code item} from {@code stock}, gathering one of an item costing what
-	 * {@code costs} says (1 where it leaves the item out).
+	 * {@code costs} says (1 where it leaves the item out) and gathering any {@code once} more (0 where it leaves it out).
 	 */
-	static PyDict needs(Item item, long n, Map<Item, Integer> stock, List<Item> also, Map<Item, Integer> costs, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+	static PyDict needs(Item item, long n, Map<Item, Integer> stock, List<Item> also, Map<Item, Integer> costs, Map<Item, Integer> once,
+		TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
 		if (n < 1 || n > MAX_NEEDS) {
 			throw new ScriptError("needs() n must be at least 1" + (n < 1 ? "" : " and at most " + MAX_NEEDS) + ", not " + n);
 		}
-		return needs(TaskPlanner.plan(item, (int) n, also, stock, book, gatherable, costs), i -> BuiltInRegistries.ITEM.getKey(i).toString());
+		return needs(TaskPlanner.plan(item, (int) n, also, stock, book, gatherable, costs, once), i -> BuiltInRegistries.ITEM.getKey(i).toString());
+	}
+
+	/** A cost of needs' costs: at least 0, at most Integer.MAX_VALUE. */
+	private static int cost(Object value) {
+		long cost = Args.integer(value);
+		if (cost < 0) {
+			throw new ScriptError("needs() costs must be at least 0, not " + cost);
+		}
+		return (int) Math.min(cost, Integer.MAX_VALUE);
 	}
 
 	/**

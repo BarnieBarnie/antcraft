@@ -101,17 +101,26 @@ class Source:
         counts as blocks(n), the blocks that drop it.
         ponytail: the nearest vein only."""
         n = self.blocks(n)
+        p, tier, once, each = self.parts(radius, start)
+        if p is None:
+            return once + each * n, tier
+        vein = max(1, min(n, len([b for b in ore_vein(p) if lib.find.allowed(b)])))
+        return once + each * vein + self.estimate * (n - vein), tier
+
+    def parts(self, radius, start=None):
+        """(p, tier, once, each) of cost: the nearest exposed ore block within radius (None: none, or no ore) and the
+        tier as cost gives it; the ticks once, the walk from start (None: the bot's Pos) to p, else deep(y) for a source
+        with ore (0 without); and those of each block, the mining of one with the best pickaxe carried where it drops the
+        ore, else with that tier, else (no p) the estimate."""
         p = None if self.ore is None else lib.find.exposed(self.ore, radius)
         tier = lib.tools.tier_for(p) if p is not None and self.tool == "pickaxe" else self.tier
         if p is None:
-            return self.estimate * n + (deep(self.y) if self.ore is not None else 0), tier
-        vein = min(n, len([b for b in ore_vein(p) if lib.find.allowed(b)]))
+            return None, tier, deep(self.y) if self.ore is not None else 0, self.estimate
         best = lib.tools.best("pickaxe")
         mine = tier
         if best is not None and tier in lib.tools.TIERS and lib.tools.rank(best) <= lib.tools.TIERS.index(tier):
             mine = lib.tools.tier(best)
-        walk = lib.cost.walk(pos() if start is None else start, p)
-        return walk + lib.cost.breaking(max(vein, 1), "ore", mine) + self.estimate * (n - max(vein, 1)), tier
+        return p, tier, lib.cost.walk(pos() if start is None else start, p), lib.cost.breaking(1, "ore", mine)
 
 
 def deep(y):
@@ -463,14 +472,22 @@ def plan_by(start, item, n, costs=None):
     return lib.craft.plan(item, n, costs=costs)
 
 
-def fuel_costs(radius):
-    """needs' costs of the fuels a plan may gather (#954): one coal, by its source's cost (the walk to and mining of an
-    exposed vein, else the trip down), and one log, the walk to the nearest log within radius and its breaking, DEEP
-    more where there is none. ponytail: per one, so a big smelt counts the walk once for each; the tool each takes is
-    not costed."""
+def fuel_costs(radius, tools=None):
+    """needs' costs of the fuels a plan may gather (#954), each a pair (once, each), so a big smelt counts the walk once
+    (#960): coal, once the walk to an exposed coal ore (else the trip down) and the tool_cost of a pickaxe of the tier it
+    needs (DEEP where none can be had), each the mining of a block (Source.parts); a log, once the walk to the nearest
+    log within radius (DEEP where there is none), each its breaking with the best axe carried, else by hand. tools as
+    make_cost's. ponytail: an axe made to fell faster is not costed, so with none carried a log costs the hand's 60; past
+    the nearest vein coal costs as much a block, where get finds the next."""
+    if tools is None:
+        tools = {}
+    p, tier, walk, mine = SOURCES[COAL].parts(radius)
+    pickaxe = 0 if tier == "hand" else tool_cost("pickaxe", tier or "wooden", 1, radius, tools)
     log = lib.find.nearest(LOGS, radius)
-    wood = lib.cost.BREAK["wood"]["stone"] + (DEEP if log is None else lib.cost.walk(pos(), log))
-    return {COAL: SOURCES[COAL].cost(1, radius)[0], LOGS: wood}
+    axe = lib.tools.best("axe")
+    chop = lib.cost.breaking(1, "wood", None if axe is None else lib.tools.tier(axe))
+    return {COAL: (walk + (DEEP if pickaxe is None else pickaxe), mine),
+            LOGS: (DEEP if log is None else lib.cost.walk(pos(), log), chop)}
 
 
 def intermediate(p, item, chests, tried):
@@ -583,7 +600,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             # least_make, so a tier it bounds out measures none. ponytail: that bound is of the plan without them.
             if smelted(p) and [r for r in p["gather"] if key(r) in (COAL, LOGS)]:
                 if "fuel" not in tools:
-                    tools["fuel"] = fuel_costs(radius)
+                    tools["fuel"] = fuel_costs(radius, tools)
                 cached[2] = tools["fuel"]
                 p = needs(item, n, costs=cached[2])
             cached[1] = planned(item, n, p, tools, cached[2])

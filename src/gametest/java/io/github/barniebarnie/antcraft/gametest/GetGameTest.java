@@ -736,8 +736,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * plans with, so it costs the coal beside: its fuel, less the smelting and the furnace mined back, costs less than the
 	 * walk to the far tree. It planned without them, burnt planks and costed a log of the far tree.
 	 */
-	// Measured: passes at tick 67 (red: printed ['minecraft:oak_log'] False).
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 140)
+	// Measured: passes at tick 67 alone (red: printed ['minecraft:oak_log'] False), 137 to 150 in class runs, which
+	// timed out at 140 with the code before #960 too (#960).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 280)
 	public void makeCostWithNoFuelCostsTheCoalBesideNotAFarTree(GameTestHelper helper) {
 		helper.setBlock(2, 1, 1, Blocks.COAL_ORE);
 		TreesGameTest.plantTree(helper, new BlockPos(20, 1, 20), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
@@ -756,6 +757,30 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(sorted(p["gather"]), fuel < lib.cost.walk(pos(), lib.find.nearest("#minecraft:logs", 32)))
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "['minecraft:coal'] True"));
+	}
+
+	/**
+	 * A big smelt with no fuel carried, an oak 4 blocks off and coal ore 20 off (#960): 64 iron ingots plan 8 coal, not 11
+	 * logs for planks. Coal costs the walk once and 45 a block with the wooden pickaxe carried (460), the logs the short
+	 * walk once and 60 each by hand, as no axe is carried (680). With the walk counted for each coal and a log broken as
+	 * with a stone axe the far coal cost 1160 and the logs 385.
+	 */
+	// Measured: passes at tick 55 alone and 137 to 138 in class runs (red: printed ['minecraft:dark_oak_log', 'minecraft:oak_log']).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 300)
+	public void aBigSmeltPlansCoalAWalkOffOverATreeNear(GameTestHelper helper) {
+		helper.setBlock(21, 1, 1, Blocks.COAL_ORE);
+		TreesGameTest.plantTree(helper, new BlockPos(5, 1, 1), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 64));
+		run(helper, bot, """
+			from lib.get import make_cost
+			tools = {}
+			make_cost("iron_ingot", 64, tools=tools)
+			print(sorted(tools["plans"][("iron_ingot", 64)][1]["gather"]))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "['minecraft:coal']"));
 	}
 
 	/** How far make_cost may be from the ticks get takes, either way. */
