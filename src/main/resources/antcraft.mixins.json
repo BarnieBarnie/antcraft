@@ -2,10 +2,15 @@
 	"required": true,
 	"package": "io.github.barniebarnie.antcraft.mixin",
 	"compatibilityLevel": "JAVA_25",
+	"mixinextras": {
+		"minVersion": "0.5.0"
+	},
 	"mixins": [
 		"BlockStateBaseMixin",
 		"DoorBlockMixin",
 		"FenceGateBlockMixin",
+		"FishingHookAccessor",
+		"FishingHookMixin",
 		"MoveControlMixin",
 		"ProjectileMixin",
 		"ResultSlotMixin",

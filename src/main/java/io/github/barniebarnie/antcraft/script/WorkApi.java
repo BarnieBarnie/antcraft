@@ -8,6 +8,21 @@ import io.github.barniebarnie.antcraft.entity.KiteGoal;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.work.Mining;
+import io.github.barniebarnie.antcraft.mixin.FishingHookAccessor;
+import io.github.barniebarnie.antcraft.work.Fishing;
+import io.github.barniebarnie.antcraft.script.lang.PyList;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.projectile.FishingHook;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.level.block.Blocks;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.script.lang.Args;
@@ -52,7 +67,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The actions of the bot API that change the world (docs/reference/index.md, Working blocks): {@code mine}, {@code place},
- * {@code pick_up}, {@code equip}, {@code use}, {@code drop}, {@code eat}, {@code attack} and {@code shoot}. Those that work on a block first walk into reach of it, as
+ * {@code pick_up}, {@code equip}, {@code use}, {@code drop}, {@code eat}, {@code attack}, {@code shoot} and {@code fish}. Those that work on a block first walk into reach of it, as
  * {@code goto} walks ({@link MoveApi#reach}); each returns a {@link Result}.
  */
 public final class WorkApi {
@@ -163,6 +178,24 @@ public final class WorkApi {
 				refused = Result.fail(Result.NO_ITEM);
 			}
 			return refused != null ? run.done(shoot.describe(), refused) : run.start(shoot, call);
+		});
+		natives.register("fish", call -> {
+			Object[] args = Args.bind("fish", call, 0, "n", "at");
+			long n = Args.absent(args[0]) ? 1 : Args.integer(args[0]);
+			if (n < 1) {
+				throw new ScriptError("fish() n must be at least 1, not " + n);
+			}
+			Pos at = Args.absent(args[1]) ? null : Pos.of(args[1]);
+			AntBot bot = bot(run, call);
+			Fish fish = new Fish(run, bot, n, at);
+			if (run.elsewhere(at)) {
+				return run.done(fish.describe(), Result.fail(Result.WRONG_DIMENSION));
+			}
+			if (BotHands.find(bot, Fish.ROD) == null) {
+				return run.done(fish.describe(), Result.fail(Result.NO_ROD));
+			}
+			// Its first tick now, so where the scan finds no water within the tick's budget it fails at once.
+			return fish.tick() ? run.done(fish.describe(), (Result) fish.result()) : run.start(fish, call);
 		});
 	}
 
@@ -987,6 +1020,219 @@ public final class WorkApi {
 		@Override
 		public String describe() {
 			return "shoot(" + this.info + ")";
+		}
+	}
+
+	/**
+	 * {@code fish(n=1, at=None)}: walks to where it sees the water block {@code at}, or else the open water within
+	 * {@link #RADIUS} it chose ({@link Fishing#spot}), within {@link #REACH}; casts a fishing hook of its own there, as a
+	 * player's rod does ({@link Fishing#pitch}), reels it in as soon as a fish bites and waits for the catch to fly to it,
+	 * until it caught {@code n} items: ok with how many. It fails with {@code no_rod} when it carries no fishing rod,
+	 * {@code no_water} when it finds no open water or its casts keep landing out of it, {@code rod_broke} when its last
+	 * rod broke first, and with the walk's reason; each with how many it caught so far.
+	 */
+	private static final class Fish implements ScriptRun.Action {
+		static final Predicate<ItemStack> ROD = stack -> stack.is(Items.FISHING_ROD);
+		/** How far, in blocks, it looks for water. */
+		static final int RADIUS = 16;
+		/** How many water blocks, nearest first, it chooses from. */
+		private static final int LIMIT = 64;
+		/** How far, in blocks from its eyes, it casts from. */
+		private static final double REACH = 4;
+		/** How many ticks a hook has to land in water before it reels it in and casts again. */
+		private static final int LANDING = 40;
+		/** How many casts in a row may miss the water before it gives up. */
+		private static final int MISSES = 3;
+		/** How many ticks it waits for the catch to fly to it before it takes what is left lying near it. */
+		private static final int CATCHING = 40;
+
+		private final ScriptRun run;
+		private final AntBot bot;
+		private final ServerLevel level;
+		private final long n;
+		private final @Nullable Pos at;
+		private ScriptRun.@Nullable Action scan;
+		private @Nullable BlockPos spot;
+		private ScriptRun.@Nullable Action walk;
+		private boolean walked;
+		private @Nullable FishingHook hook;
+		private int hookTicks;
+		private int misses;
+		private boolean broke;
+		private List<ItemEntity> flying = List.of();
+		private int flyingTicks;
+		private long caught;
+		private @Nullable Result result;
+
+		Fish(ScriptRun run, AntBot bot, long n, @Nullable Pos at) {
+			this.run = run;
+			this.bot = bot;
+			this.level = (ServerLevel) bot.level();
+			this.n = n;
+			this.at = at;
+		}
+
+		private static boolean water(BlockState state) {
+			return state.is(Blocks.WATER) && state.getFluidState().isSource();
+		}
+
+		/** The water to cast at: {@code at} if it is water, else the spot of the open water the scan found; null for none. */
+		private @Nullable BlockPos chooseSpot() {
+			if (this.at != null) {
+				BlockPos pos = blockPos(this.at);
+				return this.level.getFluidState(pos).is(FluidTags.WATER) ? pos : null;
+			}
+			List<BlockPos> open = ((PyList) Objects.requireNonNull(this.scan).result()).items.stream()
+				.map(found -> blockPos((Pos) found))
+				.filter(pos -> this.level.getBlockState(pos.above()).isAir())
+				.toList();
+			return Fishing.spot(open, this.bot.blockPosition());
+		}
+
+		@Override
+		public boolean tick() {
+			if (this.result != null) {
+				return true;
+			}
+			if (this.spot == null) {
+				if (this.at == null) {
+					if (this.scan == null) {
+						this.scan = SenseApi.scan(this.run, this.bot, this.bot.blockPosition(), RADIUS, LIMIT, Fish::water);
+					}
+					if (!this.scan.tick()) {
+						return false;
+					}
+				}
+				this.spot = this.chooseSpot();
+				if (this.spot == null) {
+					return this.finish(Result.fail(Result.NO_WATER, this.caught));
+				}
+			}
+			if (!this.walked) {
+				if (this.walk == null) {
+					this.walk = MoveApi.reach(this.run.host(), EntityInfo.pos(this.spot), REACH);
+				}
+				if (!this.walk.tick()) {
+					return false;
+				}
+				Result walked = (Result) this.walk.result();
+				this.walk = null;
+				if (!walked.ok()) {
+					return this.finish(Result.fail(Objects.requireNonNull(walked.reason()), this.caught));
+				}
+				this.walked = true;
+			}
+			if (!this.flying.isEmpty()) {
+				this.flying = this.flying.stream().filter(Entity::isAlive).toList();
+				if (!this.flying.isEmpty() && ++this.flyingTicks < CATCHING) {
+					return false;
+				}
+				this.flying.stream().filter(item -> item.distanceTo(this.bot) < REACH).forEach(item -> BotHands.collect(this.bot, item));
+				this.flying = List.of();
+				if (this.caught >= this.n) {
+					return this.finish(Result.ok(this.caught));
+				}
+			}
+			if (this.hook == null) {
+				if (!BotHands.equip(this.bot, ROD)) {
+					return this.finish(Result.fail(this.broke ? Result.ROD_BROKE : Result.NO_ROD, this.caught));
+				}
+				this.cast(this.bot.getMainHandItem());
+				return false;
+			}
+			FishingHook hook = this.hook;
+			if (hook.isRemoved()) {
+				// Gone on its own, as a player's hook when the rod left the hand: a miss.
+				this.hook = null;
+				return ++this.misses >= MISSES && this.finish(Result.fail(Result.NO_WATER, this.caught));
+			}
+			if (((FishingHookAccessor) hook).antcraft$nibble() > 0) {
+				this.reel(hook);
+				return false;
+			}
+			if (++this.hookTicks > LANDING && !this.level.getFluidState(hook.blockPosition()).is(FluidTags.WATER)) {
+				hook.discard(); // not reeled in: a hook on the ground would wear the rod by 2
+				this.hook = null;
+				return ++this.misses >= MISSES && this.finish(Result.fail(Result.NO_WATER, this.caught));
+			}
+			return false;
+		}
+
+		/** Faces the spot and casts a hook at it as the rod casts a player's (FishingHook's constructor), with its enchantments. */
+		private void cast(ItemStack rod) {
+			BlockPos spot = Objects.requireNonNull(this.spot);
+			double dx = spot.getX() + 0.5 - this.bot.getX();
+			double dz = spot.getZ() + 0.5 - this.bot.getZ();
+			float yaw = (float) (Mth.atan2(dz, dx) * Mth.RAD_TO_DEG) - 90.0F;
+			float pitch = Fishing.pitch(Math.sqrt(dx * dx + dz * dz), this.bot.getEyeY() - (spot.getY() + 1));
+			this.bot.setYRot(yaw);
+			this.bot.setYHeadRot(yaw);
+			this.bot.setXRot(pitch);
+			int lure = (int) (EnchantmentHelper.getFishingTimeReduction(this.level, rod, this.bot) * 20.0F);
+			int luck = EnchantmentHelper.getFishingLuckBonus(this.level, rod, this.bot);
+			FishingHook hook = FishingHookAccessor.antcraft$create(EntityTypes.FISHING_BOBBER, this.level, luck, lure);
+			hook.setOwner(this.bot);
+			float cos = Mth.cos(-yaw * Mth.DEG_TO_RAD - Mth.PI);
+			float sin = Mth.sin(-yaw * Mth.DEG_TO_RAD - Mth.PI);
+			float down = -Mth.cos(-pitch * Mth.DEG_TO_RAD);
+			float up = Mth.sin(-pitch * Mth.DEG_TO_RAD);
+			hook.snapTo(this.bot.getX() - sin * 0.3, this.bot.getEyeY(), this.bot.getZ() - cos * 0.3, yaw, pitch);
+			Vec3 throwing = new Vec3(-sin, Mth.clamp(-(up / down), -5.0F, 5.0F), -cos);
+			double length = throwing.length();
+			RandomSource random = this.bot.getRandom();
+			hook.setDeltaMovement(throwing.multiply(0.6 / length + random.triangle(0.5, 0.0103365),
+				0.6 / length + random.triangle(0.5, 0.0103365), 0.6 / length + random.triangle(0.5, 0.0103365)));
+			Projectile.spawnProjectile(hook, this.level, rod);
+			this.level.playSound(null, this.bot.getX(), this.bot.getY(), this.bot.getZ(), SoundEvents.FISHING_BOBBER_THROW,
+				SoundSource.NEUTRAL, 0.5F, 0.4F / (random.nextFloat() * 0.4F + 0.8F));
+			this.hook = hook;
+			this.hookTicks = 0;
+		}
+
+		/** Reels the hook in on a bite, wearing the rod as a player's (FishingHookMixin), the catch flying to the bot. */
+		private void reel(FishingHook hook) {
+			ItemStack rod = this.bot.getMainHandItem();
+			int damage = hook.retrieve(rod);
+			this.flying = this.level.getEntitiesOfClass(ItemEntity.class, hook.getBoundingBox().inflate(1), item -> item.tickCount == 0);
+			this.flyingTicks = 0;
+			this.caught += this.flying.stream().mapToInt(item -> item.getItem().getCount()).sum();
+			this.misses = 0;
+			rod.hurtAndBreak(damage, this.bot, EquipmentSlot.MAINHAND);
+			this.broke = rod.isEmpty();
+			this.hook = null;
+		}
+
+		private boolean finish(Result result) {
+			this.cancel();
+			this.result = result;
+			return true;
+		}
+
+		@Override
+		public Object result() {
+			return this.result == null ? Result.fail(Result.STOPPED, this.caught) : this.result;
+		}
+
+		@Override
+		public boolean walks() {
+			return true;
+		}
+
+		@Override
+		public void cancel() {
+			if (this.walk != null) {
+				this.walk.cancel();
+				this.walk = null;
+			}
+			if (this.hook != null) {
+				this.hook.discard();
+				this.hook = null;
+			}
+		}
+
+		@Override
+		public String describe() {
+			return "fish(" + this.n + (this.at == null ? "" : ", at=" + this.at) + ")";
 		}
 	}
 

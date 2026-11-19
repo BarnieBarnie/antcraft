@@ -194,6 +194,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		Map.entry("mine", "mine(h).reason"),
 		Map.entry("place", "place(h, 'dirt').reason"),
 		Map.entry("use", "use(h).reason"),
+		Map.entry("fish", "fish(at=h).reason"),
 		Map.entry("put", "put(h, 'dirt').reason"),
 		Map.entry("take", "take(h, 'dirt').reason"),
 		Map.entry("craft", "craft('stick', table=h).reason"),

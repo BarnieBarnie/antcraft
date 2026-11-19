@@ -111,6 +111,7 @@ nav = [
     "cookbook/kelp-farm.md",
     "cookbook/guard.md",
     "cookbook/ranch.md",
+    "cookbook/fish.md",
   ] },
   { "Development" = ["development/index.md"] },
   { "Design" = ["design/index.md", "design/library.md"] },

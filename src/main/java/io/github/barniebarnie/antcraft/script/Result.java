@@ -38,6 +38,12 @@ public record Result(boolean ok, @Nullable String reason, Object value, @Nullabl
 	public static final String NO_FURNACE = "no_furnace";
 	/** {@code eat}: the bot is full, and the food is not one that can always be eaten, such as a golden apple. */
 	public static final String FULL = "full";
+	/** {@code fish}: the bot carries no fishing rod. */
+	public static final String NO_ROD = "no_rod";
+	/** {@code fish}: no open water within its radius, or its casts keep landing out of the water. */
+	public static final String NO_WATER = "no_water";
+	/** {@code fish}: its last rod broke before it caught enough. */
+	public static final String ROD_BROKE = "rod_broke";
 
 	public Result(boolean ok, @Nullable String reason, Object value) {
 		this(ok, reason, value, null);

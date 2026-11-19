@@ -517,6 +517,14 @@ public final class SenseApi {
 		return run.start(search, call);
 	}
 
+	/**
+	 * A {@code scan} of the {@code blocks} within {@code radius} of {@code center} as an action of another, its result a
+	 * list of positions, nearest first, such as {@code fish}'s for water.
+	 */
+	static ScriptRun.Action scan(ScriptRun run, AntBot bot, BlockPos center, int radius, int limit, Predicate<BlockState> blocks) {
+		return new Search(run, bot, center, radius, limit, blocks, false);
+	}
+
 	/** A block search, a tick's share of the server's scan budget at a time. */
 	private static final class Search implements ScriptRun.Action {
 		private final ScriptRun run;
