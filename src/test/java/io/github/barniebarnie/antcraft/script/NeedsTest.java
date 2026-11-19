@@ -31,7 +31,18 @@ class NeedsTest {
 	}
 
 	private static PyDict needs(Item item, long n, Map<Item, Integer> stock, List<Item> also) {
-		return CraftApi.needs(item, n, stock, also, VanillaData.recipeBook(), VanillaData.gatherable());
+		return CraftApi.needs(item, n, stock, also, Map.of(), VanillaData.recipeBook(), VanillaData.gatherable());
+	}
+
+	/** With costs, a fuel shortfall gathers what costs less: coal near rather than a log for planks far off (#954). */
+	@Test
+	void costsChooseTheFuelToGather() {
+		Map<Item, Integer> costs = new java.util.HashMap<>();
+		net.minecraft.core.registries.BuiltInRegistries.ITEM.getTagOrEmpty(net.minecraft.tags.ItemTags.LOGS).forEach(log -> costs.put(log.value(), 9));
+		costs.put(Items.COAL, 2);
+		PyDict needs = CraftApi.needs(Items.IRON_INGOT, 1, Map.of(Items.RAW_IRON, 1), List.of(), costs, VanillaData.recipeBook(), VanillaData.gatherable());
+
+		assertEquals("{'minecraft:coal': 1}", gather(needs));
 	}
 
 	private static String crafts(PyDict needs) {

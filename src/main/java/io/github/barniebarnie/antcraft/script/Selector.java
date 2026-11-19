@@ -219,7 +219,7 @@ public record Selector(List<String> ids, List<String> tags) {
 			.orElseThrow(() -> new ScriptError("unknown " + kind + " '" + id + "'"))).collect(Collectors.toSet());
 	}
 
-	private <T> List<TagKey<T>> tags(Registry<T> registry, ResourceKey<? extends Registry<T>> key, String kind) {
+	<T> List<TagKey<T>> tags(Registry<T> registry, ResourceKey<? extends Registry<T>> key, String kind) {
 		List<TagKey<T>> keys = new ArrayList<>();
 		for (String tag : this.tags) {
 			TagKey<T> tagKey = TagKey.create(key, Identifier.parse(tag));

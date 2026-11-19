@@ -1,7 +1,7 @@
 # `needs`
 
 ```text
-needs(item, n=1, also=None, extra=None)
+needs(item, n=1, also=None, extra=None, costs=None)
 ```
 
 What the bot still has to gather, and what to craft and smelt from it, to make `n` of `item` from what it carries, and one of each item of `also` before it.
@@ -14,6 +14,7 @@ What the bot still has to gather, and what to craft and smelt from it, to make `
 | `n` | int | `1` | how many to make, from 1 to 1000000 |
 | `also` | list of str | `None` | items to make one each of first, from the same carried items, such as `["crafting_table"]`; each one item as `item` |
 | `extra` | dict of str to int | `None` | items to count as carried besides what the bot carries, such as those a chest holds: item id to count, each one item as `item` and a count of at least 0 |
+| `costs` | dict of str to int | `None` | what gathering one of a raw item costs, such as the ticks it takes: item id or item tag (each of its items) to a cost of at least 0; an item left out costs 1. The plan gathers what costs least in all, so `{"coal": 30, "#minecraft:logs": 90}` gathers coal for a fuel shortfall rather than a log for planks (#954) |
 
 ## Returns
 
@@ -69,9 +70,9 @@ No, it is done at once. It only plans: it crafts and gathers nothing.
 
 It works through the game's recipes, data packs included, down to raw items: those of the item tag `antcraft:gatherable` (logs, cobblestone, raw iron, coal, sand and the like), and anything no recipe makes. What the bot carries is used first at every level, so with two sticks carried a stone pickaxe needs only the cobblestone, and the steps are only the pickaxe. Where a recipe takes any of several items (any planks for sticks), it picks the one that needs the least gathering, then the fewest crafts, and the first of them on a tie (oak).
 
-A smelting step also needs fuel: it counts on burning what the bot carries (coal, then charcoal, then logs and planks), and what is short is in `gather`, as coal, unless making fuel from carried logs uses up less, which adds that step: planks, four from a log that each burn as long as it, so one item smelted from a carried log burns a plank and keeps three, or charcoal, whose own smelt burns planks too, so a big smelt burns charcoal: 64 iron ingots from carried oak logs burn 8 charcoal, 10 logs with the 2 for its planks, where planks alone take 11 (#944). `fuel` says which it burns: eight torches from one coal and one log put the coal in the torches and burn a plank to smelt the log into charcoal, where `smelt` without `fuel` would burn the coal. `smelt` loads at most a stack a call, so a `"smelt"` step of more than 64 takes several calls.
+A smelting step also needs fuel: it counts on burning what the bot carries (coal, then charcoal, then logs and planks), and what is short is in `gather` as the fuel that costs least to gather by `costs`: without `costs` every raw item costs 1, and that is a log for planks to burn; with them coal, where coal costs less than a log ([`lib.get`](../modules/lib/get.md) passes the walk to coal ore and to a tree, #954). That is unless making fuel from carried logs uses up less, which adds that step: planks, four from a log that each burn as long as it, so one item smelted from a carried log burns a plank and keeps three, or charcoal, whose own smelt burns planks too, so a big smelt burns charcoal: 64 iron ingots from carried oak logs burn 8 charcoal, 10 logs with the 2 for its planks, where planks alone take 11 (#944). `fuel` says which it burns: eight torches from one coal and one log put the coal in the torches and burn a plank to smelt the log into charcoal, where `smelt` without `fuel` would burn the coal. `smelt` loads at most a stack a call, so a `"smelt"` step of more than 64 takes several calls.
 
-An item no recipe makes and that is not in the tag, such as an elytra, is in `gather` itself. An `n` outside 1 to 1000000, an item the game does not know, in `item`, `also` or `extra`, or an `extra` that is not a dict or has a count under 0, stops the script with an error.
+An item no recipe makes and that is not in the tag, such as an elytra, is in `gather` itself. An `n` outside 1 to 1000000, an item the game does not know, in `item`, `also`, `extra` or `costs`, an item tag in `costs` the game does not know, or an `extra` or `costs` that is not a dict or has a count or cost under 0, stops the script with an error.
 
 ## Examples
 

@@ -393,10 +393,16 @@ def resolve(item, n, radius):
     # The logs got as any log (key): one the plan still asks for after that, the recipe takes only that kind (#933).
     widened = []
     start = by_stations()
+    # The gather costs of fuel, measured once and only where a plan smelts and gathers a fuel, coal or a log (for planks),
+    # so may be short of fuel (#954): not where fuel is carried, so a raw item with no source fails as soon as before.
+    costs = None
     for _ in range(ROUNDS):
-        p = plan_by(start, item, n)
+        p = plan_by(start, item, n, costs)
+        if costs is None and smelted(p) and [r for r in p["gather"] if key(r) in (COAL, LOGS)]:
+            costs = fuel_costs(radius)
+            p = plan_by(start, item, n, costs)
         while p["gather"] and intermediate(p, item, chests, tried):
-            p = plan_by(start, item, n)
+            p = plan_by(start, item, n, costs)
         if item in p["gather"]:
             return result("no_recipe", None, {item: n - count(item)})
         if p["no_tool"]:
@@ -451,10 +457,20 @@ def back_to(start):
         goto(spot)
 
 
-def plan_by(start, item, n):
-    """lib.craft.plan(item, n) once the bot is back by its stations (back_to)."""
+def plan_by(start, item, n, costs=None):
+    """lib.craft.plan(item, n, costs=costs) once the bot is back by its stations (back_to)."""
     back_to(start)
-    return lib.craft.plan(item, n)
+    return lib.craft.plan(item, n, costs=costs)
+
+
+def fuel_costs(radius):
+    """needs' costs of the fuels a plan may gather (#954): one coal, by its source's cost (the walk to and mining of an
+    exposed vein, else the trip down), and one log, the walk to the nearest log within radius and its breaking, DEEP
+    more where there is none. ponytail: per one, so a big smelt counts the walk once for each; the tool each takes is
+    not costed."""
+    log = lib.find.nearest(LOGS, radius)
+    wood = lib.cost.BREAK["wood"]["stone"] + (DEEP if log is None else lib.cost.walk(pos(), log))
+    return {COAL: SOURCES[COAL].cost(1, radius)[0], LOGS: wood}
 
 
 def intermediate(p, item, chests, tried):

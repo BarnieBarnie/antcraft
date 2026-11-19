@@ -687,6 +687,50 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> printed(helper, bot, "True None"));
 	}
 
+	/**
+	 * No fuel carried, a raw iron, a furnace and a wooden pickaxe, coal ore beside the bot and an oak at the far corner of
+	 * the wide area (#954): get of an iron ingot mines the coal and smelts with it, and leaves the tree standing. Without
+	 * gather costs in needs the plan burnt planks and the bot walked to the tree for a log.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 850)
+	public void withNoFuelCoalBesideBeatsAFarTreeForFuel(GameTestHelper helper) {
+		helper.setBlock(2, 1, 1, Blocks.COAL_ORE);
+		TreesGameTest.plantTree(helper, new BlockPos(20, 1, 20), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON));
+		run(helper, bot, """
+			from lib.get import get
+			r = get("iron_ingot")
+			print(r["ok"], count("iron_ingot"), count("#minecraft:logs") + count("#minecraft:planks"))
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True 1 0");
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(2, 1, 1));
+			helper.assertBlockPresent(Blocks.OAK_LOG, new BlockPos(20, 1, 20));
+		});
+	}
+
+	/**
+	 * As {@link #withNoFuelCoalBesideBeatsAFarTreeForFuel}, with an oak near and no coal ore (#954): get of an iron ingot
+	 * burns a plank of the oak's log, three planks left.
+	 */
+	@GameTest(maxTicks = 750)
+	public void withNoFuelATreeNearAndNoCoalBurnsPlanks(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON));
+		run(helper, bot, """
+			from lib.get import get
+			r = get("iron_ingot")
+			print(r["ok"], count("iron_ingot"), count("#minecraft:planks"))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True 1 3"));
+	}
+
 	/** How far make_cost may be from the ticks get takes, either way. */
 	private static final double COST_FACTOR = 1.5;
 
