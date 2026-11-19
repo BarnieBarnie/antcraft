@@ -340,10 +340,14 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 	 * A bot at flee health shot by a skeleton 12 blocks off, beyond {@code HOSTILE_RANGE} (8), runs out of its bow's range
 	 * (15), rather than stand under its arrows (#918). The skeleton is kept where it stands, so it does not follow; it
 	 * wears a helmet so it does not burn in daylight. The bot wears iron armour to live through a few arrows, and is fed
-	 * just short of healing (17), so it stays at flee health.
+	 * just short of healing (17), so it stays at flee health. The skeleton's first arrow lands on tick 29 when it hits, but
+	 * it misses about one shot in three and shoots again 60 ticks later, so where it has not hit by tick 35 the skeleton
+	 * strikes the bot instead; the flight takes 35 ticks from the hit whenever it lands (#943).
 	 */
-	// Measured: passes at tick 64 alone (red: stood 8.4 blocks from the skeleton on tick 302 of 300).
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 150)
+	// Measured beside the Ranch and Fight game tests: passes at tick 64 when the arrow hits, 70 when it misses (red: stood
+	// 8.4 blocks from the skeleton on tick 302 of 300; before #943, 124 after one missed arrow and timed out on tick 152
+	// of 150 after two).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 140)
 	public void fleesTheSkeletonShootingItFromAfar(GameTestHelper helper) {
 		Skeleton skeleton = helper.spawn(EntityTypes.SKELETON, 2, 1, 12);
 		skeleton.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
@@ -364,6 +368,11 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 			shot[0] |= bot.getLastHurtByMob() == skeleton;
 			if (!bot.isAlive()) {
 				helper.fail("bot shot dead at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+			}
+		});
+		helper.runAtTickTime(35, () -> {
+			if (!shot[0]) {
+				bot.hurtServer(helper.getLevel(), helper.getLevel().damageSources().mobAttack(skeleton), 1);
 			}
 		});
 		helper.succeedWhen(() -> {
