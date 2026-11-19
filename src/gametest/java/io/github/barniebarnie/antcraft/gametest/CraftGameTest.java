@@ -707,6 +707,25 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/**
+	 * Four oak planks to burn and four birch: the table it crafts first takes the planks the plan of the stations with the
+	 * fuel planned first uses, the birch, not the oak a plan of the stations first takes, so an oak plank is left to burn (#935).
+	 */
+	@GameTest(maxTicks = 680)
+	public void smeltHereCraftsItsStationsFromWhatThePlanUses(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("'raw_iron', 1, fuel='oak_planks'", "iron_ingot", "furnace", "crafting_table", "cobblestone"),
+			List.of("True None 1 1 1 0"), () -> {
+				tablesInTheArea(helper, 0).run();
+				inTheArea(helper, Blocks.FURNACE, 0).run();
+			});
+	}
+
 	/** One log, the fuel smelt burns without fuel=: the table would take it, so it crafts nothing and keeps it. */
 	@GameTest(maxTicks = 20)
 	public void smeltHereKeepsItsDefaultFuelBackFromTheTable(GameTestHelper helper) {

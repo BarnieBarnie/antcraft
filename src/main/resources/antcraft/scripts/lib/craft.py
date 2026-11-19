@@ -154,7 +154,8 @@ def craft_table(p, item, n):
 
 def smelt_here(item, n=1, fuel=None):
     """smelt(item, n, fuel=fuel), and where no furnace is within reach, one placed beside the bot for it: the carried
-    one, else one crafted with craft_here from what the bot carries besides the n of item it smelts. The placed furnace
+    one, else one crafted with craft_stations, by the steps and uses of the plan that keeps back the n of item it smelts
+    and its fuel (#935). The placed furnace
     is mined back after, with anything left in it, also when the smelt fails. Gives result(): ok, smelt's reason (for
     missing_ingredients with what it lacked, smelt_lacking),
     no_tool where the bot carries no pickaxe to mine a furnace back (it places and crafts none), missing_ingredients
@@ -176,8 +177,9 @@ def smelt_here(item, n=1, fuel=None):
         if not carried:
             return result("missing_ingredients", None, {first(item): n})
         # ponytail: keeps back the first carried item item selects, the one smelt loads unless a station cooks only another.
-        stations = ["furnace"] if table_near() else ["crafting_table", "furnace"]
         k = min(n, count(carried[0]))
+        # Planned first, so the stations are made of what is left (#935): the input, then the fuel.
+        kept = [carried[0]] * k
         # The fuel smelt burns: fuel, else the best carried, as smelt picks it once the k it smelts are loaded, so the
         # input burns only where more of it is carried (#530).
         for f in [fuel] if fuel else ["coal", "charcoal", "#minecraft:logs", "#minecraft:planks"]:
@@ -185,12 +187,12 @@ def smelt_here(item, n=1, fuel=None):
             if burnt:
                 spare = count(burnt[0]) - (k if burnt[0] == carried[0] else 0)
                 # ponytail: one for each 1.5 smelted, as wood burns, the only fuel a table or furnace takes; at most what is carried, so a short fuel is smelt's to report.
-                stations = stations + [burnt[0]] * min(spare, (2 * k + 2) // 3)
+                kept = kept + [burnt[0]] * min(spare, (2 * k + 2) // 3)
                 break
-        p = needs(carried[0], k, also=stations)
+        p = needs("furnace", 1, also=kept + ([] if table_near() else ["crafting_table"]))
         if p["gather"]:
             return result("missing_ingredients", None, p["gather"])
-        if not craft_here("furnace")["ok"]:
+        if not craft_stations(p)["ok"]:
             return result(r.reason)
     spot = place_beside("furnace")
     if spot is None:
@@ -201,6 +203,28 @@ def smelt_here(item, n=1, fuel=None):
         take_back(spot, "furnace")
         # What a failed smelt left in the furnace spills when it is mined.
         pick_up(radius=3)
+
+
+def craft_stations(p):
+    """Crafts each step of p, a needs() plan of a furnace and the crafting table it takes, of the items the plan uses
+    for it (#935); a step that needs a table at the one within REACH, else the carried one placed beside the bot and
+    mined back after. Gives result(): ok, or the reason of the first step that failed."""
+    spot = placed = None
+    try:
+        for (step, k, how), uses in zip(p["crafts"], p["uses"]):
+            r = craft(step, k, table=spot, use=list(uses))
+            if not r and r.reason == "no_table" and spot is None:
+                spot = find_nearest("crafting_table", radius=REACH)
+                if spot is None and count("crafting_table"):
+                    spot = placed = place_beside("crafting_table")
+                if spot is not None:
+                    r = craft(step, k, table=spot, use=list(uses))
+            if not r:
+                return result(r.reason)
+        return result()
+    finally:
+        if placed is not None:
+            take_back(placed, "crafting_table")
 
 
 def smelt_lacking(r, item, n, fuel):
