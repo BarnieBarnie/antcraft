@@ -42,7 +42,7 @@ public final class KiteGoal extends Goal {
 	private static final double STEP_IN_RANGE = 3;
 	/**
 	 * How near, in blocks, the melee goal walks the bot up to an unlit creeper while its weapon is not ready: a block outside
-	 * {@link #STEP_IN_RANGE}, for the bot to stop short of where the fuse lights (#949).
+	 * {@link #STEP_IN_RANGE}, for the bot to stop short of where the fuse lights (#949). Nearer, it backs away (#955).
 	 */
 	static final double HOLD_BACK = STEP_IN_RANGE + 1;
 	/** How far, in blocks, a creeper's blast hurts: twice its explosion's power of 3. */

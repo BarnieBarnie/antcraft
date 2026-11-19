@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotHands;
 import io.github.barniebarnie.antcraft.entity.KiteGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
@@ -780,6 +781,38 @@ public class FightGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		helper.succeedWhen(() -> helper.assertTrue(creeper.getHealth() < health, "not struck"));
+	}
+
+	/**
+	 * A bot whose weapon cools backs away from a creeper walking at it, keeping outside the 3 blocks where its fuse lights,
+	 * until the weapon is ready (#955). It stood still 4 blocks off, so the creeper walked up and lit its fuse. An iron axe
+	 * strikes every 23 ticks (BotHands.strikeTicks), long enough for the creeper to close in. The bot waits without AI
+	 * while the creeper sets off from 8 blocks, as a creeper takes some 20 ticks to start walking, and strikes the pig
+	 * (so its axe starts cooling) and turns on once the creeper is 5 blocks off.
+	 */
+	// Measured: passes at tick 52, the bot kept 3.8 to 4.1 blocks off (red: came 2.9 blocks near, the fuse lit, tick 37).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 105)
+	public void aBotWithItsWeaponCoolingBacksAwayFromACreeperWalkingAtIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 4.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_AXE));
+		bot.setNoAi(true);
+		Pig pig = helper.spawn(EntityTypes.PIG, new Vec3(16.5, 1, 4.5));
+		pig.setNoAi(true);
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 12.5));
+		GameTests.onEnd(helper, creeper::discard);
+		creeper.setTarget(bot);
+		boolean[] struck = {false};
+		helper.onEachTick(() -> {
+			if (!struck[0] && bot.distanceTo(creeper) <= 5) {
+				struck[0] = true;
+				bot.setNoAi(false);
+				bot.setLastHurtMob(pig);
+				bot.setTarget(creeper);
+			} else if (struck[0] && !BotHands.weaponReady(bot) && bot.distanceTo(creeper) <= 3) {
+				helper.fail("came " + bot.distanceTo(creeper) + " blocks near with the weapon not ready, tick " + helper.getTick());
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(struck[0] && BotHands.weaponReady(bot), "the weapon is not ready"));
 	}
 
 	/**

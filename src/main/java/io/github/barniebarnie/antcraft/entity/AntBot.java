@@ -266,17 +266,24 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		// Before the melee goal: a hostile mob is safer shot than struck or kited, where the bot carries a bow and arrows (#724, #734).
 		this.goalSelector.addGoal(2, new ShootGoal(this));
 		// Holds back from a creeper, outside where its fuse lights, while the weapon cools after another blow: walked up, it
-		// lit the fuse with no blow ready (#949).
+		// lit the fuse with no blow ready (#949). It stands within a block beyond HOLD_BACK and backs straight away inside
+		// it, as a creeper walking at it would otherwise light anyway (#955).
 		this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.2, true) {
 			private boolean held;
 
 			@Override
 			public void tick() {
 				LivingEntity target = AntBot.this.getTarget();
-				if (target instanceof Creeper && !BotHands.weaponReady(AntBot.this) && AntBot.this.distanceTo(target) <= KiteGoal.HOLD_BACK) {
+				double distance = target == null ? Double.MAX_VALUE : AntBot.this.distanceTo(target);
+				if (target instanceof Creeper && !BotHands.weaponReady(AntBot.this) && distance <= KiteGoal.HOLD_BACK + 1) {
 					this.held = true;
 					AntBot.this.getNavigation().stop();
 					AntBot.this.getLookControl().setLookAt(target);
+					if (distance < KiteGoal.HOLD_BACK) {
+						// ponytail: straight away, no path: against a wall it stands, and once the fuse lights the kite goal plans a way off.
+						Vec3 away = AntBot.this.position().add(AntBot.this.position().subtract(target.position()).horizontal().normalize().scale(2));
+						AntBot.this.getMoveControl().setWantedPosition(away.x, AntBot.this.getY(), away.z, 1.2);
+					}
 					return;
 				}
 				// The goal's own path waits for its next recalculation, up to a few ticks off.
