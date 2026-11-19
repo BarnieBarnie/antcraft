@@ -907,8 +907,41 @@ def make(kind, t, uses, radius, costs, limit=None):
         return None
     have = sum([lib.tools.uses_left(s) for s in inventory() if s.item == tool])
     n = count(tool) + -(-max(uses - have, 1) // lib.cost.USES[t])
+    # A bound before make_cost's needs, so a dear tier is left out for less (#958).
+    if limit is not None and least_head(kind, t, n, radius, costs) + work(kind, uses, t) > limit:
+        return None
     ticks = make_cost(tool, n, radius, costs, None if limit is None else limit - work(kind, uses, t))
     return None if ticks is None else (ticks + work(kind, uses, t), n)
+
+
+# The item a tool head of each tier is made of, and its raw item, for least_head (#958).
+HEADS = {"copper": ("minecraft:copper_ingot", "minecraft:raw_copper"),
+         "iron": ("minecraft:iron_ingot", "minecraft:raw_iron"), "diamond": ("minecraft:diamond", "minecraft:diamond")}
+# How many of its head's item each kind of tool takes.
+HEAD = {"pickaxe": 3, "axe": 3, "shovel": 1, "hoe": 2, "sword": 2}
+
+
+def least_head(kind, t, n, radius, tools):
+    """A bound make_cost of n tools of kind and tier t never goes under, without needs (3,000 instructions, #958): for a
+    tier of HEADS, the SMELT of each ingot the heads take, the least of their raw item's source and smelted_pickaxe of
+    it, as least_make counts them; 0 for another tier or kind, where a chest of lib.stock (tools["chests"]) is near, or
+    where the bot carries any item whose id holds t (the tool, an ingot, a nugget or a block).
+    ponytail: those cases fall through to make_cost's own bound (least_make), which sees what they hold."""
+    if t not in HEADS or kind not in HEAD:
+        return 0
+    if "chests" not in tools:
+        tools["chests"] = lib.stock.chests(radius)
+    if tools["chests"] or [s for s in inventory() if t in s.item]:
+        return 0
+    head, raw = HEADS[t]
+    k = HEAD[kind] * n
+    s = SOURCES[raw]
+    p = {"table": True, "crafts": [] if head == raw else [(head, k, "smelt")], "inputs": {head: [raw]}}
+    ticks = lib.cost.SMELT * smelted(p) + stations(p) + s.least(k) + smelted_pickaxe(s, tools)
+    # The sticks' log, where the bot carries nothing they may come from.
+    if not sum([count(w) for w in ("minecraft:stick", PLANKS, LOGS, "minecraft:bamboo", "#minecraft:bamboo_blocks")]):
+        ticks += SOURCES[LOGS].least(1)
+    return ticks
 
 
 def lasting(kind, uses, tier):
