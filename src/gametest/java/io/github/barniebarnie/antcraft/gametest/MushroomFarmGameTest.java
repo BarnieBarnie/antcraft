@@ -68,7 +68,7 @@ public class MushroomFarmGameTest implements CustomTestMethodInvoker {
 			import jobs.mushroom_farm
 			jobs.mushroom_farm.run(Pos(%d, %d, %d), 1, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ()));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		// The cobblestone dug building a cell has a depot chest to go in (#859).
 		helper.onEachTick(() -> {
 			if (said(bot, "store:")) {

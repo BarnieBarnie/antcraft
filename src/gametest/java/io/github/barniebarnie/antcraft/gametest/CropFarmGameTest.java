@@ -266,13 +266,13 @@ public class CropFarmGameTest implements CustomTestMethodInvoker {
 		return helper.spawn(ModEntities.ANT_BOT, 20, 1, 18);
 	}
 
-	/** Runs jobs.crop_farm of crop at AT, up to cells cells, and fails the test on a script error. */
+	/** Runs jobs.crop_farm of crop at AT, up to cells cells, and fails the test on a script error or warning (the farm stopping, #951). */
 	private static void run(GameTestHelper helper, AntBot bot, String crop, int cells) {
 		BlockPos at = helper.absolutePos(AT);
 		List<String> said = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.crop_farm " + crop + " "
 			+ at.getX() + " " + at.getY() + " " + at.getZ() + " " + cells);
 		helper.assertTrue(bot.getScript() != null, "not run: " + said);
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 	}
 
 	/** The cell from x0: water in its middle, every other spot farmland under crop. */

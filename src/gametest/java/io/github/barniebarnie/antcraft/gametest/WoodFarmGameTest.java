@@ -161,6 +161,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		bot.snapTo(Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(12, 30, 14))), 0, 0);
 		bot.setHome(helper.absolutePos(new BlockPos(12, 30, 14)));
 		run(helper, bot, 1, 32);  // the supply chest 31 blocks off
+		BotScripts.failOnWarningButDeath(helper, () -> helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null);
 		helper.succeedWhen(() -> {
 			AntBot now = helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
 			helper.assertTrue(now != null && now.getDeaths() >= 1, "never died; " + BotScripts.log(bot, Output.Level.DEBUG));
@@ -1866,6 +1867,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			lib.cells.add("birch_farm", 1)
 			jobs.wood_farm.run(kind, cell[0].up(), None, 32)
 			""");
+		BotScripts.failOnWarning(helper, bot);
 		Runnable kitted = () -> {
 			helper.assertTrue(said(bot).contains("birch_farm 2/4: sapling"), "said " + said(bot));
 			helper.assertBlockPresent(Blocks.DIRT, SPOT.below());

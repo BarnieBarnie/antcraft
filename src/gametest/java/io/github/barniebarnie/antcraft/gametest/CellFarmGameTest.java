@@ -67,7 +67,7 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			     "harvest": harvest, "tend": tend, "most": lambda: 2}
 			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
 			""".formatted(at.getX(), at.getY(), at.getZ()));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		boolean[] ripe = new boolean[1];
 		helper.onEachTick(() -> {
 			if (!ripe[0] && BotScripts.log(bot, Output.Level.PRINT).contains("built cell 2")) {
@@ -114,7 +114,7 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			     "chores": chores, "learn": lambda ticks, n: say(f"learnt {ticks // n}")}
 			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
 			""".formatted(at.getX(), at.getY(), at.getZ()));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			String said = String.join("\n", BotScripts.log(bot, Output.Level.PRINT));
 			helper.assertTrue(said.split("chores", -1).length > 3, "not three rounds; said " + said);
@@ -170,7 +170,7 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			     "harvest": harvest, "tend": lambda boxes, told: None, "most": lambda: 1}
 			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
 			""".formatted(at.getX(), at.getY(), at.getZ()));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT).stream()
 			.filter(l -> !l.contains("cell") && !l.contains("farm")).toList(),
 			List.of("2", "2", "10", "1 True"), "said"));
@@ -208,7 +208,7 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			     "harvest": lambda low, high, told: result(), "tend": lambda boxes, told: None, "most": lambda: 1}
 			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
 			""".formatted(at.getX(), at.getY(), at.getZ()));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT).stream()
 			.filter(l -> !l.endsWith(": farm")).toList(),
 			List.of("cell not built: blocked at Pos(" + at.below().toShortString() + ")", "[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2]"),
@@ -253,7 +253,7 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			     "kept": lambda low, high: [low]}
 			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
 			""".formatted(at.getX(), at.getY(), at.getZ()));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT).stream()
 			.filter(l -> l.startsWith("keeps")).toList(), List.of("keeps 2"), "said"));
 	}
@@ -289,7 +289,7 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			     "kept": lambda low, high: [low]}
 			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
 			""".formatted(at.getX(), at.getY(), at.getZ()));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarningButDeath(helper, () -> helper.getLevel().getEntity(id) instanceof AntBot now && now.isAlive() ? now : null);
 		boolean[] killed = new boolean[1];
 		helper.onEachTick(() -> {
 			if (!killed[0] && BotScripts.log(bot, Output.Level.PRINT).contains("farm full")) {

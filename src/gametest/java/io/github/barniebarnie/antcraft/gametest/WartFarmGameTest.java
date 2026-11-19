@@ -45,7 +45,7 @@ public class WartFarmGameTest implements CustomTestMethodInvoker {
 			import jobs.wart_farm
 			jobs.wart_farm.run(Pos(%d, %d, %d), %s, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ(), size));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		return bot;
 	}
 

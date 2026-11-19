@@ -47,7 +47,7 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 			import jobs.cactus_farm
 			jobs.cactus_farm.run(Pos(%d, %d, %d), %s, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ(), size));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		failOnCactus(helper, bot, run);
 		return bot;
 	}

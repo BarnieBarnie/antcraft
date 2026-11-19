@@ -44,7 +44,7 @@ public class BambooFarmGameTest implements CustomTestMethodInvoker {
 			import jobs.bamboo_farm
 			jobs.bamboo_farm.run(Pos(%d, %d, %d), %s, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ(), size));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		return bot;
 	}
 

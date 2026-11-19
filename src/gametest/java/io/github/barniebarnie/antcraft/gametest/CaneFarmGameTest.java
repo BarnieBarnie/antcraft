@@ -45,7 +45,7 @@ public class CaneFarmGameTest implements CustomTestMethodInvoker {
 			import jobs.cane_farm
 			jobs.cane_farm.run(Pos(%d, %d, %d), %s, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ(), size));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		return bot;
 	}
 

@@ -56,7 +56,7 @@ public class StemFarmGameTest implements CustomTestMethodInvoker {
 			import jobs.stem_farm
 			jobs.stem_farm.run("%s", Pos(%d, %d, %d), %d, 8)
 			""".formatted(kind, at.getX(), at.getY(), at.getZ(), cells));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		return bot;
 	}
 

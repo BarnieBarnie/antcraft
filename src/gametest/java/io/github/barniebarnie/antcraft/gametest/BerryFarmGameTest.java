@@ -49,7 +49,7 @@ public class BerryFarmGameTest implements CustomTestMethodInvoker {
 			import jobs.berry_farm
 			jobs.berry_farm.run(Pos(%d, %d, %d), %s, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ(), size));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
 			DamageSource hurt = bot.getLastDamageSource();
 			if (hurt != null && hurt.is(DamageTypes.SWEET_BERRY_BUSH)) {

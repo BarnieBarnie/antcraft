@@ -81,7 +81,7 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 			%s
 			jobs.kelp_farm.run(Pos(%d, %d, %d), Pos(%d, %d, %d), 8, %s%s)
 			""".formatted(before, low.getX(), low.getY(), low.getZ(), high.getX(), high.getY(), high.getZ(), dry ? "True" : "False", args));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		return bot;
 	}
 
@@ -326,7 +326,7 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, top, 6);
 		grow(helper, bot, top, size, dry, depth);
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		return bot;
 	}
 

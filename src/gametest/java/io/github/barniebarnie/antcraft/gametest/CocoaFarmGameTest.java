@@ -63,7 +63,7 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 			%s
 			jobs.cocoa_farm.run(Pos(%d, %d, %d), %d, 8)
 			""".formatted(prelude, at.getX(), at.getY(), at.getZ(), size));
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
 		if (watch) {
 			failOnLostLog(helper, bot, run, dz);
 		}
