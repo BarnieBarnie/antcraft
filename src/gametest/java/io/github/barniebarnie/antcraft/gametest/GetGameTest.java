@@ -731,6 +731,33 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> printed(helper, bot, "True 1 3"));
 	}
 
+	/**
+	 * As {@link #withNoFuelCoalBesideBeatsAFarTreeForFuel} (#961): make_cost of an iron ingot plans with the fuel costs get
+	 * plans with, so it costs the coal beside: its fuel, less the smelting and the furnace mined back, costs less than the
+	 * walk to the far tree. It planned without them, burnt planks and costed a log of the far tree.
+	 */
+	// Measured: passes at tick 67 (red: printed ['minecraft:oak_log'] False).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 140)
+	public void makeCostWithNoFuelCostsTheCoalBesideNotAFarTree(GameTestHelper helper) {
+		helper.setBlock(2, 1, 1, Blocks.COAL_ORE);
+		TreesGameTest.plantTree(helper, new BlockPos(20, 1, 20), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON));
+		run(helper, bot, """
+			import lib.cost
+			import lib.find
+			from lib.get import make_cost, stations
+			tools = {}
+			c = make_cost("iron_ingot", 1, tools=tools)
+			p = tools["plans"][("iron_ingot", 1)][1]
+			fuel = c - lib.cost.SMELT - stations(p)
+			print(sorted(p["gather"]), fuel < lib.cost.walk(pos(), lib.find.nearest("#minecraft:logs", 32)))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "['minecraft:coal'] True"));
+	}
+
 	/** How far make_cost may be from the ticks get takes, either way. */
 	private static final double COST_FACTOR = 1.5;
 

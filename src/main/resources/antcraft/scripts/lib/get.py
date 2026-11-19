@@ -557,7 +557,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once, and
     so for a raw item only its crafting table or furnace takes (#729). tools holds the tool
     costs found so far, by tool id, for one options, under "chests" the chests of lib.stock, scanned once, and under
-    "plans" the needs and lib.craft.plan of each (item, n) costed (#728), under "logs" whether any log is near (only_kind), as a tier options costs may be costed again as
+    "plans" the needs, lib.craft.plan and fuel costs of each (item, n) costed (#728, #961), under "fuel" the fuel_costs
+    get plans with, measured once and only where a plan smelts and gathers a fuel (#961), under "logs" whether any log is near (only_kind), as a tier options costs may be costed again as
     the tool of a source (the wooden pickaxe of a stone one's cobblestone). With
     limit, None as soon as the cost is sure to be over it: a source costs at least its least, so the ore scans and tool
     costs of a dear one are left out (#582, #681)."""
@@ -568,7 +569,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         tools["plans"] = {}
     plans = tools["plans"]
     if (item, n) not in plans:
-        plans[(item, n)] = [needs(item, n), None]
+        plans[(item, n)] = [needs(item, n), None, None]
     cached = plans[(item, n)]
     p = cached[0]
     if limit is not None and least_make(p, radius, tools) > limit:
@@ -578,15 +579,23 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     GETTING.append(key(item))
     try:
         if cached[1] is None:
-            cached[1] = planned(item, n, p, tools)
+            # The fuel costs get plans with, where the plan smelts and gathers a fuel (#961, as resolve, #954); after
+            # least_make, so a tier it bounds out measures none. ponytail: that bound is of the plan without them.
+            if smelted(p) and [r for r in p["gather"] if key(r) in (COAL, LOGS)]:
+                if "fuel" not in tools:
+                    tools["fuel"] = fuel_costs(radius)
+                cached[2] = tools["fuel"]
+                p = needs(item, n, costs=cached[2])
+            cached[1] = planned(item, n, p, tools, cached[2])
         p = cached[1]
+        costs = cached[2]
         ticks = 0
         gather = dict(p["gather"])
         # The last chest get takes from, where its walk back to the stations starts (#698).
         back = None
         smelt = smelts(p)
         if gather:
-            c, back, gather, smelt = stored(p, item, n, radius, tools)
+            c, back, gather, smelt = stored(p, item, n, radius, tools, costs)
             if sum([max(0, k) for k in smelt.values()]) <= 0 < smelted(p):
                 # The chests hold all the plan smelts: no furnace to make, nor fuel to burn (#709).
                 p = without_furnace(item, n)
@@ -667,13 +676,13 @@ def only_kind(item, n, p, raw, k, radius, tools):
     return raw in needs(item, n, also=p["also"], extra={other: k})["gather"]
 
 
-def planned(item, n, p, tools):
-    """lib.craft.plan(item, n, p) for make_cost: where it would plan only a crafting table, p with the steps of
+def planned(item, n, p, tools, costs=None):
+    """lib.craft.plan(item, n, p, costs) for make_cost: where it would plan only a crafting table, p with the steps of
     needs("crafting_table"), made once for one options in tools["table"], put first, which is the same where the table
     takes none of what the bot carries: it gathers one oak log and the bot carries no planks (#737). Its four planks are
     one log's whole output, so the item's planks keep their leftovers."""
     if lib.craft.smelt_inputs(p) or not p["table"] or lib.craft.table_near():
-        return lib.craft.plan(item, n, p)
+        return lib.craft.plan(item, n, p, costs)
     if "table" not in tools:
         tools["table"] = needs("crafting_table")
     t = tools["table"]
@@ -777,9 +786,9 @@ def station(at, kind, material, least, n=1, start=None):
     return lib.cost.breaking(n, material, least if tool is None else lib.tools.tier(tool))
 
 
-def stored(p, item, n, radius, tools):
+def stored(p, item, n, radius, tools, costs=None):
     """The walk to the nearest chest of lib.stock within radius that holds each step of p, a plan for n of item, as
-    intermediate takes them (planks of any kind for planks); tools as make_cost's. Gives those ticks, the Pos of the
+    intermediate takes them (planks of any kind for planks); tools as make_cost's, costs the gather costs of fuel its needs take. Gives those ticks, the Pos of the
     last chest walked to (None: none), and the raw items (#580) and how many of each step (smelts, #709) the plan made
     again with what the chests hold of its steps counted as carried takes, so a carried item is counted once (#737). A
     step those taken already cover is not walked to. A chest's items count once, though a step comes twice (the table's
@@ -812,7 +821,7 @@ def stored(p, item, n, radius, tools):
                 m = min(held, max(0, m))
                 extra[i] = extra.get(i, 0) + m
                 held -= m
-            left = needs(item, n, also=p.get("also") or None, extra=extra)
+            left = needs(item, n, also=p.get("also") or None, extra=extra, costs=costs)
     return ticks, last, dict(left["gather"]), smelts(left)
 
 
