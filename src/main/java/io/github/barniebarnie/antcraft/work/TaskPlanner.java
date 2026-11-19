@@ -103,7 +103,7 @@ public final class TaskPlanner {
 	};
 
 	/** What a plan is made from; the recipe book and gatherables compare as their own objects do, by identity unless they say otherwise. */
-	private record PlanKey(Object item, int count, List<?> first, Map<?, Integer> stock, RecipeBook<?> book, Predicate<?> gatherable) {
+	private record PlanKey(Object item, int count, List<?> first, Map<?, Integer> stock, RecipeBook<?> book, Predicate<?> gatherable, Map<?, Integer> gatherCosts) {
 	}
 
 	/**
@@ -117,16 +117,25 @@ public final class TaskPlanner {
 	}
 
 	/** Like {@link #plan(Object, int, Map, RecipeBook, Predicate)}, but one of each of {@code first} is planned before {@code item}, from the same stock. */
-	@SuppressWarnings("unchecked")
 	public static <I> Plan<I> plan(I item, int count, List<I> first, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
-		PlanKey key = new PlanKey(item, count, List.copyOf(first), Map.copyOf(stock), book, gatherable);
+		return plan(item, count, first, stock, book, gatherable, Map.of());
+	}
+
+	/**
+	 * Like {@link #plan(Object, int, List, Map, RecipeBook, Predicate)}, but gathering one of an item costs as much as
+	 * {@code gatherCosts} says (1 for an item it leaves out), so the plan gathers what is cheaper, such as coal from ore
+	 * near rather than a log from a tree far off for planks to burn (#944).
+	 */
+	@SuppressWarnings("unchecked")
+	public static <I> Plan<I> plan(I item, int count, List<I> first, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable, Map<I, Integer> gatherCosts) {
+		PlanKey key = new PlanKey(item, count, List.copyOf(first), Map.copyOf(stock), book, gatherable, Map.copyOf(gatherCosts));
 		synchronized (KEPT) {
 			Plan<?> kept = KEPT.get(key);
 			if (kept != null) {
 				return (Plan<I>) kept;
 			}
 		}
-		Plan<I> plan = search(item, count, first, stock, book, gatherable, new long[1]);
+		Plan<I> plan = search(item, count, first, stock, book, gatherable, Map.copyOf(gatherCosts), new long[1]);
 		synchronized (KEPT) {
 			KEPT.put(key, plan);
 		}
@@ -136,12 +145,13 @@ public final class TaskPlanner {
 	/** How many stock entries a search for a plan copies, for checking that a large stock stays cheap. */
 	static <I> long stockEntriesCopied(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
 		long[] copied = {0};
-		search(item, count, List.of(), stock, book, gatherable, copied);
+		search(item, count, List.of(), stock, book, gatherable, Map.of(), copied);
 		return copied[0];
 	}
 
-	private static <I> Plan<I> search(I item, int count, List<I> first, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable, long[] copied) {
-		State<I> state = new State<>(new Stock<>(stock, copied));
+	private static <I> Plan<I> search(I item, int count, List<I> first, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable,
+		Map<I, Integer> gatherCosts, long[] copied) {
+		State<I> state = new State<>(new Stock<>(stock, copied), gatherCosts);
 		Search<I> search = new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0, 0});
 		for (I one : first) {
 			search.need(state, one, 1, new HashSet<>(), true);
@@ -255,12 +265,16 @@ public final class TaskPlanner {
 		/** Set when the plan reached its bound and was abandoned; it loses to any finished plan. */
 		boolean pruned;
 
-		State(Stock<I> stock) {
+		/** What gathering one of an item costs, 1 for one left out (#944). */
+		final Map<I, Integer> gatherCosts;
+
+		State(Stock<I> stock, Map<I, Integer> gatherCosts) {
 			this.stock = stock;
+			this.gatherCosts = gatherCosts;
 		}
 
 		State<I> copy() {
-			State<I> copy = new State<>(this.stock.copy());
+			State<I> copy = new State<>(this.stock.copy(), this.gatherCosts);
 			copy.crafts.addAll(this.crafts);
 			copy.gather.putAll(this.gather);
 			copy.missing.putAll(this.missing);
@@ -298,10 +312,13 @@ public final class TaskPlanner {
 			return this.pruned;
 		}
 
-		/** Lower is better: missing items are worst, then gathering, then crafting effort. */
+		/** Lower is better: missing items are worst, then gathering (each item at its cost), then crafting effort. */
 		long[] score() {
 			long missingCount = this.missing.values().stream().mapToLong(Integer::longValue).sum();
-			long gatherCount = this.gather.values().stream().mapToLong(Integer::longValue).sum();
+			long gatherCount = 0;
+			for (Map.Entry<I, Integer> gathered : this.gather.entrySet()) {
+				gatherCount += (long) gathered.getValue() * this.gatherCosts.getOrDefault(gathered.getKey(), 1);
+			}
 			long craftCount = this.crafts.stream().mapToLong(Craft::times).sum();
 			return new long[] {missingCount, gatherCount, craftCount};
 		}
@@ -335,11 +352,11 @@ public final class TaskPlanner {
 
 	/**
 	 * Everything {@link Search#need} decides depends on: the item, how many, the stock (as its {@linkplain Stock#changes changes}), whether
-	 * conversion recipes may make it, whether the plan is broken already and whether it is for making fuel (which
-	 * burns its own fuel rather than make it).
+	 * conversion recipes may make it, whether the plan is broken already and how deep in making fuel it is (which
+	 * limits what fuel it makes for itself, see {@link Search#fuel}).
 	 */
-	private record NeedKey<I>(I item, int count, Map<I, Integer> stock, boolean conversions, boolean cycle, boolean makingFuel) {
-		static <I> NeedKey<I> of(State<I> state, I item, int count, boolean conversions, boolean makingFuel) {
+	private record NeedKey<I>(I item, int count, Map<I, Integer> stock, boolean conversions, boolean cycle, int makingFuel) {
+		static <I> NeedKey<I> of(State<I> state, I item, int count, boolean conversions, int makingFuel) {
 			return new NeedKey<>(item, count, state.stock.changes(), conversions, state.cycle, makingFuel);
 		}
 	}
@@ -409,7 +426,7 @@ public final class TaskPlanner {
 				this.budget[PATH_HITS]++;
 				return;
 			}
-			NeedKey<I> key = NeedKey.of(state, item, remaining, conversions, this.budget[MAKING_FUEL] > 0);
+			NeedKey<I> key = NeedKey.of(state, item, remaining, conversions, Math.min(this.budget[MAKING_FUEL], 2));
 			NeedResult<I> known = this.memo.get(key);
 			if (known != null) {
 				known.replay(state);
@@ -506,15 +523,16 @@ public final class TaskPlanner {
 		 * Fuel for smelting {@code smelts} items. Either burns what is in stock in the book's order
 		 * of preference (gathering the rest), or first makes a better fuel, such as charcoal from
 		 * logs, when that uses up less. A fuel on {@code path} is being made already, so it is not
-		 * made again to fuel itself. Fuel for making fuel is only burnt or gathered, never made: making
-		 * fuel for every fuel and recipe at every level grows with the number of fuels to the power of
-		 * the depth and could hold up a server tick for ever (#309). Each fuel recipe tried spends the
-		 * expansion budget, and once it is spent the fuel is burnt.
+		 * made again to fuel itself. Fuel for making fuel is only burnt, gathered or {@linkplain #multipliesFuel
+		 * crafted}, such as planks to smelt charcoal (#944), one level deep: making fuel for every fuel and
+		 * recipe at every level grows with the number of fuels to the power of the depth and could hold up
+		 * a server tick for ever (#309). Each fuel recipe tried spends the expansion budget, and once it is
+		 * spent the fuel is burnt.
 		 */
 		Map<I, Integer> fuel(State<I> state, int smelts, Set<I> path) {
 			State<I> best = state.copy();
 			Map<I, Integer> bestUsed = this.burn(best, smelts);
-			if (this.budget[MAKING_FUEL] > 0) {
+			if (this.budget[MAKING_FUEL] > 1) {
 				state.assign(best);
 				return bestUsed;
 			}
@@ -527,6 +545,9 @@ public final class TaskPlanner {
 					for (Recipe<I> recipe : this.book.recipesFor(item)) {
 						if (this.exhausted()) {
 							break;
+						}
+						if (this.budget[MAKING_FUEL] > 0 && !multipliesFuel(recipe)) {
+							continue;
 						}
 						this.budget[LEFT]--;
 						State<I> trial = state.copy();
@@ -546,6 +567,15 @@ public final class TaskPlanner {
 			}
 			state.assign(best);
 			return bestUsed;
+		}
+
+		/**
+		 * Whether making fuel for a fuel's own smelt may use {@code recipe}: crafted, with no furnace and so no fuel of its
+		 * own, into more items than it takes, as a log into four planks (#944).
+		 * ponytail: more items, not more burn time; compare burn ticks when a crafted fuel burns shorter than what it takes.
+		 */
+		static boolean multipliesFuel(Recipe<?> recipe) {
+			return !recipe.smelting() && recipe.count() > recipe.ingredients().values().stream().mapToInt(Integer::intValue).sum();
 		}
 
 		/**

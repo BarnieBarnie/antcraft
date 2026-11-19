@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
@@ -598,6 +599,44 @@ class TaskPlannerTest {
 
 		assertEquals(1, plan.crafts().size(), "plan: " + plan);
 		assertEquals(Items.BED.red(), plan.crafts().getFirst().recipe().output());
+		assertTrue(plan.isReady(), "plan: " + plan);
+	}
+
+	/** Fuel for two iron ingots from nothing, with the real fuel ranking, each log costing {@code logCost} to gather and coal {@code coalCost} (#944). */
+	private static TaskPlanner.Plan<Item> ingotsFromNoFuel(int logCost, int coalCost) {
+		Map<Item, Integer> costs = new HashMap<>(Map.of(Items.COAL, coalCost));
+		BuiltInRegistries.ITEM.getTagOrEmpty(ItemTags.LOGS).forEach(log -> costs.put(log.value(), logCost));
+		return TaskPlanner.plan(Items.IRON_INGOT, 2, List.of(), new HashMap<>(Map.of(Items.RAW_IRON, 2)), VanillaData.recipeBook(), VanillaData.gatherable(), costs);
+	}
+
+	@Test
+	void withNoFuelAndCoalCheaperToGatherThePlanGathersCoal() {
+		TaskPlanner.Plan<Item> plan = ingotsFromNoFuel(3, 1);
+
+		assertEquals(Map.of(Items.COAL, 1), plan.toGather(), "plan: " + plan);
+	}
+
+	@Test
+	void withNoFuelAndATreeCheaperToGatherThePlanBurnsPlanks() {
+		TaskPlanner.Plan<Item> plan = ingotsFromNoFuel(1, 3);
+
+		assertEquals(1, plan.toGather().size(), "plan: " + plan);
+		assertTrue(plan.toGather().keySet().iterator().next().builtInRegistryHolder().is(ItemTags.LOGS), "plan: " + plan);
+		assertTrue(plan.crafts().getFirst().recipe().output().builtInRegistryHolder().is(ItemTags.PLANKS), "plan: " + plan);
+	}
+
+	/**
+	 * 64 ingots from carried logs: planks burn 11 logs (43 planks), charcoal 10, 8 smelted into charcoal and 2 into the
+	 * planks that smelt them. Charcoal's own smelt burnt logs, 6, so it lost (#944).
+	 */
+	@Test
+	void aBigSmeltFromCarriedLogsBurnsCharcoalWhenThatBurnsFewerLogs() {
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.IRON_INGOT, 64, Map.of(Items.RAW_IRON, 64, Items.OAK_LOG, 64));
+
+		TaskPlanner.Craft<Item> ingots = plan.crafts().getLast();
+		assertEquals(Map.of(Items.CHARCOAL, 8), ingots.fuel(), "plan: " + plan);
+		int logs = plan.crafts().stream().mapToInt(craft -> craft.uses().getOrDefault(Items.OAK_LOG, 0) + craft.fuel().getOrDefault(Items.OAK_LOG, 0)).sum();
+		assertEquals(10, logs, "plan: " + plan);
 		assertTrue(plan.isReady(), "plan: " + plan);
 	}
 
