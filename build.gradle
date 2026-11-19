@@ -25,6 +25,13 @@ loom {
 			sourceSet sourceSets.client
 		}
 	}
+
+	runs {
+		client {
+			// A fixed offline name, so the dev player keeps its UUID: its bots and inventory from one runClient to the next.
+			programArgs "--username", "Player342"
+		}
+	}
 }
 
 dependencies {
