@@ -788,8 +788,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * walk once and 60 each by hand, as no axe is carried (680). With the walk counted for each coal and a log broken as
 	 * with a stone axe the far coal cost 1160 and the logs 385.
 	 */
-	// Measured: passes at tick 55 alone and 137 to 138 in class runs (red: printed ['minecraft:dark_oak_log', 'minecraft:oak_log']).
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 300)
+	// Measured: passes at tick 55 to 113 alone and 137 to 248 in class runs (red: printed ['minecraft:dark_oak_log', 'minecraft:oak_log']).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 500)
 	public void aBigSmeltPlansCoalAWalkOffOverATreeNear(GameTestHelper helper) {
 		helper.setBlock(21, 1, 1, Blocks.COAL_ORE);
 		TreesGameTest.plantTree(helper, new BlockPos(5, 1, 1), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
