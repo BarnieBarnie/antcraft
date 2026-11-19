@@ -61,7 +61,8 @@ public final class BotApi {
 
 		Wait(long ticks) {
 			this.ticks = ticks;
-			this.left = ticks;
+			// One more: its first tick is the one it is called on (ScriptRun.start, #965), which it does not count.
+			this.left = ticks + 1;
 		}
 
 		@Override

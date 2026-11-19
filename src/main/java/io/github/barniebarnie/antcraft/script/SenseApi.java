@@ -510,11 +510,7 @@ public final class SenseApi {
 			return nearest ? PyNone.NONE : new PyList();
 		}
 		BlockPos from = center == null ? bot.blockPosition() : blockPos(center);
-		Search search = new Search(run, bot, from, radius, limit, blocks, nearest);
-		if (search.tick()) {
-			return search.result();
-		}
-		return run.start(search, call);
+		return run.start(new Search(run, bot, from, radius, limit, blocks, nearest), call);
 	}
 
 	/**

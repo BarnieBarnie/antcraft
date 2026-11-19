@@ -288,11 +288,7 @@ public final class MoveApi {
 			if (chunkX != (int) chunkX || chunkZ != (int) chunkZ || !body.chunkLoaded((int) chunkX, (int) chunkZ)) {
 				return false;
 			}
-			Reachable reachable = new Reachable(run, body.plan(target, (int) Math.min(near, Integer.MAX_VALUE)));
-			if (reachable.tick()) {
-				return reachable.result();
-			}
-			return run.start(reachable, call);
+			return run.start(new Reachable(run, body.plan(target, (int) Math.min(near, Integer.MAX_VALUE))), call);
 		});
 	}
 

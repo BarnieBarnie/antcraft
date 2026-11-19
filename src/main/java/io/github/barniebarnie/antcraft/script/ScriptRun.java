@@ -255,6 +255,8 @@ public final class ScriptRun {
 	private State state = State.RUNNING;
 	/** Whether the run was resumed suspended in a native call, which it makes again on its first tick ({@link Vm#recall}). */
 	private boolean recall;
+	/** Whether the run is making that call again right now, so {@link #start} leaves the action's first tick to {@link #tick}. */
+	private boolean recalling;
 	/** The progress of the action the run was resumed in, which it hands to the action it starts again. */
 	private long progress;
 	private long[] progressData = new long[0];
@@ -533,8 +535,13 @@ public final class ScriptRun {
 		try {
 			if (recall) {
 				recall = false;
-				if (vm.recall() == Vm.Status.SUSPENDED && action != null) {
-					action.restore(progress, progressData);
+				recalling = true;
+				try {
+					if (vm.recall() == Vm.Status.SUSPENDED && action != null) {
+						action.restore(progress, progressData);
+					}
+				} finally {
+					recalling = false;
 				}
 			}
 			// After a resumed run restored its action, so a reflex interrupts that as any other.
@@ -553,6 +560,10 @@ public final class ScriptRun {
 				vm.resume(result);
 			}
 			status = vm.run(budget);
+			if (state != State.RUNNING) {
+				// Stopped from inside the run, as by the bot dying in an action's first tick (start).
+				return;
+			}
 		} catch (RuntimeException e) {
 			// A bug in a native or an action, not in the script: stop the script rather than the bot's tick.
 			AntCraft.LOGGER.warn("Script {} failed with an internal error at {}:{}", name, file, vm.line(), e);
@@ -603,10 +614,25 @@ public final class ScriptRun {
 		return true;
 	}
 
-	/** Starts {@code action} for the native call being made: the native returns what this gives, pausing the script. */
+	/**
+	 * Starts {@code action} for the native call being made: the native returns what this gives. The action's first tick
+	 * runs now, on the tick it is called, so back to back actions lose no tick between them (#965): one done in that tick
+	 * gives its result at once and the script goes on, otherwise the script pauses until it is done. A resumed run making
+	 * its call again ({@link Vm#recall}) runs none here: its action is restored first, then ticks in {@link #tick}.
+	 */
 	Object start(Action action, NativeCall call) {
 		this.action = action;
-		return call.suspend();
+		if (this.recalling) {
+			return call.suspend();
+		}
+		boolean finished = action.tick();
+		if (this.action != action || !finished) {
+			// Not done, or the run was stopped in the action's tick, which dropped it.
+			return call.suspend();
+		}
+		this.action = null;
+		Object result = action.result();
+		return result instanceof Result r ? done(action.describe(), r) : result;
 	}
 
 	/**

@@ -4,7 +4,7 @@ Many bots run their scripts on one server, and Minecraft runs 20 ticks a second.
 
 ## Actions pause the script
 
-An **action** takes game time: walking somewhere, mining a block, smelting. When a script calls one, the script pauses there, the bot does the action over as many ticks as it takes, and the script goes on with the action's `Result` as the value of the call. You write it as an ordinary call, one line after the other:
+An **action** takes game time: walking somewhere, mining a block, smelting. When a script calls one, the script pauses there, the bot does the action over as many ticks as it takes, and the script goes on with the action's `Result` as the value of the call. The action starts on the tick it is called, so one done at once (a `place` in reach) gives its result in that tick, and back-to-back actions lose no tick between them. You write it as an ordinary call, one line after the other:
 
 ```python
 tree = find_nearest("#minecraft:logs")

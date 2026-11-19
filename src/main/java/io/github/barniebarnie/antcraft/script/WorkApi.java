@@ -194,8 +194,8 @@ public final class WorkApi {
 			if (BotHands.find(bot, Fish.ROD) == null) {
 				return run.done(fish.describe(), Result.fail(Result.NO_ROD));
 			}
-			// Its first tick now, so where the scan finds no water within the tick's budget it fails at once.
-			return fish.tick() ? run.done(fish.describe(), (Result) fish.result()) : run.start(fish, call);
+			// Its first tick runs in start, so where the scan finds no water within the tick's budget it fails at once.
+			return run.start(fish, call);
 		});
 	}
 
@@ -1294,6 +1294,8 @@ public final class WorkApi {
 		private int falling;
 		/** How many ticks it has waited beside the current goal, for it to land or for its pickup delay to end. */
 		private int waiting;
+		/** Whether this is its first tick. */
+		private boolean first = true;
 		/** How many of the items the bot carried when it started, to tell how many it took, also by walking over them. */
 		private final long before;
 		private long taken;
@@ -1348,6 +1350,8 @@ public final class WorkApi {
 			if (this.result != null) {
 				return true;
 			}
+			boolean first = this.first;
+			this.first = false;
 			AABB grab = this.bot.getBoundingBox().inflate(GRAB, 0.5, GRAB);
 			List<Entity> around = this.around();
 			for (Entity entity : around) {
@@ -1366,7 +1370,9 @@ public final class WorkApi {
 				.sorted(Comparator.comparingDouble(entity -> entity.distanceToSqr(this.bot)))
 				.toList();
 			if (fitting.isEmpty()) {
-				return this.finish(around);
+				// On its first tick, the one it is called on (#965), it looks once more the next: a block that pops off one
+				// just mined, such as the cane over it, drops its item a tick later.
+				return !first && this.finish(around);
 			}
 			if (this.goal == null || !fitting.contains(this.goal)) {
 				this.stopWalk();

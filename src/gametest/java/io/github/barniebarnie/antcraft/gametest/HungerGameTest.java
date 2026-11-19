@@ -116,7 +116,11 @@ public class HungerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** {@code eat} takes the item's eat time, 32 ticks for a steak, then gives its nutrition and saturation and uses it up. */
+	/**
+	 * {@code eat} takes the item's eat time, 32 ticks for a steak, then gives its nutrition and saturation and uses it up.
+	 * The first of the 32 is the tick it is called on (#965), as a player's eat counts the tick it starts, so the script
+	 * goes on 31 ticks after the call.
+	 */
 	@GameTest(maxTicks = 70)
 	public void eatGivesTheFoodsNutritionAfterItsEatTime(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
@@ -127,7 +131,7 @@ public class HungerGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, """
 			t = game_time()
 			r = eat('cooked_beef')
-			print(r.ok, food(), saturation() > 12, count('cooked_beef'), game_time() - t >= 32)
+			print(r.ok, food(), saturation() > 12, count('cooked_beef'), game_time() - t == 31)
 			print(eat('dirt').reason, eat('bread').reason)
 			""", List.of("True 18 True 1 True", "no_item no_item"));
 	}

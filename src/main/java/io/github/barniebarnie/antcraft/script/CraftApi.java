@@ -544,9 +544,9 @@ public final class CraftApi {
 			});
 			if (at != null) {
 				Smelt smelt = new Smelt(run, bot, at, input, (int) Math.min(n, input.getDefaultMaxStackSize()), given, describe);
-				// Its first tick now, before the furnace ticks: a fire still burning from the last smelt goes on into this
-				// input, where a tick's wait for the action to start would burn a tick with nothing in (#956).
-				return smelt.tick() ? run.done(describe, (Result) smelt.result()) : run.start(smelt, call);
+				// Its first tick runs in start, before the furnace ticks: a fire still burning from the last smelt goes on into
+				// this input, where a tick's wait for the action to start would burn a tick with nothing in (#956).
+				return run.start(smelt, call);
 			}
 		}
 		if (smeltable) {

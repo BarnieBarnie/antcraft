@@ -998,13 +998,15 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * A hauler killed with the birch logs it took from a chest for a haul job respawns beside the core, picks them up,
 	 * takes the job it held up again and brings them to the core (#689).
 	 */
-	// Measured: passes at tick 243 (red: respawned where first spawned).
-	@GameTest(maxTicks = 500)
+	// Measured: passes at tick 285 with the chest out of reach of the core (243 before, #965; red: respawned where first spawned).
+	@GameTest(maxTicks = 600)
 	public void aHaulerKilledMidHaulComesBackAndFinishesIt(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
-		colony.setRadius(7);
-		helper.setBlock(1, 1, 1, Blocks.CHEST);
-		container(helper, 1, 1, 1).setItem(0, new ItemStack(Items.BIRCH_LOG, 3));
+		colony.setRadius(9);
+		// Far enough from the core that no block is in reach of both: actions start on the tick they are called (#965), so a
+		// bot in reach of both would take and put in one tick, never seen carrying the logs.
+		helper.setBlock(0, 1, 7, Blocks.CHEST);
+		container(helper, 0, 1, 7).setItem(0, new ItemStack(Items.BIRCH_LOG, 3));
 		Container core = container(helper, 6, 1, 1);
 		AntBot hauler = member(helper, colony, 6, 1, 4);
 		PyDict data = new PyDict();

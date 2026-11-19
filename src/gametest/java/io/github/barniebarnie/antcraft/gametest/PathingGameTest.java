@@ -280,9 +280,9 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		ScriptRun run = BotScripts.run(bot, "wait(5)\ngoto((%d, %d, %d))\nwhile True:\n    wait(1000)\n".formatted(goal.getX(), goal.getY(), goal.getZ()));
 
 		boolean[] pushed = new boolean[1];
-		int[] walking = new int[1];
 		helper.onEachTick(() -> {
-			if (!pushed[0] && run.walking() && ++walking[0] == 2) {
+			// The walk planned on the tick goto was called (#965), as in aWalkFromTheBlockBesideWherePlannedPlansAgain.
+			if (!pushed[0] && run.walking()) {
 				bot.setPos(bot.getX(), bot.getY(), helper.absoluteVec(new Vec3(2.5, 1, 3.3)).z);
 				bot.setDeltaMovement(0, 0, 0.2);
 				pushed[0] = true;

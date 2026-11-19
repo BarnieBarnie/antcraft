@@ -56,7 +56,7 @@ public final class MineApi {
 				return PyNone.NONE;
 			}
 			SiteSearch search = new SiteSearch(run, bot, WorkApi.blockPos(near), levels, branches, length);
-			return search.tick() ? search.result() : run.start(search, call);
+			return run.start(search, call);
 		});
 		natives.register("mineshaft_at", 1500, call -> {
 			Object[] args = Args.bind("mineshaft_at", call, 2, "top", "levels", "round", "branches", "length");

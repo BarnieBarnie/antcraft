@@ -538,6 +538,19 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		return helper.spawn(ModEntities.ANT_BOT, 0, 4, 0);
 	}
 
+	/**
+	 * Actions start on the tick they are called (#965): two places in reach, back to back, are both done on the tick the
+	 * script called the first, where each lost a tick waiting to start.
+	 */
+	// Measured: passes at tick 1 (red: printed True True 1 1).
+	@GameTest(maxTicks = 20)
+	public void backToBackActionsStartOnTheTickTheyAreCalled(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 2));
+		expect(helper, bot, "a = game_time()\nr = place(" + at(helper, 5, 1, 3) + ", 'dirt')\nb = game_time()\ns = place(" + at(helper, 3, 1, 5)
+			+ ", 'dirt')\nprint(r.ok, s.ok, b - a, game_time() - b)\n", List.of("True True 0 0"));
+	}
+
 	/** {@code place} on the floor of the middle of a pool 3 deep swims out and places from the surface. */
 	// Measured: passes at tick 32 (red: out_of_reach).
 	@GameTest(maxTicks = 70)
