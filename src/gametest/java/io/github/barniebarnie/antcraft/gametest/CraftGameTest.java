@@ -777,6 +777,22 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			"crafting_table"), List.of("[{'minecraft:coal': 1, 'minecraft:oak_planks': 1}]", "True None {} 9 0 0 1 1"));
 	}
 
+	/**
+	 * Two oak and two birch logs to charcoal (#953): craft_all smelts the whole step at one placed furnace, so the fire
+	 * burning on from the oak into the birch burns the three planks the plan counts, not two for each kind.
+	 */
+	@GameTest(maxTicks = 1800)
+	public void craftAllSmeltsAStepOfSeveralInputsAtOneFurnace(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_LOG, 2));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, "print(needs('charcoal', 4)['burns'])\n" + craftAll("'charcoal', 4", "charcoal", "oak_planks", "furnace"),
+			List.of("[{'minecraft:oak_planks': 3}]", "True None {} 4 1 1"), inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
 	/** A smoker within reach and no pickaxe or cobblestone: craft_here cooks the beef there and places no furnace. */
 	@GameTest(maxTicks = 220)
 	public void craftHereCooksInASmokerWithinReach(GameTestHelper helper) {
