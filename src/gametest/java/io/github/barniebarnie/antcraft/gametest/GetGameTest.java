@@ -760,6 +760,29 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * As {@link #makeCostWithNoFuelCostsTheCoalBesideNotAFarTree} (#963): make_cost's bound (least_make) leaves out the
+	 * wood its plan without fuel costs burns, as the plan with them may burn coal, so with a limit of the cost itself, as
+	 * options gives a dearer tier where a cheaper one cost that much, it still gives that cost. The bound counted the log
+	 * for the planks that plan burnt, a log's least (55) over the coal beside (50), so the iron ingot was left out.
+	 */
+	// Measured: passes at tick 212 to 216 in class runs (red: printed True False).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 420)
+	public void makeCostBoundsWithTheFuelCosts(GameTestHelper helper) {
+		helper.setBlock(2, 1, 1, Blocks.COAL_ORE);
+		TreesGameTest.plantTree(helper, new BlockPos(20, 1, 20), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON));
+		run(helper, bot, """
+			from lib.get import make_cost
+			c = make_cost("iron_ingot", 1)
+			print(c is not None, make_cost("iron_ingot", 1, limit=c) == c)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True True"));
+	}
+
+	/**
 	 * A big smelt with no fuel carried, an oak 4 blocks off and coal ore 20 off (#960): 64 iron ingots plan 8 coal, not 11
 	 * logs for planks. Coal costs the walk once and 45 a block with the wooden pickaxe carried (460), the logs the short
 	 * walk once and 60 each by hand, as no axe is carried (680). With the walk counted for each coal and a log broken as

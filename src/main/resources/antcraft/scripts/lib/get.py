@@ -597,7 +597,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     try:
         if cached[1] is None:
             # The fuel costs get plans with, where the plan smelts and gathers a fuel (#961, as resolve, #954); after
-            # least_make, so a tier it bounds out measures none. ponytail: that bound is of the plan without them.
+            # least_make, so a tier it bounds out measures none: its bound leaves out the wood the plan burns (#963).
             if smelted(p) and [r for r in p["gather"] if key(r) in (COAL, LOGS)]:
                 if "fuel" not in tools:
                     tools["fuel"] = fuel_costs(radius, tools)
@@ -630,7 +630,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             if s is None or not itself and key(raw) in GETTING:
                 return None
             what = key(raw)
-            if what == LOGS and raw != LOGS and not itself and only_kind(item, n, p, raw, k, radius, tools):
+            if what == LOGS and raw != LOGS and not itself and only_kind(item, n, p, raw, k, radius, tools, costs):
                 what, s = raw, logs_of(raw)
             # get takes a raw item from the chests first: the walk to the nearest, for as much as they hold (#555, #661).
             if "chests" not in tools:
@@ -673,7 +673,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         GETTING.pop()
 
 
-def only_kind(item, n, p, raw, k, radius, tools):
+def only_kind(item, n, p, raw, k, radius, tools, costs=None):
     """Whether make_cost is to cost raw, a log of one kind that p, the plan for n of item, gathers k of, as that kind,
     not as any log (key), as get gathers it once any log did not do (#933, #938): where no log of raw is within radius
     (other logs or none at all, #941), and the plan made with k logs of another kind carried still asks for raw, as oak
@@ -681,7 +681,8 @@ def only_kind(item, n, p, raw, k, radius, tools):
     ponytail: where no log is within radius at all, only an item whose id holds raw's wood (raw less "minecraft:" and
     "_log", so oak slabs, not a wooden axe or iron one) runs the needs (3000 instructions, which choose cannot spare, and a
     fuel plan may still ask for raw); one that takes only that kind under another name, or a bamboo block's, costs as
-    any log there. tools as make_cost's: whether any log is near is found once, in tools["logs"] (#947)."""
+    any log there. tools as make_cost's: whether any log is near is found once, in tools["logs"] (#947); costs the fuel
+    costs make_cost plans with (#963)."""
     if "logs" not in tools:
         tools["logs"] = lib.find.nearest(LOGS, radius) is not None
     if not tools["logs"]:
@@ -690,7 +691,7 @@ def only_kind(item, n, p, raw, k, radius, tools):
     elif lib.find.nearest(raw, radius) is not None:
         return False
     other = "minecraft:oak_log" if raw == "minecraft:birch_log" else "minecraft:birch_log"
-    return raw in needs(item, n, also=p["also"], extra={other: k})["gather"]
+    return raw in needs(item, n, also=p["also"], extra={other: k}, costs=costs)["gather"]
 
 
 def planned(item, n, p, tools, costs=None):
@@ -715,17 +716,22 @@ def least_make(p, radius, tools):
     """A bound make_cost never goes under, from p, a needs() plan, alone (#710): before lib.craft.plan, whose needs with
     the stations costs as much again, and the ore scans. SMELT for each item p smelts, its stations and the least of each
     raw item's source with smelted_pickaxe (coal none, as it may come as charcoal); 0 where the chests in tools["chests"]
-    hold any of p's items, raw or a step, as make_cost then takes those for less."""
+    hold any of p's items, raw or a step, as make_cost then takes those for less. The logs p burns, as logs or as planks
+    (four a log), are left out too, as make_cost plans with get's fuel costs, where coal may stand in for them (#963)."""
     if "chests" not in tools:
         tools["chests"] = lib.stock.chests(radius)
     for what in list(p["gather"]) + [step for step, k, how in p["crafts"]]:
         for c in tools["chests"]:
             if any([lib.stock.holds(c, w) for w in alike(what)]):
                 return 0
+    planks = sum([m for b in p["burns"] for f, m in b.items() if f.endswith("_planks")])
+    burnt = sum([m for b in p["burns"] for f, m in b.items() if key(f) == LOGS]) + -(-planks // 4)
     ticks = lib.cost.SMELT * smelted(p) + stations(p)
     for raw, k in p["gather"].items():
         s = SOURCES.get(key(raw))
-        if s is not None and key(raw) != COAL:
+        if key(raw) == LOGS:
+            k, burnt = k - burnt, max(0, burnt - k)
+        if s is not None and key(raw) != COAL and k > 0:
             ticks += s.least(k) + smelted_pickaxe(s, tools)
     return ticks
 
