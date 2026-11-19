@@ -757,6 +757,32 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot that just struck another mob holds back from a creeper outside the 3 blocks where its fuse lights until its
+	 * weapon is ready, then steps in and strikes (#949). The melee goal walked it up with the weapon still cooling, which
+	 * lit the fuse with no blow ready. The creeper has no AI, so it neither walks nor lights: only the bot closes in.
+	 */
+	// Measured: passes at tick 22 (red: came 2.6 blocks near with the weapon not ready, tick 10).
+	@GameTest(maxTicks = 45)
+	public void aBotThatJustStruckAnotherMobHoldsBackFromACreeperUntilItsWeaponIsReady(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.5, 1, 1.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Pig pig = helper.spawn(EntityTypes.PIG, new Vec3(6.5, 1, 1.5));
+		pig.setNoAi(true);
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(2.5, 1, 6));
+		creeper.setNoAi(true);
+		bot.setLastHurtMob(pig);
+		bot.setTarget(creeper);
+		float health = creeper.getHealth();
+		// An iron sword strikes every 13 ticks (BotHands.strikeTicks).
+		helper.onEachTick(() -> {
+			if (creeper.getHealth() == health && bot.distanceTo(creeper) < 3 && bot.tickCount - bot.getLastHurtMobTimestamp() < 13) {
+				helper.fail("came " + bot.distanceTo(creeper) + " blocks near with the weapon not ready, tick " + helper.getTick());
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(creeper.getHealth() < health, "not struck"));
+	}
+
+	/**
 	 * A bot in a 1-wide dead end with a creeper lit in front of it is cornered: it goes at the creeper and strikes it, which
 	 * knocks it back, rather than stand (#725). It cannot back off 7 blocks, and an iron sword does not kill the creeper
 	 * within its 30-tick fuse, so the blast still catches it. It does not go at the creeper again with the fuse far gone

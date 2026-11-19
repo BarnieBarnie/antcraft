@@ -71,6 +71,15 @@ public final class BotHands {
 		return strikeTicks(attackSpeed(bot.getMainHandItem()));
 	}
 
+	/**
+	 * Whether the bot's weapon is ready for another blow: {@link #strikeTicks} since it last struck a mob. Ready too where it
+	 * has struck nothing yet, or not for a long while (LivingEntity forgets the mob): the timestamp is 0 then, and a bot
+	 * just spawned or loaded counts its ticks from 0, so it waited out a blow it never struck (#942).
+	 */
+	public static boolean weaponReady(AntBot bot) {
+		return bot.getLastHurtMob() == null || bot.tickCount - bot.getLastHurtMobTimestamp() >= strikeTicks(bot);
+	}
+
 	/** How many ticks pass between blows at {@code attackSpeed} blows a second, a part tick waited out in full. */
 	static int strikeTicks(double attackSpeed) {
 		return Mth.ceil(20 / attackSpeed);

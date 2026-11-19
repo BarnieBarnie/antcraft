@@ -265,7 +265,28 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(1, new KiteGoal(this));
 		// Before the melee goal: a hostile mob is safer shot than struck or kited, where the bot carries a bow and arrows (#724, #734).
 		this.goalSelector.addGoal(2, new ShootGoal(this));
-		this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.2, true));
+		// Holds back from a creeper, outside where its fuse lights, while the weapon cools after another blow: walked up, it
+		// lit the fuse with no blow ready (#949).
+		this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.2, true) {
+			private boolean held;
+
+			@Override
+			public void tick() {
+				LivingEntity target = AntBot.this.getTarget();
+				if (target instanceof Creeper && !BotHands.weaponReady(AntBot.this) && AntBot.this.distanceTo(target) <= KiteGoal.HOLD_BACK) {
+					this.held = true;
+					AntBot.this.getNavigation().stop();
+					AntBot.this.getLookControl().setLookAt(target);
+					return;
+				}
+				// The goal's own path waits for its next recalculation, up to a few ticks off.
+				if (this.held && target != null) {
+					AntBot.this.getNavigation().moveTo(target, 1.2);
+				}
+				this.held = false;
+				super.tick();
+			}
+		});
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));

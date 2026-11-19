@@ -40,6 +40,11 @@ public final class KiteGoal extends Goal {
 	 * spend the fuse walking there and back (#717).
 	 */
 	private static final double STEP_IN_RANGE = 3;
+	/**
+	 * How near, in blocks, the melee goal walks the bot up to an unlit creeper while its weapon is not ready: a block outside
+	 * {@link #STEP_IN_RANGE}, for the bot to stop short of where the fuse lights (#949).
+	 */
+	static final double HOLD_BACK = STEP_IN_RANGE + 1;
 	/** How far, in blocks, a creeper's blast hurts: twice its explosion's power of 3. */
 	private static final double BLAST = 6;
 	/** How many spots further from the creeper the bot weighs when it backs off: it takes the one that gains it most. */
@@ -237,10 +242,7 @@ public final class KiteGoal extends Goal {
 		this.bot.getLookControl().setLookAt(creeper);
 		// The weapon out before it asks whether it is ready, as the reflexes do: not the bow the shoot goal left in hand (#734).
 		Tools.equipBestWeapon(this.bot);
-		// Ready too where it has struck nothing yet, or not for a long while (LivingEntity forgets the mob): the timestamp is 0
-		// then, and a bot just spawned or loaded counts its ticks from 0, so it waited out a blow it never struck (#942).
-		boolean ready = this.bot.getLastHurtMob() == null
-			|| this.bot.tickCount - this.bot.getLastHurtMobTimestamp() >= BotHands.strikeTicks(this.bot);
+		boolean ready = BotHands.weaponReady(this.bot);
 		if (ready && BotHands.inStrikingReach(this.bot, creeper)) {
 			BotHands.strike(this.bot, (ServerLevel) this.bot.level(), creeper);
 			this.cornered = false;
