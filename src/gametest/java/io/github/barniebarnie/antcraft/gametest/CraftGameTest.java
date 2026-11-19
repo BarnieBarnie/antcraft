@@ -841,6 +841,23 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("[{'minecraft:oak_planks': 2}]", "True None {} 3 1 1"), inTheArea(helper, Blocks.FURNACE, 0));
 	}
 
+	/**
+	 * Beef and raw iron, a smoker within reach and a furnace carried (#957): the beef cooks in the smoker, then the raw
+	 * iron, which gives no_furnace there, smelts in the furnace put down, and the beef is not smelted again.
+	 */
+	@GameTest(maxTicks = 720)
+	public void smeltHereSmeltsInAPlacedFurnaceOnlyWhatTheSmokerLeft(GameTestHelper helper) {
+		helper.setBlock(FURNACE, Blocks.SMOKER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.BEEF, 1));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 2));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("{'beef': 1, 'raw_iron': 1}", "cooked_beef", "iron_ingot", "furnace"), List.of("True None 1 1 1"),
+			inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
 	/** A smoker within reach and no pickaxe or cobblestone: craft_here cooks the beef there and places no furnace. */
 	@GameTest(maxTicks = 220)
 	public void craftHereCooksInASmokerWithinReach(GameTestHelper helper) {

@@ -156,7 +156,8 @@ def smelt_here(item, n=1, fuel=None):
     no_tool where the bot carries no pickaxe to mine a furnace back (it places and crafts none), missing_ingredients
     with missing, what the stations lack with the input and its fuel kept back, before it crafts anything, or no_furnace where no
     furnace could be crafted or placed."""
-    uses = item if isinstance(item, dict) else {item: n}
+    # A copy: smelt_all takes out of it what it smelted, so a retry at a placed furnace smelts only the rest (#957).
+    uses = dict(item) if isinstance(item, dict) else {item: n}
     # fuel as a dict, as needs' burns gives it: how many of each it burns, kept back so, smelt burning any of them (#945).
     burns = fuel if isinstance(fuel, dict) else None
     fuel = list(fuel) if burns else fuel
@@ -209,13 +210,16 @@ def smelt_here(item, n=1, fuel=None):
 
 def smelt_all(uses, furnace, fuel):
     """Smelts each of uses (item to how many) at furnace (None: one within reach), a stack a smelt call, burning fuel
-    (a list or selector). Gives result(): ok, else smelt_lacking of the first smelt that failed."""
-    for what, m in uses.items():
-        while m > 0:
-            r = smelt(what, min(m, STACK), furnace=furnace, fuel=fuel)
+    (a list or selector). Takes out of uses what it smelted, so uses holds what is left after a failed smelt (#957).
+    Gives result(): ok, else smelt_lacking of the first smelt that failed."""
+    for what in list(uses):
+        while uses[what] > 0:
+            m = min(uses[what], STACK)
+            r = smelt(what, m, furnace=furnace, fuel=fuel)
             if not r:
-                return smelt_lacking(r, what, min(m, STACK), fuel)
-            m -= min(m, STACK)
+                return smelt_lacking(r, what, m, fuel)
+            uses[what] -= m
+        uses.pop(what)
     return result()
 
 
