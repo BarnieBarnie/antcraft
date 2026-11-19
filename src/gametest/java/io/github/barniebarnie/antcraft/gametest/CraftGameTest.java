@@ -824,6 +824,23 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("[{'minecraft:oak_planks': 3}]", "True None {} 4 1 1"), inTheArea(helper, Blocks.FURNACE, 0));
 	}
 
+	/**
+	 * An oak, a birch and a spruce log to charcoal (#956): three inputs take 600 ticks of fire, which the plan's 2 planks
+	 * give exactly, so the fire must go on from one input into the next without a tick lost, or a third plank burns.
+	 */
+	@GameTest(maxTicks = 1400)
+	public void smeltingOneInputAfterAnotherLosesNoFire(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.SPRUCE_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 3));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, "print(needs('charcoal', 3)['burns'])\n" + craftAll("'charcoal', 3", "charcoal", "oak_planks", "furnace"),
+			List.of("[{'minecraft:oak_planks': 2}]", "True None {} 3 1 1"), inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
 	/** A smoker within reach and no pickaxe or cobblestone: craft_here cooks the beef there and places no furnace. */
 	@GameTest(maxTicks = 220)
 	public void craftHereCooksInASmokerWithinReach(GameTestHelper helper) {
