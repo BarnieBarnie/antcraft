@@ -3,6 +3,7 @@
 	"package": "io.github.barniebarnie.antcraft.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"FishingHookRendererMixin",
 		"MouseHandlerMixin"
 	],
 	"injectors": {
