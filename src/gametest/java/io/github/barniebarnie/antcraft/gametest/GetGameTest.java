@@ -1576,27 +1576,33 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * (#595); 46,500 (26 ticks) since make_cost finds each plan's crafting table and furnace within reach (#630); 33,900
 	 * (19 ticks, 44,600 before) since make_cost bounds a tier by its needs alone before lib.craft.plan (#710), which leaves
 	 * out the plans of copper, iron and diamond; 34,500-34,700 since #728; 30,500 since make_cost puts the crafting table's
-	 * steps, planned once, before a plan's (#737), where lib.craft.plan planned each again with the table. The limit keeps
-	 * it there.
+	 * steps, planned once, before a plan's (#737), where lib.craft.plan planned each again with the table; 35,479 alone,
+	 * up to 35,880 in full runs (#941), once make_cost tells a log of one kind (#938, #941); 34,107 alone, 34,522 in a
+	 * run of Get, WoodFarm and Craft, since options scans the chests once for itself and every tool_cost, and only_kind
+	 * looks for any log once (#947). Most of it is the seven
+	 * needs of 3000 each: the wooden and stone axe, the crafting table, the stone axe's wooden pickaxe, and copper, iron
+	 * and diamond, whose needs alone bound them out. The limit leaves some 10% for full runs and small additions.
 	 */
 	@GameTest(maxTicks = 60)
 	public void chooseCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		GameTests.cost(helper, bot, "from lib.get import choose\n", "print(choose('axe', 30, radius=8)[1:3])\n",
-			List.of("('make', 'stone')"), "choose", 36_000);
+			List.of("('make', 'stone')"), "choose", 37_500);
 	}
 
 	/**
 	 * What one choose of a pickaxe costs an empty bot with no chest near (#728): the stone pickaxe's cobblestone needs a
 	 * wooden pickaxe, whose needs and plan options has as the wooden tier already, so make_cost takes them from its cache.
 	 * Measured 28,500 instructions; 34,500 before, the two needs of the wooden pickaxe made again 6,000 of it; 27,200 since
-	 * the crafting table's steps are planned once (#737).
+	 * the crafting table's steps are planned once (#737); 32,237 alone, up to 32,640 in full runs (#941); 30,865 alone,
+	 * 31,280 in a run of Get, WoodFarm and Craft, since options scans the chests once for itself and every tool_cost, and
+	 * only_kind looks for any log once (#947). The limit leaves some 10% for full runs and small additions.
 	 */
 	@GameTest(maxTicks = 60)
 	public void choosePickaxeCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		GameTests.cost(helper, bot, "from lib.get import choose\n", "print(choose('pickaxe', 30, radius=8)[1:3])\n",
-			List.of("('make', 'stone')"), "choose pickaxe", 33_000);
+			List.of("('make', 'stone')"), "choose pickaxe", 34_000);
 	}
 
 	/**

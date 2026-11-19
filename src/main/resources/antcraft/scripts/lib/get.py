@@ -541,7 +541,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once, and
     so for a raw item only its crafting table or furnace takes (#729). tools holds the tool
     costs found so far, by tool id, for one options, under "chests" the chests of lib.stock, scanned once, and under
-    "plans" the needs and lib.craft.plan of each (item, n) costed (#728), as a tier options costs may be costed again as
+    "plans" the needs and lib.craft.plan of each (item, n) costed (#728), under "logs" whether any log is near (only_kind), as a tier options costs may be costed again as
     the tool of a source (the wooden pickaxe of a stone one's cobblestone). With
     limit, None as soon as the cost is sure to be over it: a source costs at least its least, so the ore scans and tool
     costs of a dear one are left out (#582, #681)."""
@@ -588,7 +588,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             if s is None or not itself and key(raw) in GETTING:
                 return None
             what = key(raw)
-            if what == LOGS and raw != LOGS and not itself and only_kind(item, n, p, raw, k, radius):
+            if what == LOGS and raw != LOGS and not itself and only_kind(item, n, p, raw, k, radius, tools):
                 what, s = raw, logs_of(raw)
             # get takes a raw item from the chests first: the walk to the nearest, for as much as they hold (#555, #661).
             if "chests" not in tools:
@@ -631,7 +631,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         GETTING.pop()
 
 
-def only_kind(item, n, p, raw, k, radius):
+def only_kind(item, n, p, raw, k, radius, tools):
     """Whether make_cost is to cost raw, a log of one kind that p, the plan for n of item, gathers k of, as that kind,
     not as any log (key), as get gathers it once any log did not do (#933, #938): where no log of raw is within radius
     (other logs or none at all, #941), and the plan made with k logs of another kind carried still asks for raw, as oak
@@ -639,8 +639,10 @@ def only_kind(item, n, p, raw, k, radius):
     ponytail: where no log is within radius at all, only an item whose id holds raw's wood (raw less "minecraft:" and
     "_log", so oak slabs, not a wooden axe or iron one) runs the needs (3000 instructions, which choose cannot spare, and a
     fuel plan may still ask for raw); one that takes only that kind under another name, or a bamboo block's, costs as
-    any log there."""
-    if lib.find.nearest(LOGS, radius) is None:
+    any log there. tools as make_cost's: whether any log is near is found once, in tools["logs"] (#947)."""
+    if "logs" not in tools:
+        tools["logs"] = lib.find.nearest(LOGS, radius) is not None
+    if not tools["logs"]:
         if raw[10:-4] not in item:
             return False
     elif lib.find.nearest(raw, radius) is not None:
@@ -806,7 +808,9 @@ def tool_cost(kind, tier, uses, radius, tools):
     rest = uses - sum([lib.tools.uses_left(s) for s in lib.tools.carried(kind) if lib.tools.tier(s) in ok])
     if rest <= 0:
         return 0
-    found = in_chests(kind, ok, rest, radius)
+    if "chests" not in tools:
+        tools["chests"] = lib.stock.chests(radius)
+    found = in_chests(kind, ok, rest, radius, chests=tools["chests"])
     if found:
         return lib.cost.walk(pos(), found[0][0])
     tool = f"minecraft:{tier}_{kind}"
@@ -828,12 +832,13 @@ def options(kind, uses=1, tier=None, radius=32):
         found.append((work(kind, uses, None), "hand", None, None))
     if carried and need <= 0:
         found.append((work(kind, uses, lib.tools.tier(carried[0])), "carried", lib.tools.tier(carried[0]), None))
-    for chest, t in in_chests(kind, ok, need, radius):
+    # One chest scan for the chest tools and every make_cost (#947).
+    costs = {"chests": lib.stock.chests(radius)}
+    for chest, t in in_chests(kind, ok, need, radius, chests=costs["chests"]):
         found.append((lib.cost.walk(pos(), chest) + work(kind, uses, t or "wooden"), "chest", t, chest))
     # The hand and the carried tools never fail, so ensure_tool tries nothing after them: a tier dearer to make is left
     # out, told by its raw items' least costs before their ore scans (a diamond axe for a few logs, #582, #681).
     sure = min([o[0] for o in found if o[1] in ("hand", "carried")] or [None])
-    costs = {}
     # Lowest tier first, each up to the cheapest make so far (#595): a dearer tier would only follow it in the list.
     # ponytail: a dearer tier is then no fallback where the cheaper one fails; the lowest one, costed first, always is.
     limit = sure
@@ -876,11 +881,12 @@ def lasting(kind, uses, tier):
     return ok, carried, uses - sum([lib.tools.uses_left(s) for s in carried])
 
 
-def in_chests(kind, ok, uses, radius, scanning=True):
+def in_chests(kind, ok, uses, radius, scanning=True, chests=None):
     """(chest, tier) for each tool of kind of a tier in ok that lasts uses in the chests of lib.stock within radius,
-    nearest chest first; without scanning only the core and memory["chests"] (lib.stock.chests)."""
+    nearest chest first; without scanning only the core and memory["chests"] (lib.stock.chests). chests: those chests,
+    scanned already."""
     found = []
-    for chest in lib.stock.chests(radius, scanning):
+    for chest in (lib.stock.chests(radius, scanning) if chests is None else chests):
         for s in container(chest) or []:
             t = lib.tools.tier(s)
             if t in ok and matches(s, f"#minecraft:{kind}s") and lib.tools.uses_left(s) >= uses:
