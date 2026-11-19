@@ -528,6 +528,16 @@ class TaskPlannerTest {
 		assertTrue(plan.isReady(), "plan: " + plan);
 	}
 
+	/** A crafting table from three oak and three birch planks takes a birch plank for the fourth, gathering nothing (#952). */
+	@Test
+	void aCraftingTableFromTwoShortKindsOfPlanksTakesBoth() {
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.CRAFTING_TABLE, 1, Map.of(Items.OAK_PLANKS, 3, Items.BIRCH_PLANKS, 3));
+
+		assertEquals(Map.of(), plan.toGather(), "plan: " + plan);
+		assertEquals(List.of(Items.CRAFTING_TABLE), craftOrder(plan), "plan: " + plan);
+		assertEquals(4, plan.crafts().getFirst().uses().values().stream().mapToInt(Integer::intValue).sum(), "plan: " + plan);
+	}
+
 	@Test
 	void plansABedFromNothingQuickly() {
 		TaskPlanner.Plan<Item> plan = planVanilla(Items.BED.red(), 1, Map.of());

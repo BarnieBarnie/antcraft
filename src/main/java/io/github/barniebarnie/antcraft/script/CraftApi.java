@@ -98,7 +98,15 @@ public final class CraftApi {
 				throw new ScriptError("craft() n must be at least 1, not " + n);
 			}
 			Pos table = Args.absent(args[2]) ? null : Pos.of(args[2]);
-			List<Item> use = Args.absent(args[3]) ? List.of() : Values.elements(args[3]).stream().map(one -> oneItem("craft", one)).toList();
+			// use as a dict, as needs' uses gives it: how many of each at most (#952); as a list, any number of each.
+			Map<Item, Integer> use = new LinkedHashMap<>();
+			if (args[3] instanceof PyDict counts) {
+				for (Map.Entry<Object, Object> entry : counts.items()) {
+					use.put(oneItem("craft", entry.getKey()), (int) Math.clamp(Args.integer(entry.getValue()), 0, Integer.MAX_VALUE - 1));
+				}
+			} else if (!Args.absent(args[3])) {
+				use = Storage.unlimited(Values.elements(args[3]).stream().map(one -> oneItem("craft", one)).toList());
+			}
 			return craft(run, WorkApi.bot(run, call), item, n, table, use, call);
 		});
 		natives.register("needs", NEEDS_COST, call -> {
@@ -370,9 +378,9 @@ public final class CraftApi {
 	 * least {@code n}, the first recipe whose ingredients the bot carries, of those all of whose ingredients are of
 	 * {@code use} if any (#946). A 2x2 recipe is worked at once; a 3x3 one at the
 	 * crafting table at {@code table}, walked to, or at one within reach. Of interchangeable items it takes those of
-	 * {@code use} first (#930).
+	 * {@code use} first (#930), each at most its count where use is a dict, as needs' uses gives it (#952).
 	 */
-	private static Object craft(ScriptRun run, AntBot bot, Item item, long n, @Nullable Pos table, List<Item> use, NativeCall call) {
+	private static Object craft(ScriptRun run, AntBot bot, Item item, long n, @Nullable Pos table, Map<Item, Integer> use, NativeCall call) {
 		String describe = "craft(" + Values.repr(BuiltInRegistries.ITEM.getKey(item).toString()) + ", " + n + (table == null ? "" : ", table=" + table) + ")";
 		if (run.elsewhere(table)) {
 			return run.done(describe, Result.fail(Result.WRONG_DIMENSION));
@@ -386,7 +394,7 @@ public final class CraftApi {
 		List<TaskPlanner.Recipe<Item>> makeable = recipes.stream().filter(candidate -> Storage.canCraft(carried, candidate, 1)).toList();
 		// The recipe the plan chose: each of its ingredients one of use (#946); else the first makeable.
 		Optional<TaskPlanner.Recipe<Item>> recipe = makeable.stream()
-			.filter(candidate -> candidate.ingredients().keySet().stream().allMatch(set -> use.stream().anyMatch(set::contains)))
+			.filter(candidate -> candidate.ingredients().keySet().stream().allMatch(set -> use.keySet().stream().anyMatch(set::contains)))
 			.findFirst().or(() -> makeable.stream().findFirst());
 		if (recipe.isEmpty()) {
 			return run.done(describe, Result.fail(Result.MISSING_INGREDIENTS));
@@ -402,8 +410,10 @@ public final class CraftApi {
 	}
 
 	/** Works {@code recipe} until it made at least {@code n} items; its value is how many it made. */
-	private static Result craftTimes(AntBot bot, TaskPlanner.Recipe<Item> recipe, long n, List<Item> use) {
+	private static Result craftTimes(AntBot bot, TaskPlanner.Recipe<Item> recipe, long n, Map<Item, Integer> uses) {
 		Container carried = BotHands.carried(bot);
+		// Counted down over the crafts of this call.
+		Map<Item, Integer> use = new LinkedHashMap<>(uses);
 		long made = 0;
 		while (made < n) {
 			if (!Storage.canCraft(carried, recipe, 1)) {
@@ -421,10 +431,10 @@ public final class CraftApi {
 	private static final class AtTable extends WorkApi.OnBlock {
 		private final TaskPlanner.Recipe<Item> recipe;
 		private final long n;
-		private final List<Item> use;
+		private final Map<Item, Integer> use;
 		private final String describe;
 
-		AtTable(ScriptRun run, AntBot bot, Pos table, TaskPlanner.Recipe<Item> recipe, long n, List<Item> use, String describe) {
+		AtTable(ScriptRun run, AntBot bot, Pos table, TaskPlanner.Recipe<Item> recipe, long n, Map<Item, Integer> use, String describe) {
 			super(run, bot, table);
 			this.recipe = recipe;
 			this.n = n;

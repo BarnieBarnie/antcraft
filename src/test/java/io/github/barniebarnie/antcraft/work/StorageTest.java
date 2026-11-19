@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -90,6 +91,24 @@ class StorageTest {
 		assertTrue(Storage.craft(container, table, List.of(Items.BIRCH_PLANKS)));
 		assertEquals(3, container.countItem(Items.OAK_PLANKS));
 		assertEquals(0, container.countItem(Items.BIRCH_PLANKS));
+	}
+
+	/**
+	 * use with counts (#952): a table the plan makes of three oak planks and one birch takes no more oak than that, though
+	 * four oak are carried, as the fourth is kept for a later step; the counts last over the crafts of one call.
+	 */
+	@Test
+	void aCraftTakesNoMoreOfAnItemToUseThanItsCount() {
+		TaskPlanner.Recipe<Item> table = new TaskPlanner.Recipe<>(Items.CRAFTING_TABLE, 1, Map.of(new LinkedHashSet<>(List.of(Items.OAK_PLANKS, Items.BIRCH_PLANKS)), 4));
+		SimpleContainer container = full(new ItemStack(Items.OAK_PLANKS, 4), new ItemStack(Items.BIRCH_PLANKS, 6), ItemStack.EMPTY);
+		Map<Item, Integer> use = new LinkedHashMap<>(Map.of(Items.OAK_PLANKS, 3));
+		use.put(Items.BIRCH_PLANKS, 5);
+		assertTrue(Storage.craft(container, table, use));
+		assertEquals(1, container.countItem(Items.OAK_PLANKS));
+		assertEquals(5, container.countItem(Items.BIRCH_PLANKS));
+		assertTrue(Storage.craft(container, table, use));
+		assertEquals(1, container.countItem(Items.OAK_PLANKS));
+		assertEquals(1, container.countItem(Items.BIRCH_PLANKS));
 	}
 
 	@Test

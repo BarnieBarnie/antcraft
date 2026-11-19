@@ -35,7 +35,7 @@ def craft_all(item, n=1, table=None, furnace=None):
         return result("missing_ingredients", None, plan["gather"])
     for (step, k, how), uses, burns in zip(plan["crafts"], plan["uses"], plan["burns"]):
         if how == "craft":
-            r = craft(step, k, table=table, use=list(uses))
+            r = craft(step, k, table=table, use=uses)
             if not r:
                 return lacking(result(r.reason), item, n, step, k)
             continue
@@ -138,7 +138,7 @@ def craft_table(p, item, n):
     """Crafts the crafting table plan(item, n) p plans first, by its steps up to the table, each of the items the plan
     uses for it (#930, #935): of what the bot has most, the table might take planks the plan keeps for item."""
     for (step, k, how), uses in zip(p["crafts"], p["uses"]):
-        r = craft(step, k, use=list(uses))
+        r = craft(step, k, use=uses)
         if not r:
             return lacking(result(r.reason), item, n, step, k)
         if step == "minecraft:crafting_table":
@@ -226,13 +226,13 @@ def craft_stations(p):
     spot = placed = None
     try:
         for (step, k, how), uses in zip(p["crafts"], p["uses"]):
-            r = craft(step, k, table=spot, use=list(uses))
+            r = craft(step, k, table=spot, use=uses)
             if not r and r.reason == "no_table" and spot is None:
                 spot = find_nearest("crafting_table", radius=REACH)
                 if spot is None and count("crafting_table"):
                     spot = placed = place_beside("crafting_table")
                 if spot is not None:
-                    r = craft(step, k, table=spot, use=list(uses))
+                    r = craft(step, k, table=spot, use=uses)
             if not r:
                 return result(r.reason)
         return result()

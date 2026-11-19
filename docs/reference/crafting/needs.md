@@ -83,7 +83,7 @@ else:
     table = find_nearest("crafting_table", radius=16)
     for (item, n, how), uses in zip(r["crafts"], r["uses"]):
         if how == "craft":
-            craft(item, n, table=table, use=list(uses))
+            craft(item, n, table=table, use=uses)
         else:
             for what, m in uses.items():
                 smelt(what, m, fuel=r["fuel"][item])

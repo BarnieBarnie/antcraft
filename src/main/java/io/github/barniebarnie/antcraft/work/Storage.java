@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.work;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -160,16 +161,16 @@ public final class Storage {
 	 * craft that uses up a whole stack has that slot for its result.
 	 */
 	public static boolean fits(Container container, TaskPlanner.Recipe<Item> recipe) {
-		return fits(container, recipe, List.of());
+		return fits(container, recipe, Map.of());
 	}
 
-	/** {@link #fits(Container, TaskPlanner.Recipe)}, the ingredients taken as {@link #craft(Container, TaskPlanner.Recipe, List)} takes them. */
-	public static boolean fits(Container container, TaskPlanner.Recipe<Item> recipe, List<Item> use) {
+	/** {@link #fits(Container, TaskPlanner.Recipe)}, the ingredients taken as {@link #craft(Container, TaskPlanner.Recipe, Map)} takes them. */
+	public static boolean fits(Container container, TaskPlanner.Recipe<Item> recipe, Map<Item, Integer> use) {
 		List<ItemStack> slots = new ArrayList<>();
 		for (int i = 0; i < container.getContainerSize(); i++) {
 			slots.add(container.getItem(i).copy());
 		}
-		takeIngredients(slots, recipe, use);
+		takeIngredients(slots, recipe, new LinkedHashMap<>(use));
 		ItemStack result = new ItemStack(recipe.output(), recipe.count());
 		int room = 0;
 		for (ItemStack slot : slots) {
@@ -187,14 +188,28 @@ public final class Storage {
 	 * and returns false if the container lacks an ingredient or has no room for the result.
 	 */
 	public static boolean craft(Container container, TaskPlanner.Recipe<Item> recipe) {
-		return craft(container, recipe, List.of());
+		return craft(container, recipe, Map.of());
+	}
+
+	/** {@link #craft(Container, TaskPlanner.Recipe, Map)} with no limit on how many of each of {@code use} it takes. */
+	public static boolean craft(Container container, TaskPlanner.Recipe<Item> recipe, List<Item> use) {
+		return craft(container, recipe, unlimited(use));
+	}
+
+	/** Each of {@code use}, in its order, with no limit on how many of it to take. */
+	public static Map<Item, Integer> unlimited(List<Item> use) {
+		Map<Item, Integer> unlimited = new LinkedHashMap<>();
+		use.forEach(item -> unlimited.put(item, Integer.MAX_VALUE));
+		return unlimited;
 	}
 
 	/**
 	 * {@link #craft(Container, TaskPlanner.Recipe)}, but of interchangeable items those of {@code use} first, in its order
-	 * (#930): what a plan made its crafting table of, not what there is most of.
+	 * (#930): what a plan made its crafting table of, not what there is most of. Each at most its count in {@code use},
+	 * which this counts down, so over the crafts of one call a plan's three oak planks and one birch take no fourth oak
+	 * kept for a later step (#952); once the counts are spent, the rest as without use.
 	 */
-	public static boolean craft(Container container, TaskPlanner.Recipe<Item> recipe, List<Item> use) {
+	public static boolean craft(Container container, TaskPlanner.Recipe<Item> recipe, Map<Item, Integer> use) {
 		if (!canCraft(container, recipe, 1) || !fits(container, recipe, use)) {
 			return false;
 		}
@@ -211,21 +226,32 @@ public final class Storage {
 	/**
 	 * Shrinks the stacks by the ingredients of one craft: of interchangeable items, the one there is most of first, as
 	 * the planner takes them (TaskPlanner needAny), so a craft leaves what the plan keeps for a later step (#925); each
-	 * from the first slots first. Those of {@code use} come before the rest, in its order (#930).
+	 * from the first slots first. Those of {@code use} come before the rest, in its order (#930), first each up to its
+	 * count, which is counted down (#952).
 	 */
-	private static void takeIngredients(List<ItemStack> slots, TaskPlanner.Recipe<Item> recipe, List<Item> use) {
+	private static void takeIngredients(List<ItemStack> slots, TaskPlanner.Recipe<Item> recipe, Map<Item, Integer> use) {
 		Map<Item, Integer> stock = new HashMap<>();
 		slots.forEach(stack -> stock.merge(stack.getItem(), stack.getCount(), Integer::sum));
+		List<Item> order = new ArrayList<>(use.keySet());
 		for (Map.Entry<Set<Item>, Integer> ingredient : recipe.ingredients().entrySet()) {
 			int needed = ingredient.getValue();
 			List<Item> byStock = new ArrayList<>(ingredient.getKey());
-			byStock.sort(Comparator.comparingInt((Item option) -> use.contains(option) ? use.indexOf(option) : use.size())
+			byStock.sort(Comparator.comparingInt((Item option) -> order.contains(option) ? order.indexOf(option) : order.size())
 				.thenComparing(Comparator.comparingInt((Item option) -> stock.getOrDefault(option, 0)).reversed()));
-			for (Item option : byStock) {
-				for (int i = 0; i < slots.size() && needed > 0; i++) {
-					ItemStack stack = slots.get(i);
-					if (stack.is(option)) {
-						needed -= stack.split(needed).getCount();
+			for (boolean limited : new boolean[] {true, false}) {
+				for (Item option : byStock) {
+					int wanted = Math.min(needed, limited ? use.getOrDefault(option, 0) : needed);
+					int taken = 0;
+					for (int i = 0; i < slots.size() && taken < wanted; i++) {
+						ItemStack stack = slots.get(i);
+						if (stack.is(option)) {
+							taken += stack.split(wanted - taken).getCount();
+						}
+					}
+					needed -= taken;
+					int left = use.getOrDefault(option, Integer.MAX_VALUE);
+					if (taken > 0 && left != Integer.MAX_VALUE) {
+						use.put(option, Math.max(0, left - taken));
 					}
 				}
 			}

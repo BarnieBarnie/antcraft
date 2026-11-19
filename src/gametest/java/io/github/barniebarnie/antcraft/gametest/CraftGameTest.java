@@ -329,6 +329,36 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("True None {} 1 2 2 0 0"));
 	}
 
+	/**
+	 * Three oak and three birch planks: the table takes both kinds, as needs lists them, and nothing is gathered (#952).
+	 */
+	@GameTest(maxTicks = 20)
+	public void craftAllMakesATableOfTwoKindsOfPlanks(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 3));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 3));
+		expect(helper, bot, "n = needs('crafting_table', 1)\nprint(n['gather'], sum(n['uses'][0].values()), len(n['uses'][0]))\n"
+				+ "import lib.craft\nr = lib.craft.craft_all('crafting_table')\n"
+				+ "print(r['ok'], r['reason'], r['missing'], count('crafting_table'), count('oak_planks') + count('birch_planks'))\n",
+			List.of("{} 4 2", "True None {} 1 2"));
+	}
+
+	/**
+	 * craft with use a dict, as needs' uses gives it, takes at most that many of each though more oak is carried; with
+	 * use a list of both kinds, a table of three birch planks and one oak (#952).
+	 */
+	@GameTest(maxTicks = 20)
+	public void craftWithTwoKindsAsUseCraftsATableOfBoth(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 7));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 4));
+		expect(helper, bot, "r = craft('crafting_table', use={'oak_planks': 3, 'birch_planks': 1})\n"
+				+ "print(r.ok, count('crafting_table'), count('oak_planks'), count('birch_planks'))\n"
+				+ "r = craft('crafting_table', use=['birch_planks', 'oak_planks'])\n"
+				+ "print(r.ok, count('crafting_table'), count('oak_planks'), count('birch_planks'))\n",
+			List.of("True 1 4 3", "True 2 3 0"));
+	}
+
 	/** No cobblestone: it says so and crafts nothing, not even the planks it could. */
 	@GameTest(maxTicks = 20)
 	public void craftAllWithRawItemsMissingCraftsNothing(GameTestHelper helper) {
@@ -708,15 +738,16 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * Four oak planks to burn and four birch: the table it crafts first takes the planks the plan of the stations with the
-	 * fuel planned first uses, the birch, not the oak a plan of the stations first takes, so an oak plank is left to burn (#935).
+	 * Four oak planks to burn and three birch: the table it crafts first takes the planks the plan of the stations with the
+	 * fuel planned first uses, not the oak a plan of the stations first takes, so an oak plank is left to burn (#935); of
+	 * each kind no more than the plan uses, as the table takes some of both (#952).
 	 */
 	@GameTest(maxTicks = 680)
 	public void smeltHereCraftsItsStationsFromWhatThePlanUses(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
 		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
-		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 3));
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
 		expect(helper, bot, smeltHere("'raw_iron', 1, fuel='oak_planks'", "iron_ingot", "furnace", "crafting_table", "cobblestone"),
