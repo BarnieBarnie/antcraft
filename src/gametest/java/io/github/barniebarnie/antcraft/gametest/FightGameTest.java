@@ -737,6 +737,26 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot that has struck nothing yet, such as one just spawned, has its weapon ready: it steps in and strikes a creeper
+	 * lit beside it at once, rather than wait out the 13 ticks of an iron sword, by when the fuse is too far gone to step in
+	 * (#942). The kite goal took the weapon for ready only 13 ticks after the bot spawned, so where its melee goal walked
+	 * it up to the creeper of {@link #aBotCorneredInADeadEndStrikesTheLitCreeperAndOutlivesItsBlast} in its first ticks,
+	 * which lit the fuse, it never struck, in about 1 copy in 5.
+	 */
+	// Measured: passes at tick 6 (red: not struck, swell 0.5 on tick 14).
+	@GameTest(maxTicks = 12)
+	public void aBotThatStruckNothingYetStrikesALitCreeperBesideItAtOnce(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.5, 1, 2.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(2.5, 1, 4.5));
+		creeper.setTarget(bot);
+		creeper.setSwellDir(1);
+		GameTests.onEnd(helper, creeper::discard);
+		float health = creeper.getHealth();
+		helper.succeedWhen(() -> helper.assertTrue(creeper.getHealth() < health, "not struck, swell " + creeper.getSwelling(1)));
+	}
+
+	/**
 	 * A bot in a 1-wide dead end with a creeper lit in front of it is cornered: it goes at the creeper and strikes it, which
 	 * knocks it back, rather than stand (#725). It cannot back off 7 blocks, and an iron sword does not kill the creeper
 	 * within its 30-tick fuse, so the blast still catches it. It does not go at the creeper again with the fuse far gone
@@ -744,7 +764,9 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * keeps 12.7. A death would be accepted, as it costs only what the bot carries (docs/features/bots.md, Fighting
 	 * creepers; #733), but this one was avoidable. Digging or pillaring out of the blast is not worth its code.
 	 */
-	// Measured: passes at tick 39 to 48 (red, striking again: the bot dead at tick 60, struck the creeper twice).
+	// Measured: passes at tick 33 to 57 in 300 of 300 copies (#942; before, 239 of 300: a bot that walked up in its first
+	// ticks, lighting the fuse, took its weapon for not ready until tick 13 and never struck); red, striking again: the bot
+	// dead at tick 60, struck the creeper twice.
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)
 	public void aBotCorneredInADeadEndStrikesTheLitCreeperAndOutlivesItsBlast(GameTestHelper helper) {
 		deadEnd(helper);
@@ -851,6 +873,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 9));
 		creeper.setNoAi(true);
 		creeper.setSwellDir(1);
+		// Struck it just now: the weapon is ready only after the 13 ticks of an iron sword, nearly half the fuse (#942).
+		bot.setLastHurtMob(creeper);
 		helper.onEachTick(() -> {
 			if (creeper.getSwelling(1) >= 0.95F) {
 				creeper.setSwellDir(-1);

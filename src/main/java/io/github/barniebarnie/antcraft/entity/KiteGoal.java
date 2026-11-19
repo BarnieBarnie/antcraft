@@ -237,7 +237,10 @@ public final class KiteGoal extends Goal {
 		this.bot.getLookControl().setLookAt(creeper);
 		// The weapon out before it asks whether it is ready, as the reflexes do: not the bow the shoot goal left in hand (#734).
 		Tools.equipBestWeapon(this.bot);
-		boolean ready = this.bot.tickCount - this.bot.getLastHurtMobTimestamp() >= BotHands.strikeTicks(this.bot);
+		// Ready too where it has struck nothing yet, or not for a long while (LivingEntity forgets the mob): the timestamp is 0
+		// then, and a bot just spawned or loaded counts its ticks from 0, so it waited out a blow it never struck (#942).
+		boolean ready = this.bot.getLastHurtMob() == null
+			|| this.bot.tickCount - this.bot.getLastHurtMobTimestamp() >= BotHands.strikeTicks(this.bot);
 		if (ready && BotHands.inStrikingReach(this.bot, creeper)) {
 			BotHands.strike(this.bot, (ServerLevel) this.bot.level(), creeper);
 			this.cornered = false;
