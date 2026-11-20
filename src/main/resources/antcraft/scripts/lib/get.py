@@ -40,6 +40,12 @@ BRANCH = 37
 STEP_UP = 10
 # The trip of an ore with no best_y, such as one a script adds. At 1000 the bootstrap tests dug for coal and failed.
 DEEP = 2000
+# How many branches of lib.dig.LENGTH lib.dig.ore digs on average for an ore none is exposed of (#984); 1 where not
+# listed. Diamond from a Monte Carlo of the 26.3 diamond ore features (small, medium, large and buried; OreFeature
+# ported) in solid deepslate, branching at -59 and mining the veins of its walls and ceiling as lib.mine.veins: a branch
+# finds 0.93 diamonds on average and none four times in five, so ore digs 3.0 of its lib.dig.ROUNDS branches for one
+# diamond, 3.6 for six and 3.9 for twelve. ponytail: the middle of those for any count; the commoner ores, one branch.
+BRANCHES = {"diamond": 3.5}
 # The items being got, outermost first: a tool whose recipe needs one of them is not made for it.
 GETTING = []
 
@@ -51,10 +57,13 @@ class Source:
     the height it digs down to for it (lib.dig.best_y; None: DEEP); near the block or tag do gets it from, where none
     within radius means there is nothing to get (None: not known), and keep(p) whether do would take the one at p (None:
     any, as the leaves sources take no persistent leaves, #649); drops(level) the mean items a block drops with a tool of
-    that Fortune level (None: one each), so estimate is the ticks of one block then (#754)."""
+    that Fortune level (None: one each), so estimate is the ticks of one block then (#754); branches how many branches
+    the trip digs on average (BRANCHES)."""
 
-    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None, near=None, y=None, keep=None, drops=None):
+    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None, near=None, y=None, keep=None, drops=None,
+                 branches=1):
         self.do = do
+        self.branches = branches
         self.drops = drops
         self.keep = keep
         self.y = y
@@ -92,20 +101,21 @@ class Source:
         return min(self.estimate, min([lib.cost.BREAK["ore"][t] for t in ok])) * n
 
     def cost(self, n, radius, start=None):
-        """(ticks, tier) to get n: estimate each, and deep(y) once more where none of ore is exposed within radius (one
-        flight of stairs reaches a vein); the tier of a pickaxe source is that of the nearest exposed ore block
-        (lib.tools.tier_for its Pos), so a modded ore in a needs_*_tool tag gets the tier it needs, else self.tier. Where
-        one is exposed, its vein (ore_vein), up to n, costs lib.cost.walk from start (None: the bot's Pos) to that block
-        (#675) and the mining of each, with the best pickaxe carried where it drops the ore, else with that tier, as
-        lib.dig.ore mines a vein from where it stands (#661); the rest costs the estimate, which counts a walk, each. n
-        counts as blocks(n), the blocks that drop it.
+        """(ticks, tier, dug) to get n: estimate each, and deep(y, branches) once more where none of ore is exposed
+        within radius (one flight of stairs reaches a vein); the tier of a pickaxe source is that of the nearest exposed
+        ore block (lib.tools.tier_for its Pos), so a modded ore in a needs_*_tool tag gets the tier it needs, else
+        self.tier. Where one is exposed, its vein (ore_vein), up to n, costs lib.cost.walk from start (None: the bot's
+        Pos) to that block (#675) and the mining of each, with the best pickaxe carried where it drops the ore, else with
+        that tier, as lib.dig.ore mines a vein from where it stands (#661); the rest costs the estimate, which counts a
+        walk, each. n counts as blocks(n), the blocks that drop it. dug is the blocks the trip digs besides those, which
+        its tool wears on too (trip; 0 where one is exposed or there is no ore, #984).
         ponytail: the nearest vein only."""
         n = self.blocks(n)
         p, tier, once, each = self.parts(radius, start)
         if p is None:
-            return once + each * n, tier
+            return once + each * n, tier, 0 if self.ore is None else trip(self.y, self.branches)
         vein = max(1, min(n, len([b for b in ore_vein(p) if lib.find.allowed(b)])))
-        return once + each * vein + self.estimate * (n - vein), tier
+        return once + each * vein + self.estimate * (n - vein), tier, 0
 
     def parts(self, radius, start=None):
         """(p, tier, once, each) of cost: the nearest exposed ore block within radius (None: none, or no ore) and the
@@ -115,7 +125,7 @@ class Source:
         p = None if self.ore is None else lib.find.exposed(self.ore, radius)
         tier = lib.tools.tier_for(p) if p is not None and self.tool == "pickaxe" else self.tier
         if p is None:
-            return None, tier, deep(self.y) if self.ore is not None else 0, self.estimate
+            return None, tier, deep(self.y, self.branches) if self.ore is not None else 0, self.estimate
         best = lib.tools.best("pickaxe")
         mine = tier
         if best is not None and tier in lib.tools.TIERS and lib.tools.rank(best) <= lib.tools.TIERS.index(tier):
@@ -123,13 +133,21 @@ class Source:
         return p, tier, lib.cost.walk(pos() if start is None else start, p), lib.cost.breaking(1, "ore", mine)
 
 
-def deep(y):
-    """The ticks of lib.dig.ore's trip from the bot's height down to y, one branch of lib.dig.LENGTH and back up; DEEP
-    where y is None. ponytail: one branch, from the bot's feet; a vein found sooner or a second branch is not costed."""
+def deep(y, branches=1):
+    """The ticks of lib.dig.ore's trip from the bot's height down to y, branches of lib.dig.LENGTH (BRANCHES) and back
+    up; DEEP where y is None. ponytail: from the bot's feet; a vein found sooner is not costed."""
     if y is None:
         return DEEP
     down = max(0, pos().y - y)
-    return (STEP_DOWN + STEP_UP) * down + BRANCH * lib.dig.LENGTH
+    return (STEP_DOWN + STEP_UP) * down + int(BRANCH * lib.dig.LENGTH * branches)
+
+
+def trip(y, branches=1):
+    """The blocks deep(y, branches)'s trip digs (#984): 3 a step of lib.dig.stairs_to and 2 a block of branch; 0 where y
+    is None. ponytail: as through solid stone, where a cave spares some."""
+    if y is None:
+        return 0
+    return 3 * max(0, pos().y - y) + int(2 * lib.dig.LENGTH * branches)
 
 
 def dig_up(what):
@@ -179,7 +197,8 @@ TRIP_Y = {"emerald": 236}
 def ore(item, block, estimate):
     """The Source of a raw item lib.dig.ore digs, with a pickaxe that drops block."""
     return Source(lambda n, radius: lib.dig.ore(item, n, radius), "pickaxe", lib.tools.tier_for(block), estimate,
-                  lib.dig.ORES[item], y=TRIP_Y.get(item, lib.dig.best_y(item)), drops=ORE_DROPS.get(item, ore_drops))
+                  lib.dig.ORES[item], y=TRIP_Y.get(item, lib.dig.best_y(item)), drops=ORE_DROPS.get(item, ore_drops),
+                  branches=BRANCHES.get(item, 1))
 
 
 # Raw items get gathers, by id ("#minecraft:logs" for any log). A script adds its own: SOURCES["minecraft:clay_ball"] =
@@ -325,13 +344,13 @@ class Hunt(Source):
         return len(self.near_mobs(radius)) > 0
 
     def cost(self, n, radius, start=None):
-        """(ticks, None): the walk from start (None: the bot's Pos) to the nearest animal, a kill of its health for each
+        """(ticks, None, 0): the walk from start (None: the bot's Pos) to the nearest animal, a kill of its health for each
         per of n, with a sword where one is carried, else by hand, and BETWEEN from each animal to the next."""
         mobs = self.near_mobs(radius)
         walk = 0 if not mobs else lib.cost.walk(pos() if start is None else start, mobs[0].pos)
         kills = max(1, int(-(-n // self.per)))
         kill = (SWORD_KILL if count("#minecraft:swords") else HAND_KILL) * self.health
-        return int(walk + kills * kill + (kills - 1) * BETWEEN), None
+        return int(walk + kills * kill + (kills - 1) * BETWEEN), None, 0
 
     def hunt(self, n, radius):
         target = count(self.item) + n
@@ -607,7 +626,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     tier any needs; None where a raw item has no source, or it or that tool is being got or costed, or where item is
     raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once, and
     so for a raw item only its crafting table or furnace takes (#729). tools holds the tool
-    costs found so far, by tool id, for one options, under "chests" the chests of lib.stock, scanned once, and under
+    costs found so far, by (tool id, count), for one options, under "chests" the chests of lib.stock, scanned once, and under
     "plans" the needs, lib.craft.plan and fuel costs of each (item, n) costed (#728, #961), under "fuel" the fuel_costs
     get plans with, measured once and only where a plan smelts and gathers a fuel (#961), under "logs" whether any log is near (only_kind), as a tier options costs may be costed again as
     the tool of a source (the wooden pickaxe of a stone one's cobblestone). With
@@ -685,7 +704,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             if limit is not None and ticks + (0 if key(raw) == COAL else s.least(k) + smelted_pickaxe(s, tools)) > limit:
                 return None
             # The source's walk starts at the chest get took the rest from.
-            c, tier = s.cost(k, radius, chests[0] if chests else None)
+            c, tier, dug = s.cost(k, radius, chests[0] if chests else None)
             if key(raw) == COAL and LOGS not in GETTING:
                 wood = charcoal(k, radius)[1]
                 if wood < c:
@@ -694,7 +713,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             ticks += c
             if s.tool and tier != "hand":
                 t, uses = need.get(s.tool, ("wooden", 0))
-                need[s.tool] = (min([t, tier or "wooden"], key=lib.tools.TIERS.index), uses + k)
+                need[s.tool] = (min([t, tier or "wooden"], key=lib.tools.TIERS.index), uses + k + dug)
         ticks += stations(p, back, smelt)
         if limit is not None and ticks > limit:
             return None
@@ -885,8 +904,8 @@ def stored(p, item, n, radius, tools, costs=None):
 
 def tool_cost(kind, tier, uses, radius, tools):
     """0 where the bot carries tools of kind of at least tier that last uses; else the walk to the nearest chest of
-    lib.stock within radius with one that lasts the rest; else make_cost of one of tier.
-    ponytail: one tool, made, where no chest has one that lasts."""
+    lib.stock within radius with one that lasts the rest; else make_cost of as many of tier as the rest takes (#984).
+    ponytail: a chest tool must last the rest on its own."""
     ok = lib.tools.TIERS[:lib.tools.TIERS.index(tier) + 1]
     rest = uses - sum([lib.tools.uses_left(s) for s in lib.tools.carried(kind) if lib.tools.tier(s) in ok])
     if rest <= 0:
@@ -897,9 +916,10 @@ def tool_cost(kind, tier, uses, radius, tools):
     if found:
         return lib.cost.walk(pos(), found[0][0])
     tool = f"minecraft:{tier}_{kind}"
-    if tool not in tools:
-        tools[tool] = make_cost(tool, 1, radius, tools)
-    return tools[tool]
+    n = -(-rest // lib.cost.USES[tier])
+    if (tool, n) not in tools:
+        tools[(tool, n)] = make_cost(tool, n, radius, tools)
+    return tools[(tool, n)]
 
 
 def options(kind, uses=1, tier=None, radius=32):
