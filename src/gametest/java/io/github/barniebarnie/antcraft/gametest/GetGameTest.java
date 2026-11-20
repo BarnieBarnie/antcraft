@@ -1800,6 +1800,27 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * What options of a big smelt costs (#973): 8 iron pickaxes for 2000 uses, 24 ingots of the raw iron carried, with no
+	 * chest near. #963 made make_cost's bound (least_make) leave out the logs a plan burns, so it was feared the bound
+	 * would be weaker for big smelts. It is not: needs without fuel costs picks fuel by item count, so it burns coal (8
+	 * items) for all but a remainder of a few items, at most a couple of logs' planks whatever the smelt's size (24 ingots
+	 * burn 3 coal, 64 burn 8; 9 burn 6 planks), and charcoal never. Measured 84,740 instructions (43 ticks), 84,447 with
+	 * #963 reverted, the same ways; the 293 more are the sum of the burns. Only a limit within those few logs' least over
+	 * the bound costs more: make_cost of 3 iron pickaxes (6 planks burnt, bound 2,073, 2,183 before #963) with a limit
+	 * of 2,120 ran 25,422 instructions, 1,820 before, as it planned the tier. ponytail: so the fuel's own bound (the
+	 * cheaper of coal's least and the logs') is left out; it would win back part of a band some 110 ticks wide. The limit
+	 * leaves some 10% for full runs.
+	 */
+	@GameTest(maxTicks = 90)
+	public void optionsOfABigSmeltCost(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 24));
+		GameTests.cost(helper, bot, "from lib.get import options\n",
+			"print([o[2] for o in options('pickaxe', 2000, radius=8)])\n",
+			List.of("['diamond', 'iron', 'stone', 'wooden']"), "options big smelt", 93_000);
+	}
+
+	/**
 	 * An empty bot with no chest near (#710): make_cost of an iron axe with a limit of 300 is None without
 	 * lib.craft.plan and its second needs, as the needs of the axe alone cost more: SMELT for each of three iron ingots,
 	 * the least of their raw iron and of the sticks' log, and the furnace and crafting table mined back (stations).
