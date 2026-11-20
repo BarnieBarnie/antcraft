@@ -24,6 +24,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.TicketStorage;
 import net.minecraft.world.level.portal.PortalShape;
 import net.minecraft.world.item.ItemStack;
@@ -498,6 +499,70 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(level.getEntity(id) instanceof AntBot reloaded && reloaded.blockPosition().equals(newHome)
 				&& reloaded.getScript() != null && reloaded.getScript().name().equals(DefaultScripts.IDLE),
 				"reloaded bot not at its new home running idle.py: " + level.getEntity(id));
+		});
+	}
+
+	/**
+	 * A bot with no AI holds no chunk ticket, though its script runs (#983): it can do nothing there. Once its AI is back
+	 * it holds one again and its script goes on where it was. A portal's ticket keeps the far spot ticking meanwhile, so
+	 * the bot stays in the world to be watched.
+	 */
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 150)
+	public void aBotWithNoAiHoldsNoChunkTicketUntilItsAiIsBack(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		ChunkPos chunk = new ChunkPos(-1875, 1875 + 16 * FAR_SPOTS.getAndIncrement());
+		BlockPos start = new BlockPos(chunk.getBlockX(8), 300, chunk.getBlockZ(8));
+		for (int cx = chunk.x() - 3; cx <= chunk.x() + 3; cx++) {
+			for (int cz = chunk.z() - 3; cz <= chunk.z() + 3; cz++) {
+				level.getChunk(cx, cz);
+			}
+		}
+		level.setBlock(start.below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+		level.getChunkSource().addTicketWithRadius(TicketType.PORTAL, chunk, 3);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		GameTests.onEnd(helper, bot::discard);
+		bot.teleportTo(start.getX() + 0.5, start.getY(), start.getZ() + 0.5);
+		BotScripts.failOnError(helper, bot);
+		BotScripts.run(bot, "n = 0\nwhile True:\n    n += 1\n    print(n)\n    wait(1)\n");
+		GameTests.waitAtMost(helper, () -> !level.isPositionEntityTicking(start), () -> "bot not ticking on its spot");
+		// Ticks since the AI was taken (-1 before), and the lines printed then.
+		long[] frozen = {-1};
+		int[] held = {-1};
+		helper.onEachTick(() -> {
+			level.getChunkSource().addTicketWithRadius(TicketType.PORTAL, chunk, 3);
+			int printed = printed(bot).size();
+			if (frozen[0] < 0) {
+				if (printed >= 2) {
+					bot.setNoAi(true);
+					frozen[0] = 0;
+					held[0] = printed;
+				}
+				return;
+			}
+			if (!bot.isNoAi()) {
+				return;
+			}
+			frozen[0]++;
+			if (printed != held[0]) {
+				helper.fail("printed " + printed + " lines with no AI, " + held[0] + " when it was taken");
+			}
+			// The ticket lasts 40 ticks once it is no longer renewed.
+			if (frozen[0] == 50) {
+				if (hasBotTicket(level, chunk)) {
+					helper.fail("a bot with no AI still holds its chunk ticket");
+				}
+				bot.setNoAi(false);
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(frozen[0] >= 50 && !bot.isNoAi(), "AI not back yet");
+			helper.assertTrue(hasBotTicket(level, chunk), "the bot holds no chunk ticket with its AI back");
+			List<String> printed = printed(bot);
+			helper.assertTrue(printed.size() >= held[0] + 2, "printed " + printed);
+			for (int i = 0; i < printed.size(); i++) {
+				helper.assertTrue(printed.get(i).equals(String.valueOf(i + 1)), "the script started over: " + printed);
+			}
 		});
 	}
 

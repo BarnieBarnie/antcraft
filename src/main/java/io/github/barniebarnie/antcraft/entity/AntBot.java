@@ -460,8 +460,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		super.tick();
 		this.sayBubble.follow();
 		// After the move, so the ticket goes along with the bot into the next chunk before it stops ticking there.
-		// An idle bot holds its chunks only while it walks (home): waiting there, it lets them unload.
-		ScriptRun running = this.isRunningScript() ? this.script : null;
+		// An idle bot holds its chunks only while it walks (home): waiting there, it lets them unload. One with no AI holds
+		// none (#983): its script waits for the AI, and if the chunk unloads meanwhile the bot is saved with it and resumes.
+		ScriptRun running = this.isRunningScript() && !this.isNoAi() ? this.script : null;
 		if (running != null && (!this.idling || running.walking()) && AntCraftConfig.botsLoadChunks()) {
 			BotChunks.keep(this);
 		}
