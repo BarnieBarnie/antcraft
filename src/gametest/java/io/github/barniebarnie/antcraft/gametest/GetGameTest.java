@@ -1851,7 +1851,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * of 2,120 ran 25,422 instructions, 1,820 before, as it planned the tier. ponytail: so the fuel's own bound (the
 	 * cheaper of coal's least and the logs') is left out; it would win back part of a band some 110 ticks wide. The limit
 	 * leaves some 10% for full runs. Since #984 iron ranks before diamond (eightIronPickaxesCostLessThanTwoDiamondOnes...):
-	 * 83,568 instructions in a class run.
+	 * 83,568 instructions in a class run. Since #985 diamond costs more than stone and is left out: 69,791.
 	 */
 	@GameTest(maxTicks = 90)
 	public void optionsOfABigSmeltCost(GameTestHelper helper) {
@@ -1859,18 +1859,18 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 24));
 		GameTests.cost(helper, bot, "from lib.get import options\n",
 			"print([o[2] for o in options('pickaxe', 2000, radius=8)])\n",
-			List.of("['iron', 'diamond', 'stone', 'wooden']"), "options big smelt", 93_000);
+			List.of("['iron', 'stone', 'wooden']"), "options big smelt", 77_000);
 	}
 
 	/**
 	 * Eight iron pickaxes from the raw iron carried cost less than two diamond ones in optionsOfABigSmeltCost's setup
-	 * (#979, #984), and the parts are right: 21,817 = 16,000 work (8 ticks a stone) + 4,800 to smelt 24 ingots + 1,017
-	 * (logs for sticks and fuel, the furnace's cobblestone, the wooden pickaxe, stations); 22,454 = 12,000 work (2000
-	 * stone at 6 ticks) + 8,272 for the 6 diamonds (deep(-59, 3.5) from the bot's y 7: 66 steps down and up at 58, 3,828,
-	 * and the 3.5 branches of 32 at 37 that lib.dig.ore digs on average, 4,144; then 50 each) + 1,997 for the two iron
-	 * pickaxes that dig the trip (its 422 blocks and the 6 diamonds, more than one's 250 uses; 6 of the raw iron smelted,
-	 * 1,200, the furnace's cobblestone with a wooden pickaxe, logs) + 185 (sticks' logs, crafting table). With one branch
-	 * and one iron pickaxe (#979) diamond was 18,839 and ranked first.
+	 * (#979, #984, #985), and the parts are right: 21,817 = 16,000 work (8 ticks a stone) + 4,800 to smelt 24 ingots +
+	 * 1,017 (logs for sticks and fuel, the furnace's cobblestone, the wooden pickaxe, stations); 31,227 = 12,000 work
+	 * (2000 stone at 6 ticks) + 15,790 for the 6 diamonds (deep(-59, 9.85) from the bot's y 7: 66 steps down and up at 58,
+	 * 3,828, and the 9.85 branches of 32 at 37 that lib.dig.ore digs on average for 6, failed trips too, 11,662; then 50
+	 * each) + 3,252 for the four iron pickaxes that dig the trip (its 828 blocks and the 6 diamonds, more than three's 250
+	 * uses each) + 185 (sticks' logs, crafting table). So 16 stone pickaxes, 26,174, rank second. With one branch and one
+	 * iron pickaxe (#979) diamond was 18,839 and ranked first; with 3.5 branches (#984) 22,454.
 	 */
 	// Measured: passes at tick 63 in a class run.
 	@GameTest(maxTicks = 120)
@@ -1880,20 +1880,21 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			from lib.get import options, make_cost, SOURCES, work
 			print(options('pickaxe', 2000, radius=8)[:2])
-			print(pos().y, SOURCES['minecraft:diamond'].cost(6, 8), make_cost('minecraft:iron_pickaxe', 2, 8))
+			print(pos().y, SOURCES['minecraft:diamond'].cost(6, 8), make_cost('minecraft:iron_pickaxe', 4, 8))
 			print(work('pickaxe', 2000, 'diamond'), work('pickaxe', 2000, 'iron'))
+			print(make_cost('minecraft:diamond_pickaxe', 2, 8) + work('pickaxe', 2000, 'diamond'))
 			""");
-		helper.succeedWhen(() -> printed(helper, bot, "[(21817, 'make', 'iron', 8), (22454, 'make', 'diamond', 2)]",
-			"7 (8272, 'iron', 422) 1997", "12000 16000"));
+		helper.succeedWhen(() -> printed(helper, bot, "[(21817, 'make', 'iron', 8), (26174, 'make', 'stone', 16)]",
+			"7 (15790, 'iron', 828) 3252", "12000 16000", "31227"));
 	}
 
 	/**
-	 * Diamond's trip costs the branches lib.dig.ore digs for it, not one (#984): 3.5 of 32 blocks at 37 ticks, 4,144, on
-	 * top of the steps down and up from the bot's y 7 and 50 each. A branch at -59 finds 0.93 diamonds on average and none
-	 * four times in five, so ore digs 3.0 of its 4 branches for one diamond, 3.6 for six and 3.9 for twelve (lib.get
-	 * BRANCHES).
+	 * Diamond's trip costs the branches lib.dig.ore digs for it, not one (#984), failed trips too (#985): for six, 9.85
+	 * of 32 blocks at 37 ticks, 11,662, on top of the steps down and up from the bot's y 7 and 50 each. A branch at -59
+	 * finds 1.07 diamonds on average and none 78 times in 100, so with no limit ore digs 4.9 branches for one diamond and
+	 * 0.99 more for each more (lib.dig.branches, scripts/ore_sim.py): more than the 4 it gave up after before #985.
 	 */
-	// Measured: passes at tick 5 in a class run (red: printed 1184, one branch).
+	// Measured: passes at tick 5 in a class run (red: printed 1184, one branch; 4144, 3.5 branches before #985).
 	@GameTest(maxTicks = 20)
 	public void aDiamondTripCostsTheBranchesOreDigs(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -1902,13 +1903,13 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			s = SOURCES['minecraft:diamond']
 			print(s.cost(6, 8)[0] - 6 * s.estimate - (STEP_DOWN + STEP_UP) * (pos().y + 59))
 			""");
-		helper.succeedWhen(() -> printed(helper, bot, "4144"));
+		helper.succeedWhen(() -> printed(helper, bot, "11662"));
 	}
 
 	/**
 	 * A deep source's pickaxe is costed for the blocks its trip digs as well as the items (#984): from the bot's y 7 down
-	 * to diamond's -59, 3 blocks a step (198) and 2 a block of its 3.5 branches (224) are 422, so with the 6 diamonds 428
-	 * uses, more than an iron pickaxe's 250: tool_cost makes two.
+	 * to diamond's -59, 3 blocks a step (198) and 2 a block of its 9.85 branches for 6 (630, #985) are 828, so with the 6
+	 * diamonds 834 uses, more than three iron pickaxes' 250 each: tool_cost makes four.
 	 */
 	// Measured: passes at tick 80 in a class run (red: tuple index out of range, as cost gave no dug).
 	@GameTest(maxTicks = 160)
@@ -1918,10 +1919,10 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			from lib.get import SOURCES, make_cost, tool_cost
 			s = SOURCES['minecraft:diamond']
 			c = s.cost(6, 8)
-			print(c[2], make_cost('minecraft:diamond', 6, 8) - c[0] == tool_cost('pickaxe', 'iron', 428, 8, {}))
-			print(tool_cost('pickaxe', 'iron', 428, 8, {}) == make_cost('minecraft:iron_pickaxe', 2, 8))
+			print(c[2], make_cost('minecraft:diamond', 6, 8) - c[0] == tool_cost('pickaxe', 'iron', 834, 8, {}))
+			print(tool_cost('pickaxe', 'iron', 834, 8, {}) == make_cost('minecraft:iron_pickaxe', 4, 8))
 			""");
-		helper.succeedWhen(() -> printed(helper, bot, "422 True", "True"));
+		helper.succeedWhen(() -> printed(helper, bot, "828 True", "True"));
 	}
 
 	/**
@@ -1941,7 +1942,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * lib.find.WHERE limits get to where it is true (#540): with it true only within 2 blocks of the bot, an iron axe in a
 	 * chest, the oak and iron ore just outside are not used (the iron source costs the walk to it, 20, and its mining with
 	 * stone's tier, 23, #675). choose makes a stone axe from what the bot carries instead of the chest's, the iron source
-	 * costs DEEP more, ensure_tool crafts the stone axe and get finds no logs.
+	 * costs the trip down to 16 and its 2.4 branches more (#985), ensure_tool crafts the stone axe and get finds no logs.
 	 */
 	@GameTest(maxTicks = 240)
 	public void whereKeepsGetFromChestsAndBlocksOutsideIt(GameTestHelper helper) {
@@ -1965,7 +1966,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"])
 			""");
 		helper.succeedWhen(() -> {
-			printed(helper, bot, "('chest', 'iron') 43", "('make', 'stone') 1244", "True minecraft:stone_axe", "False no_logs");
+			printed(helper, bot, "('chest', 'iron') 43", "('make', 'stone') 2901", "True minecraft:stone_axe", "False no_logs");
 			helper.assertTrue(chest.countItem(Items.IRON_AXE) == 1, "the iron axe left the chest");
 			helper.assertBlockPresent(Blocks.OAK_LOG, TreesGameTest.TREE);
 		});

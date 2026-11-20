@@ -15,7 +15,7 @@ Mines stone or cobblestone within `radius` until the bot carries `n` more cobble
 
 ## `ore(item, n, radius=32, y=None, facing="north", length=32)`
 
-Makes the bot carry `n` more of `item`, a raw item: `coal`, `raw_iron`, `raw_copper`, `raw_gold`, `redstone`, `lapis_lazuli`, `diamond` or `emerald` (`minecraft:` may be left out). First it mines the exposed veins of its ore (the block tag `#c:ores/...`) within `radius`, nearest first, each whole through [`ore_vein`](../../mining/ore_vein.md), but for the blocks of a vein [`lib.find.WHERE`](find.md#where) leaves out, which stay. A vein its pickaxe does not drop ([`lib.tools.drops`](tools.md)), such as a modded ore in `#minecraft:needs_iron_tool` next to iron ore it mines with a stone pickaxe, it leaves, here and in the branches. Where they give too few, it digs `stairs_to(y)` towards `facing` (`y` is `best_y(item)` where `None`), digs up to 4 branches of `length` blocks on from there until it carries enough, and climbs back with `stairs_up()`. Where it dug no staircase, as for a bot already at `y`, or remembers one it is not on (see [`stairs()`](#stairs)), it walks back to where it started instead, so a bot in the Nether, which has no surface to dig up to, comes back too. Emerald has no `best_y`: pass `y`, or `ore` gives `no_ore` once the exposed veins are out. Where the staircase or a branch reaches the edge of [`lib.find.WHERE`](find.md#where), as in a colony, it turns square to the way it was going ([`turn`](#turnfacing-tried)) and goes on down or branches that way; it never turns back, which would dig under the steps of its staircase. Once every facing it turns to reaches the edge, it gives `no_ore` (#561).
+Makes the bot carry `n` more of `item`, a raw item: `coal`, `raw_iron`, `raw_copper`, `raw_gold`, `redstone`, `lapis_lazuli`, `diamond` or `emerald` (`minecraft:` may be left out). First it mines the exposed veins of its ore (the block tag `#c:ores/...`) within `radius`, nearest first, each whole through [`ore_vein`](../../mining/ore_vein.md), but for the blocks of a vein [`lib.find.WHERE`](find.md#where) leaves out, which stay. A vein its pickaxe does not drop ([`lib.tools.drops`](tools.md)), such as a modded ore in `#minecraft:needs_iron_tool` next to iron ore it mines with a stone pickaxe, it leaves, here and in the branches. Where they give too few, it digs `stairs_to(y)` towards `facing` (`y` is `best_y(item)` where `None`), digs up to [`rounds(item, n)`](#roundsitem-n) branches of `length` blocks on from there until it carries enough, and climbs back with `stairs_up()`. Where it dug no staircase, as for a bot already at `y`, or remembers one it is not on (see [`stairs()`](#stairs)), it walks back to where it started instead, so a bot in the Nether, which has no surface to dig up to, comes back too. Emerald has no `best_y`: pass `y`, or `ore` gives `no_ore` once the exposed veins are out. Where the staircase or a branch reaches the edge of [`lib.find.WHERE`](find.md#where), as in a colony, it turns square to the way it was going ([`turn`](#turnfacing-tried)) and goes on down or branches that way; it never turns back, which would dig under the steps of its staircase. Once every facing it turns to reaches the edge, it gives `no_ore` (#561).
 
 - **Returns** a dict: `ok`, `reason` (`None`, `no_recipe` with `missing` for an item that is no ore, `no_ore` with `missing` where the branches found too little or there is no `y` to dig to, and `tier` where it left veins its pickaxe does not drop: the lowest pickaxe tier ([`lib.tools.tier_for`](tools.md#tier_forwhat)) that drops them all, which [`lib.get`](get.md) gets and tries again with, `no_space` with `at`, or the reason a step failed with `at`).
 - **Pauses** yes, while it walks and digs.
@@ -31,6 +31,24 @@ if not r["ok"]:
 ## `best_y(item)`
 
 The height where the ore of the raw item `item` is most common: coal 96, raw iron 16, raw copper 48, raw gold -16, redstone and diamond -59, lapis lazuli 0; `None` for any other, emerald too: it is only in mountains, high up, which a height alone does not find. Done at once.
+
+## `branches(item, blocks)`
+
+How many branches of 32 `ore` digs on average at `best_y(item)` to find `blocks` blocks of the ore of `item`, with no limit, so a trip that gives `no_ore` counts too, as the next one digs on for the rest. From `BRANCHES`, the branches to the first block and those for each block more, measured with `scripts/ore_sim.py`, a Monte Carlo of the game's ore features through a branch whose walls and ceiling are mined as `ore` mines them (#985):
+
+| item | ore a branch finds | none in a branch | first block | each more |
+|---|---|---|---|---|
+| `diamond` | 1.07 | 78% | 4.9 | 0.99 |
+| `raw_iron` | 3.28 | 58% | 2.4 | 0.25 |
+| `raw_gold` | 1.00 | 86% | 7.3 | 0.72 |
+| `redstone` | 2.25 | 66% | 3.0 | 0.38 |
+| `lapis_lazuli` | 0.69 | 86% | 7.5 | 1.44 |
+
+One for any other (coal, copper, emerald: not measured). Ponytail: a line through 1 and 12 blocks, up to a quarter over in between. [`lib.get`](get.md) costs an ore's trip with it. Done at once.
+
+## `rounds(item, n)`
+
+How many branches `ore` digs at most for `n` more of `item` before it gives `no_ore`: more than twice `branches(item, n)`, at least 4 (`ROUNDS`). So it falls short of one diamond some 10 times in 100 and of six some 7 (39 and 70 with the 4 it dug before #985), 10 and 20 branches. `n` counts as blocks, more than redstone and lapis need, whose blocks drop several. Done at once.
 
 ## `stairs_to(y, facing="north")`
 

@@ -569,6 +569,20 @@ public class DigGameTest implements CustomTestMethodInvoker {
 			""", List.of("True None 1 True None"));
 	}
 
+	/**
+	 * ore digs more branches for a rarer ore and for more of it before it gives no_ore (#985): more than twice the
+	 * branches it digs on average for them (lib.dig.branches, scripts/ore_sim.py), at least 4. With 4 for any (before),
+	 * it fell short of one diamond some 4 times in 10 and of six some 7 in 10.
+	 */
+	@GameTest(maxTicks = 20)
+	public void oreDigsMoreBranchesForARarerOreAndMoreOfIt(GameTestHelper helper) {
+		AntBot bot = miner(helper, 1, 1, 1);
+		expect(helper, bot, """
+			import lib.dig
+			print(lib.dig.rounds("diamond", 1), lib.dig.rounds("diamond", 6), lib.dig.rounds("coal", 1))
+			""", List.of("10 20 4"));
+	}
+
 	/** Emerald has no best_y (it is only in mountains): without y, and no exposed vein, ore gives no_ore at once. */
 	@GameTest(maxTicks = 20)
 	public void emeraldWithoutYGivesNoOre(GameTestHelper helper) {

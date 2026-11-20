@@ -29,9 +29,16 @@ ORES = {
 # The height where each is most common.
 BEST_Y = {"coal": 96, "raw_iron": 16, "raw_copper": 48, "raw_gold": -16, "redstone": -59, "diamond": -59, "lapis_lazuli": 0}
 FACING = {"north": (0, 0, -1), "south": (0, 0, 1), "east": (1, 0, 0), "west": (-1, 0, 0)}
-# How many branches ore digs at its depth, and how long, before it gives up.
+# How many branches ore digs at its depth at least (rounds), and how long.
 ROUNDS = 4
 LENGTH = 32
+# The branches of LENGTH ore digs on average at best_y for blocks of an ore, (to the first block, for each block more):
+# scripts/ore_sim.py, a Monte Carlo of the 26.3 ore features through a branch whose walls and ceiling are mined as
+# lib.mine.veins (#985): a branch finds 1.07 diamond, 3.28 iron, 1.00 gold, 2.25 redstone and 0.69 lapis ore on
+# average, and none of them 78, 58, 86, 66 and 86 times in 100. ponytail: the line through 1 and 12 blocks, up to a
+# quarter over in between; 1 where not listed (coal, copper, emerald: not measured).
+BRANCHES = {"diamond": (4.9, 0.99), "raw_iron": (2.4, 0.25), "raw_gold": (7.3, 0.72), "redstone": (3.0, 0.38),
+            "lapis_lazuli": (7.5, 1.44)}
 
 
 def short(item):
@@ -42,6 +49,20 @@ def short(item):
 def best_y(item):
     """The height where the ore of item, a raw item such as "raw_iron", is most common; None for one that is no ore."""
     return BEST_Y.get(short(item))
+
+
+def branches(item, blocks):
+    """The branches of LENGTH ore digs on average at best_y(item) to find blocks of its ore (BRANCHES), with no limit,
+    so a trip that gives no_ore counts too: the next one digs on for the rest (#985)."""
+    first, more = BRANCHES.get(short(item), (1, 0))
+    return first + max(0, blocks - 1) * more
+
+
+def rounds(item, n):
+    """How many branches ore digs at most for n more of item: more than twice branches(item, n), at least ROUNDS. So it
+    falls short of 1 or 6 diamonds some 10 and 7 times in 100 (scripts/ore_sim.py; 39 and 70 with 4, #985). ponytail: n
+    items as n blocks, more than redstone and lapis need, whose blocks drop several."""
+    return max(ROUNDS, int(2 * branches(item, n)) + 1)
 
 
 def stone(n, radius=32):
@@ -71,8 +92,8 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     """Makes the bot carry n more of item, a raw item such as "raw_iron" or "coal": mines the exposed veins of its ore
     within radius, nearest first, but for those its pickaxe does not drop (lib.tools.drops); where they give too few, digs stairs down to y (best_y(item) where None) towards
     facing, branches of length on from there and climbs back up it, or walks back to where it started where it dug no
-    staircase. Gives result(): ok, no_recipe for an item that is no ore, no_ore with missing where ROUNDS branches found
-    too little, where its staircase and branches reach the edge of lib.find.WHERE whichever way it turns (turn), or there
+    staircase. Gives result(): ok, no_recipe for an item that is no ore, no_ore with missing where rounds(item, n)
+    branches found too little, where its staircase and branches reach the edge of lib.find.WHERE whichever way it turns (turn), or there
     is no y to dig to (emerald),
     or where a step failed. A no_ore where it left veins also has tier, the lowest pickaxe tier that drops them all
     (#555), for lib.get to try again with."""
@@ -104,7 +125,7 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     start = pos()
     tried = []
     r = stairs_to(y, facing)
-    for _ in range(ROUNDS):
+    for _ in range(rounds(key, target - count(key))):
         while r["reason"] == "outside" and facing is not None:
             # At the edge of lib.find.WHERE it goes on square to it, down or along (#561).
             tried.append(facing)
