@@ -47,6 +47,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
@@ -1272,6 +1273,11 @@ public final class WorkApi {
 		 * throw), but one that may never be picked up has an endless one (#920).
 		 */
 		private static final int WAITING_TICKS = 100;
+		/**
+		 * How many ticks after the one it is called on it looks on for an item before it finds none: a falling block, such
+		 * as sand over a block just mined, starts to fall two ticks after the block goes, before the bot's tick (#971).
+		 */
+		private static final int LOOK_TICKS = 2;
 
 		private final ScriptRun run;
 		private final AntBot bot;
@@ -1294,8 +1300,8 @@ public final class WorkApi {
 		private int falling;
 		/** How many ticks it has waited beside the current goal, for it to land or for its pickup delay to end. */
 		private int waiting;
-		/** Whether this is its first tick. */
-		private boolean first = true;
+		/** How many ticks it has run, the one it is called on the first. */
+		private int ticks;
 		/** How many of the items the bot carried when it started, to tell how many it took, also by walking over them. */
 		private final long before;
 		private long taken;
@@ -1337,6 +1343,11 @@ public final class WorkApi {
 			return !shape.isEmpty() && dropped.getY() - at.getY() < shape.max(Direction.Axis.Y) - 1.0E-3;
 		}
 
+		/** Whether a falling block, such as sand, is within its radius: it may break into an item where it lands. */
+		private boolean blockFalling() {
+			return !this.bot.level().getEntitiesOfClass(FallingBlockEntity.class, new AABB(this.center, this.center).inflate(this.radius)).isEmpty();
+		}
+
 		private List<Entity> around() {
 			double r2 = (double) this.radius * this.radius;
 			return this.bot.level().getEntities((Entity) null, new AABB(this.center, this.center).inflate(this.radius), entity -> {
@@ -1350,8 +1361,7 @@ public final class WorkApi {
 			if (this.result != null) {
 				return true;
 			}
-			boolean first = this.first;
-			this.first = false;
+			this.ticks++;
 			AABB grab = this.bot.getBoundingBox().inflate(GRAB, 0.5, GRAB);
 			List<Entity> around = this.around();
 			for (Entity entity : around) {
@@ -1370,9 +1380,11 @@ public final class WorkApi {
 				.sorted(Comparator.comparingDouble(entity -> entity.distanceToSqr(this.bot)))
 				.toList();
 			if (fitting.isEmpty()) {
-				// On its first tick, the one it is called on (#965), it looks once more the next: a block that pops off one
-				// just mined, such as the cane over it, drops its item a tick later.
-				return !first && this.finish(around);
+				// It looks on for a few ticks after the one it is called on (#965), as what a mine just before leaves may drop
+				// later: the cane over cut cane a tick later, and sand or gravel over a mined block falls two ticks later and
+				// breaks into an item where it lands on a torch (#971), so it also waits while a falling block is near.
+				// ponytail: the falling-block wait ends LANDING_TICKS into the action, not into the block's fall.
+				return this.ticks > LOOK_TICKS && (this.ticks > LANDING_TICKS || !this.blockFalling()) && this.finish(around);
 			}
 			if (this.goal == null || !fitting.contains(this.goal)) {
 				this.stopWalk();

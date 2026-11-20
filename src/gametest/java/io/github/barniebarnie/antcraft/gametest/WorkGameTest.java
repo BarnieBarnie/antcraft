@@ -915,6 +915,32 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("False out_of_reach 0"));
 	}
 
+	/** A torch on a block mined pops off as the block goes: pick_up right after the mine takes it (#971). */
+	// Measured: passes at tick 26 alone, 28 in a run of several classes (written to check, not red).
+	@GameTest(maxTicks = 60)
+	public void pickUpRightAfterAMineTakesTheTorchThatWasOnTheBlock(GameTestHelper helper) {
+		helper.setBlock(4, 1, 4, Blocks.DIRT);
+		helper.setBlock(4, 2, 4, Blocks.TORCH);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 4);
+		expect(helper, bot, "mine(" + at(helper, 4, 1, 4) + ")\nr = pick_up('torch', radius=4)\nprint(r.ok, r.value, count('torch'))\n",
+			List.of("True 1 1"));
+	}
+
+	/**
+	 * Sand over a block mined falls into its space and on down onto a torch, where it breaks into an item a few ticks
+	 * after the mine: pick_up right after the mine waits for it to land and takes it (#971).
+	 */
+	// Measured: passes at tick 37 alone, 43 in a run of several classes (red: printed [False 0 0] on tick 17).
+	@GameTest(maxTicks = 90)
+	public void pickUpRightAfterAMineTakesTheSandThatFellOntoATorch(GameTestHelper helper) {
+		helper.setBlock(4, 1, 4, Blocks.TORCH);
+		helper.setBlock(4, 2, 4, Blocks.DIRT);
+		helper.setBlock(4, 3, 4, Blocks.SAND);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 4);
+		expect(helper, bot, "mine(" + at(helper, 4, 2, 4) + ")\nr = pick_up('sand', radius=4)\nprint(r.ok, r.value, count('sand'))\n",
+			List.of("True 1 1"));
+	}
+
 	/** A cane cell along x at z 4, water at (4, y, 4) with its floor kept, a cane resting at the water's bottom. */
 	private static void pickUpCaneInACellsWater(GameTestHelper helper, AntBot bot, int y) {
 		helper.setBlock(3, y, 4, Blocks.DIRT);
