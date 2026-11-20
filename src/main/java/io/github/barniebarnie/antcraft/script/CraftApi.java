@@ -187,14 +187,17 @@ public final class CraftApi {
 	/**
 	 * {@code needs(item, n, also)} (docs/reference/crafting/needs.md): what to gather and craft to make one of each of
 	 * {@code also} and then {@code n} of {@code item} from {@code stock}, gathering one of an item costing what
-	 * {@code costs} says (1 where it leaves the item out) and gathering any {@code once} more (0 where it leaves it out).
+	 * {@code costs} says (1 where it leaves the item out) and gathering any {@code once} more (0 where it leaves it out);
+	 * where costs are given, each item smelted costs a furnace's {@link TaskPlanner#SMELT_TICKS} more (#976).
 	 */
 	static PyDict needs(Item item, long n, Map<Item, Integer> stock, List<Item> also, Map<Item, Integer> costs, Map<Item, Integer> once,
 		TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
 		if (n < 1 || n > MAX_NEEDS) {
 			throw new ScriptError("needs() n must be at least 1" + (n < 1 ? "" : " and at most " + MAX_NEEDS) + ", not " + n);
 		}
-		return needs(TaskPlanner.plan(item, (int) n, also, stock, book, gatherable, costs, once), i -> BuiltInRegistries.ITEM.getKey(i).toString());
+		// Costs are ticks, so a smelt counts its furnace time with them (#976); without costs the plan counts no time.
+		int smelt = costs.isEmpty() ? 0 : TaskPlanner.SMELT_TICKS;
+		return needs(TaskPlanner.plan(item, (int) n, also, stock, book, gatherable, costs, once, smelt), i -> BuiltInRegistries.ITEM.getKey(i).toString());
 	}
 
 	/** A cost of needs' costs: at least 0, at most Integer.MAX_VALUE. */

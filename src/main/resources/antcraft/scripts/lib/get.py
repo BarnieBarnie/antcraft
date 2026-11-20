@@ -477,15 +477,15 @@ def fuel_costs(radius, tools=None, logs=0):
     counts the walk once (#960): coal, once the walk to an exposed coal ore (else the trip down) and the tool_cost of a
     pickaxe of the tier it needs (DEEP where none can be had), each the mining of a block (Source.parts); a log, once the
     walk to the nearest log within radius (DEEP where there is none), each its breaking with the best axe carried, else
-    by hand, or where no axe is carried and a wooden one made (tool_cost) and logs, the logs the plan may fell, broken
-    with it cost less, once that axe more and each its breaking with it; any other gatherable item (the
-    antcraft:gatherable tag) the estimate of its SOURCES entry each, or DEEP where get has none. tools as make_cost's.
+    by hand, or where no axe is carried and a wooden or stone one made (tool_cost) and logs, the logs the plan may fell,
+    broken with it cost less (#974), the cheaper, once that axe more and each its breaking with it; any other gatherable
+    item (the antcraft:gatherable tag) the estimate of its SOURCES entry each, or DEEP where get has none. tools as
+    make_cost's. needs counts each smelt's lib.cost.SMELT with these costs, so a stone axe's cheap logs do not tip a big
+    smelt to charcoal (#976).
     ponytail: no scan for the other raw items, so an ore costs its estimate, not its walk or trip; a SOURCES item outside
     the tag costs needs' 1, as an id the game does not know would stop needs; neither changes a vanilla plan's choice
     (#974: no recipe takes those items where another raw item would do, and an ore's other ways are cycles or raw items
-    get has no source for); only a wooden axe is costed, as a stone axe's cheaper logs only tip a big smelt from coal to
-    charcoal, whose 200 ticks a smelt needs does not weigh (#974); past the nearest vein coal costs as much a block, where
-    get finds the next."""
+    get has no source for); past the nearest vein coal costs as much a block, where get finds the next."""
     if tools is None:
         tools = {}
     p, tier, walk, mine = SOURCES[COAL].parts(radius)
@@ -494,12 +494,16 @@ def fuel_costs(radius, tools=None, logs=0):
     fell = DEEP if log is None else lib.cost.walk(pos(), log)
     axe = lib.tools.best("axe")
     chop = lib.cost.breaking(1, "wood", None if axe is None else lib.tools.tier(axe))
-    wooden = lib.cost.breaking(1, "wood", "wooden")
-    # The axe's make_cost only where it may pay off: it takes at least a log (#966).
-    if axe is None and log is not None and logs * (chop - wooden) > SOURCES[LOGS].least(1):
-        made = tool_cost("axe", "wooden", logs, radius, tools)
-        if made is not None and made + logs * wooden < logs * chop:
-            fell, chop = fell + made, wooden
+    # With no axe, the cheapest of the hand, a wooden and a stone axe made, as ensure_tool picks (#966, #974).
+    extra = 0
+    for tier in ("wooden", "stone") if axe is None and log is not None else ():
+        each = lib.cost.breaking(1, "wood", tier)
+        # The axe's make_cost only where it may pay off: it takes at least a log (#966).
+        if logs * (chop - each) + extra > SOURCES[LOGS].least(1):
+            made = tool_cost("axe", tier, logs, radius, tools)
+            if made is not None and made + logs * each < extra + logs * chop:
+                extra, chop = made, each
+    fell += extra
     # Only the tag's items, so a script's SOURCES entry of an item the game does not know stops no needs (#966).
     costs = {}
     for item in tag_items(GATHERABLE):

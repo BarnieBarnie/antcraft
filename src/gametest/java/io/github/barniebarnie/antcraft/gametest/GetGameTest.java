@@ -786,9 +786,11 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * A big smelt with no fuel carried, an oak 4 blocks off and coal ore 20 off (#960): 64 iron ingots plan 8 coal, not 11
 	 * logs for planks. Coal costs the walk once and 45 a block with the wooden pickaxe carried (460), the logs the short
 	 * walk once and 60 each by hand, as no axe is carried (680). With the walk counted for each coal and a log broken as
-	 * with a stone axe the far coal cost 1160 and the logs 385.
+	 * with a stone axe the far coal cost 1160 and the logs 385. Since a stone axe made is costed (#974), 10 logs as 8
+	 * charcoal cost 304 + 10 * 15 = 454, and only the 8 charcoal's 1,600 smelt ticks, counted since #976, keep coal ahead.
 	 */
-	// Measured: passes at tick 55 to 113 alone and 137 to 248 in class runs (red: printed ['minecraft:dark_oak_log', 'minecraft:oak_log']).
+	// Measured: passes at tick 55 to 113 alone and 137 to 248 in class runs (red: printed ['minecraft:dark_oak_log', 'minecraft:oak_log']);
+	// 305 in a class run with the stone axe (red without #976's smelt time: printed ['minecraft:dark_oak_log']).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 500)
 	public void aBigSmeltPlansCoalAWalkOffOverATreeNear(GameTestHelper helper) {
 		helper.setBlock(21, 1, 1, Blocks.COAL_ORE);
@@ -809,14 +811,14 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A big smelt with no axe, an oak 4 blocks off and no coal ore in sight (#966): 64 iron ingots plan 11 logs for
 	 * planks, and make_cost costs them with a wooden axe made, as get makes one where that is cheaper (ensure_tool): the
-	 * axe (some 260) and 30 a log beat 60 a log by hand. Before, a log cost the hand's 60 with no axe carried.
+	 * axe (some 260) and 30 a log beat 60 a log by hand. Before, a log cost the hand's 60 with no axe carried. No pickaxe
+	 * carried, so a stone axe, which needs one for its cobblestone, costs more (#974).
 	 */
-	// Measured: passes at tick 118 alone, 241 in a class run (red: printed 60 False False).
+	// Measured: passes at tick 118 alone, 241 in a class run (red: printed 60 False False); without the pickaxe 149 alone, 339 to 341 in class runs.
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 480)
 	public void aBigSmeltWithNoAxeCostsTheLogsWithAnAxeMade(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper, new BlockPos(5, 1, 1), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
-		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
 		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
 		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 64));
 		run(helper, bot, """
@@ -829,6 +831,29 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(each, once > lib.cost.walk(pos(), lib.find.nearest(LOGS, 32)), tools.get("minecraft:wooden_axe") is not None)
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "30 True True"));
+	}
+
+	/**
+	 * As {@link #aBigSmeltWithNoAxeCostsTheLogsWithAnAxeMade}, with 3 cobblestone carried (#974): make_cost costs the
+	 * 11 logs with a stone axe made, as get makes one where that is cheaper (ensure_tool): its sticks take one log where
+	 * a wooden axe's planks take two, and it breaks a log in 15 ticks, not 30. Before, only a wooden axe was costed.
+	 */
+	// Measured: passes at tick 314 to 316 in class runs (#976).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 480)
+	public void aBigSmeltWithNoAxeCostsTheLogsWithAStoneAxeMade(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(5, 1, 1), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 64));
+		run(helper, bot, """
+			from lib.get import make_cost, LOGS
+			tools = {}
+			make_cost("iron_ingot", 64, tools=tools)
+			print(tools["fuel"][LOGS][1], tools.get("minecraft:stone_axe") is not None)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "15 True"));
 	}
 
 	/**

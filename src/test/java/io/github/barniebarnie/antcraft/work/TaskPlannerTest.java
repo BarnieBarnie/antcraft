@@ -660,6 +660,28 @@ class TaskPlannerTest {
 	}
 
 	/**
+	 * 64 ingots from nothing, with coal ore 20 blocks off (100, then 45 a coal) and a tree 4 blocks off felled with a
+	 * stone axe made (304, then 15 a log): 8 coal cost 460, 10 logs as 8 charcoal 454, but each charcoal smelts for 200
+	 * ticks, 1,600 more, so with smelt time counted the plan gathers coal (#976). Without it, the logs.
+	 */
+	@Test
+	void withTickCostsASmeltStepsTimeCounts() {
+		Map<Item, Integer> each = new HashMap<>(Map.of(Items.COAL, 45));
+		Map<Item, Integer> once = new HashMap<>(Map.of(Items.COAL, 100));
+		BuiltInRegistries.ITEM.getTagOrEmpty(ItemTags.LOGS).forEach(log -> {
+			each.put(log.value(), 15);
+			once.put(log.value(), 304);
+		});
+		Map<Item, Integer> stock = new HashMap<>(Map.of(Items.RAW_IRON, 64));
+
+		TaskPlanner.Plan<Item> noSmeltTime = TaskPlanner.plan(Items.IRON_INGOT, 64, List.of(), stock, VanillaData.recipeBook(), VanillaData.gatherable(), each, once);
+		assertTrue(noSmeltTime.toGather().keySet().iterator().next().builtInRegistryHolder().is(ItemTags.LOGS), "plan: " + noSmeltTime);
+
+		TaskPlanner.Plan<Item> plan = TaskPlanner.plan(Items.IRON_INGOT, 64, List.of(), stock, VanillaData.recipeBook(), VanillaData.gatherable(), each, once, 200);
+		assertEquals(Map.of(Items.COAL, 8), plan.toGather(), "plan: " + plan);
+	}
+
+	/**
 	 * 64 ingots from carried logs: planks burn 11 logs (43 planks), charcoal 10, 8 smelted into charcoal and 2 into the
 	 * planks that smelt them. Charcoal's own smelt burnt logs, 6, so it lost (#944).
 	 */
