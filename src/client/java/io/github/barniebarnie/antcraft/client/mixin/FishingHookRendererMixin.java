@@ -21,6 +21,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(FishingHookRenderer.class)
 abstract class FishingHookRendererMixin {
+	/** How much lower than a player's the line starts: the bot is drawn unscaled with its own arm pose. Tuned by eye in runClient. */
+	private static final double ANTCRAFT$ROD_DROP = 0.17;
+
 	@Inject(method = "shouldRender(Lnet/minecraft/world/entity/projectile/FishingHook;Lnet/minecraft/client/renderer/culling/Frustum;DDDF)Z", at = @At("HEAD"), cancellable = true)
 	private void antcraft$renderBotHook(FishingHook hook, Frustum frustum, double x, double y, double z, float partialTicks, CallbackInfoReturnable<Boolean> info) {
 		if (hook.getOwner() instanceof AntBot) {
@@ -28,7 +31,8 @@ abstract class FishingHookRendererMixin {
 		}
 	}
 
-	@Inject(method = "extractRenderState(Lnet/minecraft/world/entity/projectile/FishingHook;Lnet/minecraft/client/renderer/entity/state/FishingHookRenderState;F)V", at = @At("TAIL"))
+	// RETURN, not TAIL: vanilla returns early with a zero line for a hook with no player owner.
+	@Inject(method = "extractRenderState(Lnet/minecraft/world/entity/projectile/FishingHook;Lnet/minecraft/client/renderer/entity/state/FishingHookRenderState;F)V", at = @At("RETURN"))
 	private void antcraft$botLine(FishingHook hook, FishingHookRenderState state, float partialTicks, CallbackInfo info) {
 		if (!(hook.getOwner() instanceof AntBot bot)) {
 			return;
@@ -43,7 +47,7 @@ abstract class FishingHookRendererMixin {
 		double sideways = side * 0.35 * scale;
 		double forward = 0.8 * scale;
 		float crouch = bot.isCrouching() ? -0.1875F : 0.0F;
-		Vec3 hand = bot.getEyePosition(partialTicks).add(-cos * sideways - sin * forward, crouch - 0.45 * scale, -sin * sideways + cos * forward);
+		Vec3 hand = bot.getEyePosition(partialTicks).add(-cos * sideways - sin * forward, crouch - (0.45 + ANTCRAFT$ROD_DROP) * scale, -sin * sideways + cos * forward);
 		state.lineOriginOffset = hand.subtract(hook.getPosition(partialTicks).add(0.0, 0.25, 0.0));
 	}
 }
