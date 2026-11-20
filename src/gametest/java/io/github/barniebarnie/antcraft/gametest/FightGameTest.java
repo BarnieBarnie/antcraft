@@ -100,6 +100,28 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot with no AI stays put beside a husk and leaves it alone (#970). The bot set its AI by the config every tick, so
+	 * {@code setNoAi(true)} did nothing and it walked up to the husk and struck it.
+	 */
+	// Measured: passes at tick 30, as it runs (red: moved 0.33 blocks, tick 23).
+	@GameTest(maxTicks = 40)
+	public void aBotWithNoAiStaysPutBesideAHostileMob(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, new Vec3(5.5, 1, 3.5));
+		husk.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.5, 1, 3.5));
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
+		bot.setNoAi(true);
+		Vec3 at = bot.position();
+		float health = husk.getHealth();
+		helper.onEachTick(() -> {
+			if (bot.position().distanceTo(at) > 0.01 || husk.getHealth() < health) {
+				helper.fail("moved " + bot.position().distanceTo(at) + " blocks, husk at " + husk.getHealth() + ", tick " + helper.getTick());
+			}
+		});
+		helper.runAtTickTime(30, helper::succeed);
+	}
+
+	/**
 	 * {@code attack} on a mob standing still at the far edge of its block, the bot in the block beside it but out of melee
 	 * reach, steps in to strike it (#825). A walk to within a block of the mob's ends where the bot stands, so each one
 	 * counted an arrival at once and the attack gave {@code unreachable} after three, 7 ticks in, as it did now and then on
@@ -790,7 +812,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * while the creeper sets off from 8 blocks, as a creeper takes some 20 ticks to start walking, and strikes the pig
 	 * (so its axe starts cooling) and turns on once the creeper is 5 blocks off.
 	 */
-	// Measured: passes at tick 52, the bot kept 3.8 to 4.1 blocks off (red: came 2.9 blocks near, the fuse lit, tick 37).
+	// Measured: passes at tick 65 since the bot really waits without AI (#970), 52 before, the bot keeping 3.8 to 4.1
+	// blocks off (red: came 2.9 blocks near, the fuse lit, tick 37).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 105)
 	public void aBotWithItsWeaponCoolingBacksAwayFromACreeperWalkingAtIt(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 4.5));
@@ -819,10 +842,9 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * As {@link #aBotWithItsWeaponCoolingBacksAwayFromACreeperWalkingAtIt}, with a wall right behind the bot: it backs off
 	 * along the wall instead, as the kite goal does from a lit creeper (#964). Straight away, it stood against the wall.
 	 * The axe is in hand and the creeper 5 blocks off from the start, and the axe is kept cooling until the creeper sets
-	 * off, so the bot holds back against the wall rather than walk at the creeper first (setNoAi would not stop it: a bot
-	 * sets its AI by the config every tick). Then the axe cools a last 23 ticks. The creeper comes down a 1-wide corridor
-	 * square at the wall, so the bot does not slide along the wall by chance, as it did backing straight away from a
-	 * creeper coming a little askew.
+	 * off, so the bot holds back against the wall rather than walk at the creeper first. Then the axe cools a last 23
+	 * ticks. The creeper comes down a 1-wide corridor square at the wall, so the bot does not slide along the wall by
+	 * chance, as it did backing straight away from a creeper coming a little askew.
 	 */
 	// Measured: passes at tick 45 in 4 of 4, the bot kept 4.1 to 4.6 blocks off (red, 3 of 3: came 2.8 blocks near with
 	// the weapon not ready, tick 40).

@@ -383,6 +383,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/** Set while an animal and the bot push each other apart: only the animal moves ({@link #push(Entity)}). */
 	private boolean shoving;
+	/** Takes the AI away while bots are not allowed, leaving a {@code setNoAi} alone. */
+	private final AiGate aiGate = new AiGate();
 
 	/**
 	 * Animals do not push bots back, though bots push them (#897): chickens crowded against a pen's door, which stays
@@ -416,8 +418,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			// Bots on a server that has not opted in stand still instead of being deleted,
 			// so enabling the mod again later restores them.
 			boolean allowed = AntCraftConfig.botsAllowed(level.getServer());
-			if (this.isNoAi() == allowed) {
-				this.setNoAi(!allowed);
+			boolean noAi = this.aiGate.noAi(this.isNoAi(), allowed);
+			if (noAi != this.isNoAi()) {
+				this.setNoAi(noAi);
 			}
 			if (!this.buildScaffold.isEmpty() && this.tickCount > this.buildScaffoldUntil) {
 				this.takeDownExpiredScaffold(level);
@@ -1259,6 +1262,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("LastDeath", GlobalPos.CODEC, this.lastDeath);
 		output.storeNullable("LastScript", CoreScript.CODEC, this.lastRun);
 		this.food.save(output);
+		output.putBoolean("NoAiByConfig", this.aiGate.tookAi());
 		ScriptRun.Saved running = this.isRunningScript() ? this.script.save() : this.savedScript;
 		// The script's saved state holds memory too, so it is saved on its own only when that does not (#341).
 		if (running == null || running.vm() == null || !Memory.isPlain(this.memory)) {
@@ -1314,6 +1318,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.lastDeath = input.read("LastDeath", GlobalPos.CODEC).orElse(null);
 		this.lastRun = input.read("LastScript", CoreScript.CODEC).orElse(null);
 		this.food.load(input);
+		// Older versions saved no flag, and only the config took a bot's AI away.
+		this.aiGate.tookAi(input.getBooleanOr("NoAiByConfig", this.isNoAi()));
 		this.log.load(input);
 		this.savedScript = ScriptRun.Saved.read(input).orElse(null);
 		this.memory = Memory.load(input, this.savedScript == null ? null : this.savedScript.vm());
