@@ -698,8 +698,9 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             # Coal may come as charcoal for less than its least.
             if limit is not None and ticks + (0 if key(raw) == COAL else s.least(k) + smelted_pickaxe(s, tools)) > limit:
                 return None
-            # The source's walk starts at the chest get took the rest from.
-            c, tier, dug = s.cost(k, radius, chests[0] if chests else None)
+            # The source's walk starts at the chest get took the rest from. A script's cost giving (ticks, tier), as
+            # before #984, digs nothing more (#986).
+            c, tier, dug = (tuple(s.cost(k, radius, chests[0] if chests else None)) + (0,))[:3]
             if key(raw) == COAL and LOGS not in GETTING:
                 wood = charcoal(k, radius)[1]
                 if wood < c:

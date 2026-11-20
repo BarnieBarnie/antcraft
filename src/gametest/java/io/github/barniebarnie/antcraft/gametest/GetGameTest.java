@@ -1926,6 +1926,30 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A script's Source whose cost gives the (ticks, tier) of before #984 costs as one that gives (ticks, tier, 0): no
+	 * trip wear on its tool (#986).
+	 */
+	// Measured: passes at tick 18 in a class run (red: lib/get.py:702: not enough values to unpack (expected 3, got 2)).
+	@GameTest(maxTicks = 40)
+	public void aSourceCostOfTwoValuesCostsWithNoTripWear(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			from lib.get import SOURCES, Source, make_cost
+			class Two(Source):
+			    def cost(self, n, radius, start=None):
+			        return 100 * n, None
+			class Three(Source):
+			    def cost(self, n, radius, start=None):
+			        return 100 * n, None, 0
+			SOURCES['minecraft:clay_ball'] = Two(None, tool='shovel')
+			two = make_cost('minecraft:clay_ball', 3, 8)
+			SOURCES['minecraft:clay_ball'] = Three(None, tool='shovel')
+			print(two is not None and two == make_cost('minecraft:clay_ball', 3, 8))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True"));
+	}
+
+	/**
 	 * An empty bot with no chest near (#710): make_cost of an iron axe with a limit of 300 is None without
 	 * lib.craft.plan and its second needs, as the needs of the axe alone cost more: SMELT for each of three iron ingots,
 	 * the least of their raw iron and of the sticks' log, and the furnace and crafting table mined back (stations).
