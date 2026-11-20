@@ -40,6 +40,7 @@ import java.util.StringJoiner;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
@@ -61,9 +62,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.Consumable;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.ticks.LevelChunkTicks;
+import net.minecraft.world.ticks.TickContainerAccess;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -1278,6 +1282,11 @@ public final class WorkApi {
 		 * as sand over a block just mined, starts to fall two ticks after the block goes, before the bot's tick (#971).
 		 */
 		private static final int LOOK_TICKS = 2;
+		/**
+		 * How many ticks it waits at most, finding no item, for the world near to settle ({@link #settling}): water held back
+		 * by a block mined washes a torch two blocks off some ten ticks after (#978).
+		 */
+		private static final int SETTLING_TICKS = 40;
 
 		private final ScriptRun run;
 		private final AntBot bot;
@@ -1300,6 +1309,8 @@ public final class WorkApi {
 		private int falling;
 		/** How many ticks it has waited beside the current goal, for it to land or for its pickup delay to end. */
 		private int waiting;
+		/** How many ticks it has waited, finding no item, for the world near to settle. */
+		private int settlingWait;
 		/** How many ticks it has run, the one it is called on the first. */
 		private int ticks;
 		/** How many of the items the bot carried when it started, to tell how many it took, also by walking over them. */
@@ -1343,9 +1354,31 @@ public final class WorkApi {
 			return !shape.isEmpty() && dropped.getY() - at.getY() < shape.max(Direction.Axis.Y) - 1.0E-3;
 		}
 
-		/** Whether a falling block, such as sand, is within its radius: it may break into an item where it lands. */
-		private boolean blockFalling() {
-			return !this.bot.level().getEntitiesOfClass(FallingBlockEntity.class, new AABB(this.center, this.center).inflate(this.radius)).isEmpty();
+		/**
+		 * Whether the world within its radius is still settling, so may yet drop an item: a block falling, such as sand, which
+		 * breaks into an item where it lands on a torch (#971), or a block or fluid with a tick scheduled, such as water
+		 * flowing into a block just mined on over a torch beside it, or the bamboo over cut bamboo, which breaks a block a
+		 * tick (#978).
+		 */
+		private boolean settling() {
+			AABB box = new AABB(this.center, this.center).inflate(this.radius);
+			if (!this.bot.level().getEntitiesOfClass(FallingBlockEntity.class, box).isEmpty()) {
+				return true;
+			}
+			for (int x = SectionPos.blockToSectionCoord(box.minX); x <= SectionPos.blockToSectionCoord(box.maxX); x++) {
+				for (int z = SectionPos.blockToSectionCoord(box.minZ); z <= SectionPos.blockToSectionCoord(box.maxZ); z++) {
+					LevelChunk chunk = this.bot.level().getChunk(x, z);
+					if (scheduled(chunk.getBlockTicks(), box) || scheduled(chunk.getFluidTicks(), box)) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		/** Whether {@code ticks}, a chunk's, holds one scheduled for a block in {@code box}. */
+		private static boolean scheduled(TickContainerAccess<?> ticks, AABB box) {
+			return ticks instanceof LevelChunkTicks<?> chunk && chunk.getAll().anyMatch(tick -> box.contains(Vec3.atCenterOf(tick.pos())));
 		}
 
 		private List<Entity> around() {
@@ -1382,9 +1415,9 @@ public final class WorkApi {
 			if (fitting.isEmpty()) {
 				// It looks on for a few ticks after the one it is called on (#965), as what a mine just before leaves may drop
 				// later: the cane over cut cane a tick later, and sand or gravel over a mined block falls two ticks later and
-				// breaks into an item where it lands on a torch (#971), so it also waits while a falling block is near.
-				// ponytail: the falling-block wait ends LANDING_TICKS into the action, not into the block's fall.
-				return this.ticks > LOOK_TICKS && (this.ticks > LANDING_TICKS || !this.blockFalling()) && this.finish(around);
+				// breaks into an item where it lands on a torch (#971), so it also waits while the world near is settling.
+				// ponytail: any scheduled tick counts, also a fire's or a clock's, so that wait ends after SETTLING_TICKS of it.
+				return this.ticks > LOOK_TICKS && (!this.settling() || ++this.settlingWait > SETTLING_TICKS) && this.finish(around);
 			}
 			if (this.goal == null || !fitting.contains(this.goal)) {
 				this.stopWalk();

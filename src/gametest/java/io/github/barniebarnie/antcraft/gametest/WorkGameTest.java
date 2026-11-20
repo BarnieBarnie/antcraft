@@ -941,6 +941,40 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True 1 1"));
 	}
 
+	/**
+	 * A bamboo stalk cut at the bottom breaks one block a tick from the bottom up, and its top pieces drop from high up
+	 * well after: pick_up right after the cut takes every piece (#978).
+	 */
+	// Measured: passes at tick 78 to 109 (not red: on main too, as a piece still falling within the radius keeps it on).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 220)
+	public void pickUpRightAfterCuttingTallBambooTakesEveryPiece(GameTestHelper helper) {
+		helper.setBlock(12, 1, 12, Blocks.DIRT);
+		for (int y = 2; y <= 13; y++) {
+			helper.setBlock(12, y, 12, Blocks.BAMBOO);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 10, 1, 12);
+		expect(helper, bot, "mine(" + at(helper, 12, 2, 12) + ")\nr = pick_up('bamboo')\nprint(r.ok, r.value, count('bamboo'))\n",
+			List.of("True 11 12"));
+	}
+
+	/**
+	 * Water held back by a block mined flows into its space and on over a torch beside it, which drops some ten ticks
+	 * after the mine: pick_up right after the mine takes it (#978).
+	 */
+	// Measured: passes at tick 55 (red: printed [False 0 0] on tick 18).
+	@GameTest(maxTicks = 110)
+	public void pickUpRightAfterAMineTakesTheTorchTheWaterWashedOff(GameTestHelper helper) {
+		helper.setBlock(5, 1, 3, Blocks.STONE);
+		helper.setBlock(5, 1, 5, Blocks.STONE);
+		helper.setBlock(6, 1, 4, Blocks.STONE);
+		helper.setBlock(5, 1, 4, Blocks.WATER);
+		helper.setBlock(4, 1, 4, Blocks.DIRT);
+		helper.setBlock(3, 1, 4, Blocks.TORCH);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 4);
+		expect(helper, bot, "mine(" + at(helper, 4, 1, 4) + ")\nr = pick_up('torch', radius=4)\nprint(r.ok, r.value, count('torch'))\n",
+			List.of("True 1 1"));
+	}
+
 	/** A cane cell along x at z 4, water at (4, y, 4) with its floor kept, a cane resting at the water's bottom. */
 	private static void pickUpCaneInACellsWater(GameTestHelper helper, AntBot bot, int y) {
 		helper.setBlock(3, y, 4, Blocks.DIRT);
