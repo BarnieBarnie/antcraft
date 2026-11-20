@@ -1825,18 +1825,6 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * What options of a big smelt costs (#973): 8 iron pickaxes for 2000 uses, 24 ingots of the raw iron carried, with no
-	 * chest near. #963 made make_cost's bound (least_make) leave out the logs a plan burns, so it was feared the bound
-	 * would be weaker for big smelts. It is not: needs without fuel costs picks fuel by item count, so it burns coal (8
-	 * items) for all but a remainder of a few items, at most a couple of logs' planks whatever the smelt's size (24 ingots
-	 * burn 3 coal, 64 burn 8; 9 burn 6 planks), and charcoal never. Measured 84,740 instructions (43 ticks), 84,447 with
-	 * #963 reverted, the same ways; the 293 more are the sum of the burns. Only a limit within those few logs' least over
-	 * the bound costs more: make_cost of 3 iron pickaxes (6 planks burnt, bound 2,073, 2,183 before #963) with a limit
-	 * of 2,120 ran 25,422 instructions, 1,820 before, as it planned the tier. ponytail: so the fuel's own bound (the
-	 * cheaper of coal's least and the logs') is left out; it would win back part of a band some 110 ticks wide. The limit
-	 * leaves some 10% for full runs.
-	 */
-	/**
 	 * Carrying raw iron leaves the diamond tier's least_head in place (#980): only the iron tier's falls to 0, as raw
 	 * iron is its raw item. In optionsOfABigSmeltCost's setup the diamond tier is bounded at 790 + 12,000 work, under
 	 * iron's make of 21,817, as making diamond pickaxes is cheaper there (18,839: 2 of them last 2000 uses, iron needs 8),
@@ -1851,6 +1839,18 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			List.of("True 0"), "least head", 1_000);
 	}
 
+	/**
+	 * What options of a big smelt costs (#973): 8 iron pickaxes for 2000 uses, 24 ingots of the raw iron carried, with no
+	 * chest near. #963 made make_cost's bound (least_make) leave out the logs a plan burns, so it was feared the bound
+	 * would be weaker for big smelts. It is not: needs without fuel costs picks fuel by item count, so it burns coal (8
+	 * items) for all but a remainder of a few items, at most a couple of logs' planks whatever the smelt's size (24 ingots
+	 * burn 3 coal, 64 burn 8; 9 burn 6 planks), and charcoal never. Measured 84,740 instructions (43 ticks), 84,447 with
+	 * #963 reverted, the same ways; the 293 more are the sum of the burns. Only a limit within those few logs' least over
+	 * the bound costs more: make_cost of 3 iron pickaxes (6 planks burnt, bound 2,073, 2,183 before #963) with a limit
+	 * of 2,120 ran 25,422 instructions, 1,820 before, as it planned the tier. ponytail: so the fuel's own bound (the
+	 * cheaper of coal's least and the logs') is left out; it would win back part of a band some 110 ticks wide. The limit
+	 * leaves some 10% for full runs.
+	 */
 	@GameTest(maxTicks = 90)
 	public void optionsOfABigSmeltCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -1858,6 +1858,32 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		GameTests.cost(helper, bot, "from lib.get import options\n",
 			"print([o[2] for o in options('pickaxe', 2000, radius=8)])\n",
 			List.of("['diamond', 'iron', 'stone', 'wooden']"), "options big smelt", 93_000);
+	}
+
+	/**
+	 * Two diamond pickaxes cost less than eight iron ones in optionsOfABigSmeltCost's setup (#979), though the iron is
+	 * carried and no diamond is near, and the parts are right: 18,839 = 12,000 work (2000 stone at 6 ticks) + 5,312 for
+	 * the 6 diamonds (deep(-59) from the bot's y 7: 66 steps down and up at 58, 3,828, and a branch of 32 at 37, 1,184;
+	 * then 50 each) + 1,342 for the iron pickaxe that mines them (3 of the raw iron smelted, 600, its furnace's
+	 * cobblestone with a wooden pickaxe, its logs) + 185 (sticks' logs, crafting table); 21,817 = 16,000 work (8 ticks a
+	 * stone) + 4,800 to smelt 24 ingots + 1,017 (logs for sticks and fuel, the furnace's cobblestone, the wooden pickaxe,
+	 * stations). The diamond pickaxe's faster work (4,000) and its 21 smelts fewer (4,200) outweigh the trip down. From
+	 * sea level (64) the trip is 3,306 more and iron ranks first. ponytail: the rarity of diamonds is left out (#789):
+	 * the 6 come from one branch, where lib.dig.ore digs up to 4 (each 1,184 more), and the iron pickaxe's 250 uses are
+	 * costed for the 6 diamonds, not the trip's blocks.
+	 */
+	@GameTest(maxTicks = 120)
+	public void twoDiamondPickaxesCostLessThanEightIronOnesFromCarriedRawIron(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 24));
+		run(helper, bot, """
+			from lib.get import options, make_cost, SOURCES, work
+			print(options('pickaxe', 2000, radius=8)[:2])
+			print(pos().y, SOURCES['minecraft:diamond'].cost(6, 8), make_cost('minecraft:iron_pickaxe', 1, 8))
+			print(work('pickaxe', 2000, 'diamond'), work('pickaxe', 2000, 'iron'))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "[(18839, 'make', 'diamond', 2), (21817, 'make', 'iron', 8)]",
+			"7 (5312, 'iron') 1342", "12000 16000"));
 	}
 
 	/**
