@@ -279,7 +279,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.2, true) {
 			private boolean held;
 			private @Nullable Path backOff;
-			private int plannedAt = -KiteGoal.REPLAN_TICKS;
+			private final Replan replan = new Replan();
 
 			@Override
 			public void tick() {
@@ -296,14 +296,15 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 						AntBot.this.getNavigation().stop();
 						Vec3 to = AntBot.this.position().add(away.scale(2));
 						AntBot.this.getMoveControl().setWantedPosition(to.x, AntBot.this.getY(), to.z, 1.2);
-					} else if (!room && (this.backOff == null || AntBot.this.getNavigation().isDone())
-						&& AntBot.this.tickCount - this.plannedAt >= KiteGoal.REPLAN_TICKS) {
+					} else if (!room && (this.backOff == null || AntBot.this.getNavigation().isDone()) && this.replan.due(AntBot.this, creeper)) {
 						// Already from a block beyond HOLD_BACK, as a way to the side starts slower than straight away. Planned
-						// again only every few ticks where it found no way off, as the kite goal does (#759).
-						this.plannedAt = AntBot.this.tickCount;
+						// again ever less often where it found no way off, as the kite goal does (#759, #975).
 						this.backOff = kite.away(creeper);
 						if (this.backOff != null) {
+							this.replan.reset();
 							AntBot.this.getNavigation().moveTo(this.backOff, 1.2);
+						} else {
+							this.replan.failed(AntBot.this, creeper);
 						}
 					} else if (this.backOff == null) {
 						AntBot.this.getNavigation().stop();
@@ -311,6 +312,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 					return;
 				}
 				this.backOff = null;
+				this.replan.reset();
 				// The goal's own path waits for its next recalculation, up to a few ticks off.
 				if (this.held && target != null) {
 					AntBot.this.getNavigation().moveTo(target, 1.2);

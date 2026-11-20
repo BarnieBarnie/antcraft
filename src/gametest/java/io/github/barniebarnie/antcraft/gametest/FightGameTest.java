@@ -881,6 +881,40 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot holding back from a creeper with its weapon cooling, in the sealed 1-wide corridor of {@link #deadEnd}, plans
+	 * its way off ever less often while none is found (#975): every 4 ticks it was some 2 ms a plan for nothing. Once the
+	 * wall beside it opens, at tick 40, it still finds the way out within a second or so. The creeper has no AI, so it
+	 * stays unlit; the axe is kept cooling throughout.
+	 */
+	// Measured: planned 4 ways off by tick 40 and out of the corridor at tick 54 to 55 (red: planned 10 ways off by tick 40).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 90)
+	public void aCorneredBotHoldingBackFromACreeperPlansItsWayOffEverLessOften(GameTestHelper helper) {
+		deadEnd(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 3.5));
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
+		Pig pig = helper.spawn(EntityTypes.PIG, new Vec3(16.5, 1, 3.5));
+		pig.setNoAi(true);
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 7.5));
+		creeper.setNoAi(true);
+		bot.setTarget(creeper);
+		helper.onEachTick(() -> {
+			bot.setLastHurtMob(pig);
+			if (helper.getTick() == 40) {
+				if (bot.getKitePlans() > 4) {
+					helper.fail("planned " + bot.getKitePlans() + " ways off by tick 40");
+				}
+				for (int y = 1; y <= 2; y++) {
+					helper.setBlock(11, y, 3, Blocks.AIR);
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getTick() > 40, "the wall is not open yet");
+			helper.assertTrue(TestPositions.relative(helper, bot.blockPosition()).getX() < 11, "still in the corridor");
+		});
+	}
+
+	/**
 	 * A bot in a 1-wide dead end with a creeper lit in front of it is cornered: it goes at the creeper and strikes it, which
 	 * knocks it back, rather than stand (#725). It cannot back off 7 blocks, and an iron sword does not kill the creeper
 	 * within its 30-tick fuse, so the blast still catches it. It does not go at the creeper again with the fuse far gone

@@ -57,11 +57,6 @@ public final class KiteGoal extends Goal {
 	private static final int RING_PATHS = 4;
 	/** How near the bot, in blocks, a creeper counts when it backs off, lit or not: one about to light is in the way too (#725). */
 	private static final double CREEPERS_RANGE = 2 * RANGE;
-	/**
-	 * How many ticks the bot waits to plan again where a plan found no way off and it is not cornered: a plan, 20 random
-	 * spots and a path, costs about 2 ms, and the next can find a spot this one did not (#759).
-	 */
-	static final int REPLAN_TICKS = 4;
 	/** How fast the bot steps in and backs off, as a factor of its speed: faster than the melee goal's 1.2. */
 	private static final double SPEED = 1.5;
 
@@ -75,8 +70,8 @@ public final class KiteGoal extends Goal {
 	 * step in when the mob moves on, or it flips between the two every few ticks as mobs come and go (#793).
 	 */
 	private boolean crowded;
-	/** The tick the last plan found no way off, for {@link #REPLAN_TICKS}. */
-	private int noWayOffAt = -REPLAN_TICKS;
+	/** When it plans again where the last plan found no way off and it is not cornered (#759, #975). */
+	private final Replan replan = new Replan();
 
 	KiteGoal(AntBot bot) {
 		this.bot = bot;
@@ -230,7 +225,7 @@ public final class KiteGoal extends Goal {
 		this.away = null;
 		this.cornered = false;
 		this.crowded = false;
-		this.noWayOffAt = -REPLAN_TICKS;
+		this.replan.reset();
 		this.bot.getNavigation().stop();
 	}
 
@@ -273,14 +268,15 @@ public final class KiteGoal extends Goal {
 			return;
 		}
 		// Somewhere further from the creeper than the bot is; planned again once there.
-		// With no way off and not cornered, it plans again only every few ticks, not each tick (#759).
-		if ((this.away == null || this.bot.getNavigation().isDone()) && this.bot.tickCount - this.noWayOffAt >= REPLAN_TICKS) {
+		// With no way off and not cornered, it plans again only every few ticks, not each tick, and ever less often (#759, #975).
+		if ((this.away == null || this.bot.getNavigation().isDone()) && this.replan.due(this.bot, creeper)) {
 			this.away = this.away(creeper);
 			if (this.away != null) {
+				this.replan.reset();
 				this.bot.getNavigation().moveTo(this.away, SPEED);
 				return;
 			}
-			this.noWayOffAt = this.bot.tickCount;
+			this.replan.failed(this.bot, creeper);
 			// Only within the blast's reach, where it is caught anyway: from further off it would walk into the blast, as it
 			// did 8 blocks from a creeper lit for another bot (#785). And only near it or with the fuse just started: from the
 			// edge of the blast with the fuse far gone it gets within reach only as the creeper explodes, where the blast
