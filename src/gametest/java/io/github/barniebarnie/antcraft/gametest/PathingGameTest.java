@@ -237,7 +237,8 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * corner between the two, a sweet berry bush; it plans again from where it is instead (#848). So a berry farm's bot
 	 * walked into a bush: pick_up's walk south ended as it took the berry, and take's walk east began.
 	 */
-	// Measured: passes at tick 20 (red: hurt by sweetBerryBush at (2.86, 1.0, 3.01) on tick 13).
+	// Measured: passes at tick 20 (red: hurt by sweetBerryBush at (2.86, 1.0, 3.01) on tick 13). Checked again after #965
+	// pushed on the first walking tick: without #848's check, hurt by sweetBerryBush at (2.91, 1.0, 2.99) on tick 11 (#972).
 	@GameTest(maxTicks = 40)
 	public void aWalkFromTheBlockBesideWherePlannedPlansAgain(GameTestHelper helper) {
 		room(helper, 0);
@@ -270,6 +271,8 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * with a sweet berry bush south of it: slid south off the step's start, the bot plans again rather than jump straight
 	 * for the step's block across the bush (#860).
 	 */
+	// Measured: passes at tick 25. Checked again after #965 pushed on the first walking tick: with #860's fix reverted, hurt
+	// by sweetBerryBush at (2.87, 1.0, 3.45) on tick 10 (#972).
 	@GameTest(maxTicks = 60)
 	public void aStepUpFromTheBlockBesideWherePlannedPlansAgain(GameTestHelper helper) {
 		room(helper, 0);
