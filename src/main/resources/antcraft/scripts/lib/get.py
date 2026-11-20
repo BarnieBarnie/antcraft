@@ -481,7 +481,11 @@ def fuel_costs(radius, tools=None, logs=0):
     with it cost less, once that axe more and each its breaking with it; any other gatherable item (the
     antcraft:gatherable tag) the estimate of its SOURCES entry each, or DEEP where get has none. tools as make_cost's.
     ponytail: no scan for the other raw items, so an ore costs its estimate, not its walk or trip; a SOURCES item outside
-    the tag costs needs' 1, as an id the game does not know would stop needs; only a wooden axe is costed; past the nearest vein coal costs as much a block, where get finds the next."""
+    the tag costs needs' 1, as an id the game does not know would stop needs; neither changes a vanilla plan's choice
+    (#974: no recipe takes those items where another raw item would do, and an ore's other ways are cycles or raw items
+    get has no source for); only a wooden axe is costed, as a stone axe's cheaper logs only tip a big smelt from coal to
+    charcoal, whose 200 ticks a smelt needs does not weigh (#974); past the nearest vein coal costs as much a block, where
+    get finds the next."""
     if tools is None:
         tools = {}
     p, tier, walk, mine = SOURCES[COAL].parts(radius)
