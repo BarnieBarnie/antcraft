@@ -68,6 +68,35 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A bot with no AI in fire does not step out, nor does its fire reflex take over, as with the config's gate (#977).
+	 * Without AI the bot cannot move anyway, but its reflex took over and broke off its script's wait, which ends with
+	 * {@code interrupted} once the fire is put out and the AI is back at tick 12.
+	 */
+	// Passes at tick 25, as it runs (red: printed [False interrupted], tick 14).
+	@GameTest(maxTicks = 30)
+	public void aBotWithNoAiInFireDoesNotStepOut(GameTestHelper helper) {
+		helper.setBlock(3, 0, 3, Blocks.NETHERRACK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.run(bot, WAIT);
+		BlockPos at = bot.blockPosition();
+		helper.runAfterDelay(2, () -> {
+			bot.setNoAi(true);
+			helper.setBlock(3, 1, 3, Blocks.FIRE);
+		});
+		helper.runAfterDelay(12, () -> {
+			helper.setBlock(3, 1, 3, Blocks.AIR);
+			bot.setNoAi(false);
+		});
+		helper.onEachTick(() -> {
+			if (!bot.blockPosition().equals(at) || !printed(bot).isEmpty()) {
+				helper.fail("stepped out to " + TestPositions.relative(helper, bot.blockPosition()).toShortString()
+					+ ", printed " + printed(bot) + ", tick " + helper.getTick());
+			}
+		});
+		helper.runAtTickTime(25, helper::succeed);
+	}
+
 	/** A bot in the middle of a 5x5 patch of fire on netherrack walks out of it, through the fire, rather than burn. */
 	@GameTest(maxTicks = 40)
 	public void walksOutOfAWidePatchOfFire(GameTestHelper helper) {

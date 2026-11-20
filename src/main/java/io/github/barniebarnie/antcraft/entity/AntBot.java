@@ -437,8 +437,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 				this.rememberPortal(level, portalIn(this).orElse(this.blockPosition()));
 			}
 			this.sayBubble.tick();
-			// A dead bot lies there for a second before it is gone; it does nothing meanwhile.
-			if (allowed && !this.isDeadOrDying()) {
+			// A dead bot lies there for a second before it is gone; it does nothing meanwhile. Nor does one with no AI, by the
+			// gate or a setNoAi (#977): its script holds where it is and goes on once the AI is back.
+			if (!noAi && !this.isDeadOrDying()) {
 				this.resumeSavedScript();
 				// Before the script, which a reflex holds while it lasts.
 				TickProfiler.time("bot.reflexes", () -> {

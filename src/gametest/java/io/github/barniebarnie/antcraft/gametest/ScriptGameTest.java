@@ -65,6 +65,40 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		return owner.messages().stream().filter(m -> m.text().startsWith("<" + name + "> ") || m.text().startsWith("[" + name + "] ")).toList();
 	}
 
+	/**
+	 * A bot with no AI holds its script where it is and goes on from there once its AI is back (#977): it ran its script
+	 * on with no AI, as only the config's gate held scripts. The script counts a tick at a time; the bot has no AI from
+	 * tick 5 to 15.
+	 */
+	// Measured: passes at tick 18 (red: printed 7 lines with no AI, 5 when it was taken, tick 7).
+	@GameTest(maxTicks = 36)
+	public void aBotWithNoAiHoldsItsScriptUntilItsAiIsBack(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.failOnError(helper, bot);
+		BotScripts.run(bot, "n = 0\nwhile True:\n    n += 1\n    print(n)\n    wait(1)\n");
+		int[] held = {-1};
+		helper.onEachTick(() -> {
+			long tick = helper.getTick();
+			int printed = BotScripts.log(bot, Output.Level.PRINT).size();
+			if (tick == 5) {
+				bot.setNoAi(true);
+				held[0] = printed;
+			} else if (tick > 5 && tick <= 15 && printed != held[0]) {
+				helper.fail("printed " + printed + " lines with no AI, " + held[0] + " when it was taken, tick " + tick);
+			}
+			if (tick == 15) {
+				bot.setNoAi(false);
+			}
+		});
+		helper.succeedWhen(() -> {
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(helper.getTick() > 15 && printed.size() >= held[0] + 3, "printed " + printed);
+			for (int i = 0; i < printed.size(); i++) {
+				helper.assertTrue(printed.get(i).equals(String.valueOf(i + 1)), "the script started over: " + printed);
+			}
+		});
+	}
+
 	@GameTest(maxTicks = 50)
 	public void saysWaitsAndPrintsAtTheRightTicks(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
