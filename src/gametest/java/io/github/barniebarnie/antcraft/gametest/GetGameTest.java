@@ -1836,6 +1836,21 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * cheaper of coal's least and the logs') is left out; it would win back part of a band some 110 ticks wide. The limit
 	 * leaves some 10% for full runs.
 	 */
+	/**
+	 * Carrying raw iron leaves the diamond tier's least_head in place (#980): only the iron tier's falls to 0, as raw
+	 * iron is its raw item. In optionsOfABigSmeltCost's setup the diamond tier is bounded at 790 + 12,000 work, under
+	 * iron's make of 21,817, as making diamond pickaxes is cheaper there (18,839: 2 of them last 2000 uses, iron needs 8),
+	 * so no bound could leave it out; least_head is not why make_cost plans it.
+	 */
+	@GameTest(maxTicks = 20)
+	public void carriedIronLeavesTheDiamondTiersLeastHead(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 24));
+		GameTests.cost(helper, bot, "from lib.get import least_head\n",
+			"c = {}\nprint(least_head('pickaxe', 'diamond', 2, 8, c) > 0, least_head('pickaxe', 'iron', 8, 8, c))\n",
+			List.of("True 0"), "least head", 1_000);
+	}
+
 	@GameTest(maxTicks = 90)
 	public void optionsOfABigSmeltCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
