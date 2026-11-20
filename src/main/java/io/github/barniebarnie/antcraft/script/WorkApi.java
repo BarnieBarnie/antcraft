@@ -22,6 +22,7 @@ import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Blocks;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
@@ -1368,7 +1369,7 @@ public final class WorkApi {
 			for (int x = SectionPos.blockToSectionCoord(box.minX); x <= SectionPos.blockToSectionCoord(box.maxX); x++) {
 				for (int z = SectionPos.blockToSectionCoord(box.minZ); z <= SectionPos.blockToSectionCoord(box.maxZ); z++) {
 					LevelChunk chunk = this.bot.level().getChunk(x, z);
-					if (scheduled(chunk.getBlockTicks(), box) || scheduled(chunk.getFluidTicks(), box)) {
+					if (scheduled(chunk.getBlockTicks(), box, this::settles) || scheduled(chunk.getFluidTicks(), box, pos -> true)) {
 						return true;
 					}
 				}
@@ -1376,9 +1377,20 @@ public final class WorkApi {
 			return false;
 		}
 
-		/** Whether {@code ticks}, a chunk's, holds one scheduled for a block in {@code box}. */
-		private static boolean scheduled(TickContainerAccess<?> ticks, AABB box) {
-			return ticks instanceof LevelChunkTicks<?> chunk && chunk.getAll().anyMatch(tick -> box.contains(Vec3.atCenterOf(tick.pos())));
+		/**
+		 * Whether a block tick scheduled at {@code pos} may settle into a drop: not fire's or a redstone component's, which
+		 * keep one scheduled for ever, so a pick_up finding nothing beside them waited out SETTLING_TICKS (#981).
+		 */
+		// ponytail: a clock ticking a block that is no signal source, such as a redstone lamp, still counts.
+		private boolean settles(BlockPos pos) {
+			BlockState state = this.bot.level().getBlockState(pos);
+			return !(state.getBlock() instanceof BaseFireBlock) && !state.isSignalSource();
+		}
+
+		/** Whether {@code ticks}, a chunk's, holds one scheduled for a block in {@code box} that {@code counts}. */
+		private static boolean scheduled(TickContainerAccess<?> ticks, AABB box, Predicate<BlockPos> counts) {
+			return ticks instanceof LevelChunkTicks<?> chunk
+				&& chunk.getAll().anyMatch(tick -> box.contains(Vec3.atCenterOf(tick.pos())) && counts.test(tick.pos()));
 		}
 
 		private List<Entity> around() {
@@ -1416,7 +1428,6 @@ public final class WorkApi {
 				// It looks on for a few ticks after the one it is called on (#965), as what a mine just before leaves may drop
 				// later: the cane over cut cane a tick later, and sand or gravel over a mined block falls two ticks later and
 				// breaks into an item where it lands on a torch (#971), so it also waits while the world near is settling.
-				// ponytail: any scheduled tick counts, also a fire's or a clock's, so that wait ends after SETTLING_TICKS of it.
 				return this.ticks > LOOK_TICKS && (!this.settling() || ++this.settlingWait > SETTLING_TICKS) && this.finish(around);
 			}
 			if (this.goal == null || !fitting.contains(this.goal)) {

@@ -975,6 +975,20 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True 1 1"));
 	}
 
+	/**
+	 * Fire keeps a tick scheduled for ever, but drops nothing: pick_up finding nothing beside it ends within a few ticks
+	 * rather than waiting out the world settling (#981).
+	 */
+	// Measured: passes at tick 3 (red: script still running on tick 42, as pick_up waited out SETTLING_TICKS).
+	@GameTest(maxTicks = 10)
+	public void pickUpFindingNothingBesideFireEndsAtOnce(GameTestHelper helper) {
+		helper.setBlock(4, 0, 4, Blocks.NETHERRACK);
+		helper.setBlock(4, 1, 4, Blocks.FIRE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 4);
+		expect(helper, bot, "t = game_time()\nr = pick_up('torch', radius=4)\nd = game_time() - t\nprint(r.value, d <= 5 or d)\n",
+			List.of("0 True"));
+	}
+
 	/** A cane cell along x at z 4, water at (4, y, 4) with its floor kept, a cane resting at the water's bottom. */
 	private static void pickUpCaneInACellsWater(GameTestHelper helper, AntBot bot, int y) {
 		helper.setBlock(3, y, 4, Blocks.DIRT);
