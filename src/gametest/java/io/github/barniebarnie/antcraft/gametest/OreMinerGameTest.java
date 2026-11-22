@@ -262,10 +262,25 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 2243 in a class run; green from the start (2234 alone).
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4500)
 	public void aLaterTripDownDeepStairsAndTwoTunnelsBreaksNothingOffItsRoute(GameTestHelper helper) {
-		for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 14, 12, 14)) {
+		laterTripBreaksNothingOffItsRoute(helper, 12);
+	}
+
+	/**
+	 * aLaterTripDownDeepStairsAndTwoTunnelsBreaksNothingOffItsRoute at the depth of a real trip (#1015): home on a stone
+	 * plateau at (3, 45, 6), 47 blocks of stairs down to y -2, in the 48-tall structure deep.
+	 */
+	// Measured: passes at tick 4647 in a class run; green from the start.
+	@GameTest(structure = "antcraft-gametest:deep", maxTicks = 9300)
+	public void aLaterTripAtRealDepthBreaksNothingOffItsRoute(GameTestHelper helper) {
+		laterTripBreaksNothingOffItsRoute(helper, 44);
+	}
+
+	/** Stone from y -4 up to top under x 0 to 14, z 0 to 14, home on it at (3, top + 1, 6); the checks of #1013. */
+	private static void laterTripBreaksNothingOffItsRoute(GameTestHelper helper, int top) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 14, top, 14)) {
 			helper.setBlock(pos, Blocks.STONE);
 		}
-		BlockPos home = new BlockPos(3, 13, 6);
+		BlockPos home = new BlockPos(3, top + 1, 6);
 		AntBot bot = miner(helper);
 		bot.teleportTo(bot.getX(), helper.absolutePos(home).getY(), bot.getZ());
 		bot.setHome(helper.absolutePos(home));
@@ -275,7 +290,7 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			BlockPos at = bot.isRemoved() ? BlockPos.ZERO : TestPositions.relative(helper, bot.blockPosition());
 			if (before.isEmpty() && at.getX() >= 7 && at.getZ() >= 7) {
-				for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 23, 15, 23)) {
+				for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 23, top + 3, 23)) {
 					before.put(pos.immutable(), helper.getBlockState(pos));
 				}
 				for (int i = 0, free = 0; i < bot.getInventory().getContainerSize(); i++) {
@@ -288,7 +303,7 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(!before.isEmpty(), "the bot never reached the third area");
 			ended(helper, run, bot, home);
-			helper.assertTrue(stored(helper, Items.DIRT, 13) > 0, "no dirt stored");
+			helper.assertTrue(stored(helper, Items.DIRT, top + 1) > 0, "no dirt stored");
 			helper.assertBlockPresent(Blocks.AIR, 11, -2, 11);
 			List<String> off = before.entrySet().stream()
 				.filter(e -> !e.getValue().isAir() && !helper.getBlockState(e.getKey()).equals(e.getValue()))
