@@ -26,7 +26,7 @@ if args is not None:
 ## How it works
 
 - [`deposit`](../reference/modules/lib/storage.md) first gives back what the bot borrowed ([`give_back`](../reference/modules/lib/borrow.md)), so a borrowed pickaxe goes back to its own chest.
-- The chests are those of [`lib.stock.chests`](../reference/modules/lib/stock.md): the colony's core, the positions in `memory["chests"]` and the chests and barrels within the radius. For each item the bot carries, the chests that hold it come first, read from afar with [`container`](../reference/crafting/container.md), then the others.
+- The chests are those of [`lib.stock.chests`](../reference/modules/lib/stock.md): the colony store's, then the colony's core, the positions in `memory["chests"]` and the chests and barrels within the radius. Each item goes into the colony store first (a depot published with [`lib.depot.publish_store`](../reference/modules/lib/depot.md), such as the one [`jobs.storekeeper`](storekeeper.md) keeps), however far it is, and into the other chests only once the store has no room for it. Within each, the chests that hold the item come first, read from afar with [`container`](../reference/crafting/container.md), then the others, nearest first.
 - [`room`](../reference/crafting/room.md) tells from afar how many of the item a chest still takes, so the bot skips a full chest instead of walking to it to find out. [`put`](../reference/crafting/put.md) then walks to each chest with room until the bot carries none of the item.
 - What fits nowhere stays with the bot and is named in `missing`, which the job warns about after [`go_home`](../reference/modules/lib/home.md).
 
@@ -45,7 +45,7 @@ if not r["ok"]:
 
 The bot carries one item at a time, so it needs a free slot or two.
 
-`StorageGameTest` runs the bundled job in a test area as `jobs.store 8`, and tests `deposit` with a chest that holds the item, a full chest it skips without walking to it, chests too full for anything, and `sort` over two chests.
+`StorageGameTest` runs the bundled job in a test area as `jobs.store 8`, and tests `deposit` with a chest that holds the item, a colony store it fills before a nearer chest that holds the item, a full chest it skips without walking to it, chests too full for anything, and `sort` over two chests.
 
 ## A depot that grows
 

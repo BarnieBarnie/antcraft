@@ -17,20 +17,26 @@ KEEP_KINDS = KEPT + ["minecraft:bow", "minecraft:crossbow", "minecraft:trident",
 def deposit(keep=None, radius=32):
     """Gives back what the bot borrowed (lib.borrow.give_back), then puts everything else it carries but KEEP_KINDS and
     what keep (a list of item ids or selectors) selects into the chests of lib.stock.chests(radius): each item first into
-    the chests that already hold it, then into any chest with room, nearest first; a chest with no room for it (room) is
-    skipped without walking to it. Gives result(): ok, or no_space with missing, item to how many the bot still carries
-    as no chest took them."""
+    the colony store's chests (lib.stock.store()), then into the others, nearest first (#1026); within each, first the
+    chests that already hold it, then any with room; a chest with no room for it (room) is skipped without walking to
+    it. Gives result(): ok, or no_space with missing, item to how many the bot still carries as no chest took them."""
     give_back()
     kept = KEEP_KINDS + (keep or [])
     chests = lib.stock.chests(radius)
+    first = lib.stock.store()
+    store = [c for c in chests if c in first]
+    rest = [c for c in chests if c not in first]
     items = []
     for s in inventory():
         if s.item not in items and not matches(s, kept):
             items.append(s.item)
     missing = {}
     for item in items:
-        holding = [c for c in chests if lib.stock.holds(c, item)]
-        for chest in holding + [c for c in chests if c not in holding]:
+        ordered = []
+        for group in (store, rest):
+            holding = [c for c in group if lib.stock.holds(c, item)]
+            ordered += holding + [c for c in group if c not in holding]
+        for chest in ordered:
             if has(item) and room(chest, item):
                 put(chest, item)
         if has(item):

@@ -1,7 +1,10 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
@@ -20,7 +23,8 @@ import net.minecraft.world.level.block.Blocks;
 /**
  * {@code lib/storage.py} and {@code jobs/store.py} (#572): deposit puts each item with its kind and keeps the tools, full
  * chests leave the items carried and named in missing, sort gathers each item into one chest, and the job deposits and
- * goes home; room lets deposit and sort skip a full chest without walking to it (#584). A neighbouring test's chests are out of every
+ * goes home; room lets deposit and sort skip a full chest without walking to it (#584); deposit fills the colony store
+ * before a nearer chest (#1026). A neighbouring test's chests are out of every
  * scan, which reads no further than the test's area (GameTests.hides).
  */
 public class StorageGameTest implements CustomTestMethodInvoker {
@@ -55,6 +59,40 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(far.countItem(Items.COBBLESTONE) == 11, "cobblestone in the far chest: " + far.countItem(Items.COBBLESTONE));
 			helper.assertTrue(near.countItem(Items.COBBLESTONE) == 0, "cobblestone in the near chest");
 			helper.assertTrue(near.countItem(Items.DIRT) == 3, "dirt in the near chest: " + near.countItem(Items.DIRT));
+		});
+	}
+
+	/**
+	 * A bot in a colony whose store, published in colony_memory as lib.depot.publish_store does, is the empty chest at
+	 * (6, 1, 6), and a nearer chest at (2, 1, 1) that already holds a cobblestone (#1026): deposit puts the bot's ten
+	 * cobblestone and three dirt in the store.
+	 */
+	// Measured: passes at tick 12 (red before #1026: the cobblestone went to the near chest that held some).
+	@GameTest(maxTicks = 30)
+	public void depositPutsItemsInTheColonyStoreFirst(GameTestHelper helper) {
+		Container near = chest(helper, 2, 1, 1);
+		near.setItem(0, new ItemStack(Items.COBBLESTONE));
+		Container store = chest(helper, 6, 1, 6);
+		helper.setBlock(2, 1, 6, ModBlocks.COLONY_CORE);
+		ColonyManager colonies = ColonyManager.get(helper.getLevel());
+		Colony colony = colonies.byCore(helper.absolutePos(new BlockPos(2, 1, 6))).orElseThrow();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		colonies.join(bot, colony);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 10));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 3));
+		ScriptRun job = run(helper, bot, """
+			import lib.storage
+			colony_memory["depots"] = {"me/store": {"chests": [["stone", %s]], "kind": "store"}}
+			colony_memory["storage"] = "me/store"
+			r = lib.storage.deposit()
+			print(r["ok"], count("cobblestone"), count("dirt"))
+			""".formatted(printed(helper, 6, 1, 6)));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			finished(helper, job, bot, List.of("True 0 0"));
+			helper.assertTrue(store.countItem(Items.COBBLESTONE) == 10, "cobblestone in the store: " + store.countItem(Items.COBBLESTONE));
+			helper.assertTrue(store.countItem(Items.DIRT) == 3, "dirt in the store: " + store.countItem(Items.DIRT));
+			helper.assertTrue(near.countItem(Items.COBBLESTONE) == 1, "cobblestone in the near chest: " + near.countItem(Items.COBBLESTONE));
 		});
 	}
 
