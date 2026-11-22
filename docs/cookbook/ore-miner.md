@@ -1,13 +1,25 @@
 # Mine ore for home
 
-The job `jobs/ore_miner` has one task: gather one ore and keep it at home (#1002). Iron first: the bot digs down from its home, branch-mines the chunks round it for iron ore, smelts the raw iron at home and stores the ingots in chests it places there. Unlike [`jobs.strip_mine`](strip-mine.md), which stops once the bot carries enough, it goes on until the level of every chunk of its claim is mined out, making as many trips as that takes, and then says it is finished.
+The job `jobs/ore_miner` has one task: gather one ore and keep it at home (#1002). The bot digs down from its home, branch-mines the chunks round it for the ore, smelts it at home where it smelts, and stores what it got in chests it places there. Run one bot per ore you want (#1005). Unlike [`jobs.strip_mine`](strip-mine.md), which stops once the bot carries enough, it goes on until the level of every chunk of its claim is mined out, making as many trips as that takes, and then says it is finished.
 
 ```text
 /antcraft bot run jobs.ore_miner
 /antcraft bot run jobs.ore_miner raw_iron 9 32
 ```
 
-The words are the ore, a raw item of [`lib.dig`](../reference/modules/lib/dig.md) such as `raw_iron` (the default), `raw_copper` or `coal`; how many chunks it claims, 9 (below); and how far to look for chests and the kit, 32 blocks (at most 32). It mines at the height where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)), y 16 for iron. Emerald has no such height, so the job says `no_ore` for it.
+The words are the ore, an item of [`lib.dig`](../reference/modules/lib/dig.md)'s `ORES` (below), `raw_iron` by default; how many chunks it claims, 9 (below); and how far to look for chests and the kit, 32 blocks (at most 32). It mines at the height where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)). Emerald has no such height, so the job says `no_ore` for it.
+
+| Ore | Height | Pickaxe | Kept at home as |
+|---|---|---|---|
+| `coal` | y 96 | stone | coal |
+| `raw_copper` | y 48 | stone | copper ingots |
+| `raw_iron` | y 16 | stone | iron ingots |
+| `lapis_lazuli` | y 0 | stone | lapis lazuli |
+| `raw_gold` | y -16 | iron | gold ingots |
+| `redstone` | y -59 | iron | redstone |
+| `diamond` | y -59 | iron | diamonds |
+
+Raw copper, iron and gold are smelted to ingots; the rest is stored as it drops, so a coal miner needs no fuel. The pickaxe is the lowest tier that drops the ore ([`lib.tools.NEEDS`](../reference/modules/lib/tools.md)), stone at least: a gold, redstone or diamond miner with only a stone pickaxe makes or fetches an iron one before it goes down.
 
 ## The trips
 
@@ -21,11 +33,11 @@ The bot starts with the miner's kit of `jobs.strip_mine`, a stone pickaxe, a cra
 | branches | from a corridor through the bottom of the stairs, square to their last steps, a branch each way at every third block across the chunk, each to the chunk's edge ([`lib.dig.branch`](../reference/modules/lib/dig.md)), mining the ore in its walls and ceiling and putting a torch every 8 blocks |
 | next chunk | with every branch of a chunk dug, it tunnels on at the same level into the next chunk of its claim (below) and digs that one's grid from a corridor through the tunnel's end |
 | home | when it has fewer than 3 empty slots, when its pickaxe would not last another branch, or when its claim is mined out, it walks back up the stairs and home |
-| smelt | it smelts the ore it carries with [`lib.craft.smelt_here`](../reference/modules/lib/craft.md), in the furnace it carries or one it crafts from the cobblestone it dug, burning coal; where it carries too little coal (one smelts 8), it gets more with [`lib.get`](../reference/modules/lib/get.md), from its chests first |
+| smelt | raw copper, iron or gold only: it smelts the ore it carries with [`lib.craft.smelt_here`](../reference/modules/lib/craft.md), in the furnace it carries or one it crafts from the cobblestone it dug, burning coal; where it carries too little coal (one smelts 8), it gets more with [`lib.get`](../reference/modules/lib/get.md), from its chests first |
 | better pickaxe | where a chest within the radius, its depot's or any other, holds a better pickaxe than its own (below), it takes that one and holds it |
 | store | all it carries goes into its depot (below) but its pickaxe, crafting table, furnace and torches; after taking a better pickaxe, its old ones go too |
 
-On each trip home it looks for a better pickaxe with [`lib.enchant.best_pickaxe`](../reference/modules/lib/enchant.md): a higher tier first, then better enchantments (Fortune counts most, then Efficiency and Mending, then Unbreaking), then more uses left. A pickaxe below the tier the ore needs, such as a golden one for iron, is never taken, nor one no better than its own. So an owner, or another bot, that puts a Fortune III pickaxe in one of its chests has it mining with that one from its next trip; it takes only that pickaxe, leaving the other ones in the chest, and its old pickaxe goes into the depot.
+Before its first trip, and on each trip home, it looks for a better pickaxe with [`lib.enchant.best_pickaxe`](../reference/modules/lib/enchant.md): a higher tier first, then better enchantments (Fortune counts most, then Efficiency and Mending, then Unbreaking), then more uses left. A pickaxe below the tier the ore needs, such as a golden one for iron, is never taken, nor one no better than its own. So an owner, or another bot, that puts a Fortune III pickaxe in one of its chests has it mining with that one from its next trip; it takes only that pickaxe, leaving the other ones in the chest, and its old pickaxe goes into the depot.
 
 Branches 3 blocks apart leave no block of the level unseen: each branch's walls are the blocks beside it, so the blocks between two branches are in the wall of one or the other. The columns of the last two steps of the stairs are left, as a branch through them would dig out those steps.
 
@@ -50,9 +62,10 @@ The bot keeps what it brings home in a [`lib.depot`](../reference/modules/lib/de
 | Category | What |
 |---|---|
 | `ingots` | `#c:ingots`: what it smelted |
+| `gems` | `#c:gems`, `#c:dusts` and coal: diamonds, lapis lazuli, redstone and coal, also the coal it has left after smelting |
 | `ores` | `#c:raw_materials` and `#c:ores`: raw items it could not smelt, ore blocks |
 | `pickaxes` | `#minecraft:pickaxes`: the pickaxes it held before taking a better one |
-| `other` | the rest: cobblestone, coal, and whatever else it dug |
+| `other` | the rest: cobblestone and whatever else it dug |
 
 A chest comes from [`lib.get`](../reference/modules/lib/get.md): carried, from a chest within the radius, or crafted from planks or logs.
 

@@ -10,8 +10,10 @@ import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
@@ -19,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
@@ -246,6 +249,109 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	// One ore block at (3, -2, 2), dug by the one branch of the area of aDugGridEndsTheJobAtHome (#1005): the bot ends at
+	// home with what it drops, smelted for copper and gold, in its depot. Iron-tier ores get an iron pickaxe in hand.
+
+	// Measured: passes at tick 224 (red: ore miner: could not smelt coal: no_recipe).
+	@GameTest(maxTicks = 450)
+	public void aCoalMinerStoresItsCoal(GameTestHelper helper) {
+		mines(helper, Blocks.COAL_ORE, "coal", Items.STONE_PICKAXE, Items.STONE_PICKAXE, Items.COAL, 3);
+	}
+
+	// Measured: passes at tick 654 with a drop of 2 to 5 raw copper, each smelted in 200 ticks (green
+	// before #1005 too: raw copper was smelted already).
+	@GameTest(maxTicks = 2400)
+	public void aCopperMinerStoresCopperIngots(GameTestHelper helper) {
+		mines(helper, Blocks.COPPER_ORE, "raw_copper", Items.STONE_PICKAXE, Items.STONE_PICKAXE, Items.COPPER_INGOT, 2);
+	}
+
+	// Measured: passes at tick 188 (red: ore miner: could not smelt redstone: no_recipe).
+	@GameTest(maxTicks = 450)
+	public void aRedstoneMinerStoresItsRedstone(GameTestHelper helper) {
+		mines(helper, Blocks.REDSTONE_ORE, "redstone", Items.IRON_PICKAXE, Items.IRON_PICKAXE, Items.REDSTONE, 4);
+	}
+
+	// Measured: passes at tick 188 (red: ore miner: could not smelt diamond: no_recipe).
+	@GameTest(maxTicks = 450)
+	public void aDiamondMinerStoresItsDiamond(GameTestHelper helper) {
+		mines(helper, Blocks.DIAMOND_ORE, "diamond", Items.IRON_PICKAXE, Items.IRON_PICKAXE, Items.DIAMOND, 1);
+	}
+
+	// Measured: passes at tick 224 (red: ore miner: could not smelt lapis_lazuli: no_recipe).
+	@GameTest(maxTicks = 450)
+	public void aLapisMinerStoresItsLapis(GameTestHelper helper) {
+		mines(helper, Blocks.LAPIS_ORE, "lapis_lazuli", Items.STONE_PICKAXE, Items.STONE_PICKAXE, Items.LAPIS_LAZULI, 4);
+	}
+
+	/**
+	 * A gold miner with only a stone pickaxe, and 3 iron ingots and 2 sticks in a chest near home, makes an iron pickaxe
+	 * before it goes down (lib.get.ensure_tool), then mines, smelts and stores the gold.
+	 */
+	// Measured: passes at tick 528 (green before #1005 too: ensure_pickaxe asks for the tier gold needs).
+	@GameTest(maxTicks = 900)
+	public void aGoldMinerGetsAnIronPickaxeFirstAndStoresGoldIngots(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.IRON_INGOT, 3), new ItemStack(Items.STICK, 2));
+		mines(helper, Blocks.GOLD_ORE, "raw_gold", Items.STONE_PICKAXE, Items.IRON_PICKAXE, Items.GOLD_INGOT, 1);
+	}
+
+	/**
+	 * A Fortune III iron pickaxe in a chest near home is taken before the first trip, not only on the way back: the bot
+	 * holds it when it first goes below the floor, and its stone pickaxe ends in the depot.
+	 */
+	// Measured: passes at tick 183 (red: went down holding 1 minecraft:stone_pickaxe).
+	@GameTest(maxTicks = 450)
+	public void aBetterPickaxeInAHomeChestIsTakenBeforeTheFirstTrip(GameTestHelper helper) {
+		ItemStack fortune = new ItemStack(Items.IRON_PICKAXE);
+		enchant(helper, fortune, Enchantments.FORTUNE, 3);
+		chest(helper, fortune);
+		AntBot bot = miner(helper);
+		ScriptRun run = run(helper, bot, 2, 2, 4, 6);
+		ItemStack[] down = downWith(helper, bot);
+		helper.succeedWhen(() -> {
+			ended(helper, run, bot);
+			helper.assertTrue(down[0] != null && down[0].is(Items.IRON_PICKAXE), "went down holding " + down[0]);
+			helper.assertValueEqual(stored(helper, Items.STONE_PICKAXE), 1, "stone pickaxes stored");
+		});
+	}
+
+	/**
+	 * Has a bot holding pickaxe mine ore with block at (3, -2, 2) in the one-column area of aDugGridEndsTheJobAtHome;
+	 * succeeds once it went down holding a pickaxe of item down and is home with at least n of stored in its depot and,
+	 * for a raw ore, none of it stored. A bot that smelts carries a furnace, as the area gives too little cobblestone.
+	 */
+	private static void mines(GameTestHelper helper, Block block, String ore, Item pickaxe, Item down, Item stored, int n) {
+		helper.setBlock(3, -2, 2, block);
+		AntBot bot = miner(helper);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(pickaxe));
+		Item raw = BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(ore));
+		if (raw != stored) {
+			bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		}
+		ScriptRun run = BotScripts.run(bot, source(helper, ore, 1, -2, 2, 2, 4, 6));
+		BotScripts.failOnWarning(helper, bot);
+		ItemStack[] held = downWith(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(held[0] != null && held[0].is(down), "went down holding " + held[0]);
+			ended(helper, run, bot);
+			helper.assertTrue(stored(helper, stored) >= n, stored(helper, stored) + " " + stored + " stored, " + n + " wanted");
+			if (raw != stored) {
+				helper.assertValueEqual(stored(helper, raw), 0, ore + " stored");
+			}
+		});
+	}
+
+	/** What bot holds when it first goes below the floor, null till then. */
+	private static ItemStack[] downWith(GameTestHelper helper, AntBot bot) {
+		ItemStack[] down = {null};
+		int floor = helper.absolutePos(BlockPos.ZERO).getY();
+		helper.onEachTick(() -> {
+			if (down[0] == null && !bot.isRemoved() && bot.getY() < floor) {
+				down[0] = bot.getMainHandItem().copy();
+			}
+		});
+		return down;
+	}
+
 	/** A chest at (0, 1, 4), away from the stairs and the depot's row, holding stacks. */
 	private static ChestBlockEntity chest(GameTestHelper helper, ItemStack... stacks) {
 		helper.setBlock(0, 1, 4, Blocks.CHEST);
@@ -291,9 +397,13 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	private static String source(GameTestHelper helper, int chunks, int y, int x0, int z0, int x1, int z1) {
+		return source(helper, "raw_iron", chunks, y, x0, z0, x1, z1);
+	}
+
+	private static String source(GameTestHelper helper, String ore, int chunks, int y, int x0, int z0, int x1, int z1) {
 		BlockPos a = helper.absolutePos(new BlockPos(x0, y, z0));
 		BlockPos b = helper.absolutePos(new BlockPos(x1, y, z1));
-		return "import jobs.ore_miner\njobs.ore_miner.run(\"raw_iron\", %d, 32, %d, (%d, %d, %d, %d))\n".formatted(chunks, a.getY(),
+		return "import jobs.ore_miner\njobs.ore_miner.run(\"%s\", %d, 32, %d, (%d, %d, %d, %d))\n".formatted(ore, chunks, a.getY(),
 			Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()), Math.max(a.getZ(), b.getZ()));
 	}
 

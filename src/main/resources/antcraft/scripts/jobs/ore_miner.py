@@ -4,7 +4,8 @@
 # stairs from home down to lib.dig.best_y(ore), spiralling within the home chunk, branch-mines the chunk there in a grid
 # of branches 3 blocks apart, then tunnels at that level into the next chunk of its claim and mines that, and goes home
 # to smelt what it mined and store it in depot "ore" whenever it is nearly full or its pickaxe is low; there it takes a
-# better pickaxe from a chest, storing its old one (#1004). With its claim
+# better pickaxe from a chest, storing its old one (#1004), as it also does before the first trip. Raw copper, iron and
+# gold are smelted to ingots; coal, diamonds, lapis and redstone are stored as they drop (#1005). With its claim
 # cleared it goes home and says it is finished (docs/cookbook/ore-miner.md). Another script runs it with
 # run(ore, chunks, radius, y, area); imported, this runs nothing.
 #
@@ -30,7 +31,9 @@ from lib.result import result
 NAME = "ore"  # the depot, memory["depots"]["ore"]
 PICKAXES = "#minecraft:pickaxes"
 # pickaxes: the old one after a better one from a chest (#1004); tools are never stored as other (lib.storage.KEEP_KINDS).
-CATEGORIES = {"ingots": ["#c:ingots"], "ores": ["#c:raw_materials", "#c:ores"], "pickaxes": [PICKAXES]}
+# gems: what drops as it is, never smelted: diamonds, lapis, redstone and coal, which has no #c tag (#1005).
+CATEGORIES = {"ingots": ["#c:ingots"], "ores": ["#c:raw_materials", "#c:ores"], "pickaxes": [PICKAXES],
+              "gems": ["#c:gems", "#c:dusts", "minecraft:coal"]}
 # What store leaves the bot: its pickaxe, the crafting table to make the next with and the furnace it smelts in; torches
 # are kept as lib.storage.KEEP_KINDS.
 KEEP = [PICKAXES, "minecraft:crafting_table", "minecraft:furnace"]
@@ -250,11 +253,12 @@ def better_pickaxe(item, radius):
     return took
 
 
-def unload(item, radius):
-    """Smelts the item the bot carries at home (lib.craft.smelt_here), with coal it gets (lib.get) where it carries too
-    little, takes a better pickaxe from the chests (better_pickaxe), then stores all but KEEP in depot NAME; with a
-    better pickaxe taken, the pickaxes it held before go too. Gives store's result()."""
-    n = count(item)
+def unload(item, radius, took=False):
+    """Smelts the raw item the bot carries at home (lib.craft.smelt_here), with coal it gets (lib.get) where it carries
+    too little (coal, diamonds, lapis and redstone are stored as they drop), takes a better pickaxe from the chests
+    (better_pickaxe), then stores all but KEEP in depot NAME; with a better pickaxe taken, now or before the trip (took),
+    the pickaxes it held before go too. Gives store's result()."""
+    n = count(item) if item.startswith("raw_") else 0
     if n:
         fuel = -(-n // SMELTS)
         if count(COAL) < fuel:
@@ -263,7 +267,7 @@ def unload(item, radius):
         if not r["ok"]:
             warn("ore miner: could not smelt", item + ":", r["reason"], r["missing"])
     keep = KEEP
-    if better_pickaxe(item, radius):
+    if better_pickaxe(item, radius) or took:
         keep = [(held().item, 1)] + KEEP[1:]  # the held pickaxe: put takes from the hand last
     s = lib.depot.store(NAME, keep, radius)
     if not s["ok"]:
@@ -293,13 +297,15 @@ def ore_miner(item, y, area, chunks, radius):
         return r
     go_home()
     lib.depot.depot(NAME, h + FACING[OPPOSITE[FACE]], turn(FACE, []), CATEGORIES)
+    took = better_pickaxe(item, radius)  # before ensure_pickaxe, which would otherwise make or fetch a worse one
     while True:
         lib.food.upkeep(radius)
         r = ensure_pickaxe(item, y, radius)
         if not r["ok"]:
             return r
         r = trip(item, y, claim(area, chunks), om)
-        s = unload(item, radius)
+        s = unload(item, radius, took)
+        took = False
         if not r["ok"] or not s["ok"]:
             return r if not r["ok"] else s
         if "dug" in r:
