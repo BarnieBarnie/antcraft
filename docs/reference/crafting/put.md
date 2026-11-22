@@ -11,7 +11,7 @@ Walks into reach of a container and puts carried items into it.
 | Name | Type | Default | Meaning |
 |---|---|---|---|
 | `container` | [`Pos`](../types/pos.md) or tuple | | a chest, barrel, furnace, the Colony Core or another container |
-| `item` | [selector](../types/selectors.md) | | the items to put in |
+| `item` | [selector](../types/selectors.md) or [`Stack`](../types/stack.md) | | the items to put in, or one stack from [`inventory`](../inventory/inventory.md) |
 | `n` | int | `None` | how many at most; `None` puts in every matching item |
 
 ## Returns
@@ -28,7 +28,7 @@ One instruction, the call itself. The walk plans its path as `goto` does.
 
 ## Description
 
-It moves items from the bot's hand and inventory into the container, from the inventory slots first and the hand last, each first onto the stacks of the same item the container holds, as far as they have room, and only then into its first empty slot, so a stack is not split over two slots. A double chest takes items in both halves. An `n` below 1, a malformed selector, or a name or tag the game does not know stops the script with an error.
+It moves items from the bot's hand and inventory into the container, from the inventory slots first and the hand last, each first onto the stacks of the same item the container holds, as far as they have room, and only then into its first empty slot, so a stack is not split over two slots. A double chest takes items in both halves. Given a [`Stack`](../types/stack.md), it puts in the carried stacks of the same item, damage and enchantments (the count may differ), so a script puts away one rod it picked from `inventory` and keeps the others (#997). An `n` below 1, a malformed selector, or a name or tag the game does not know stops the script with an error.
 
 ## Examples
 
@@ -42,7 +42,7 @@ put(core, "cobblestone", 32)
 
 | Reason | When |
 |---|---|
-| `no_item` | the bot carries nothing `item` selects |
+| `no_item` | the bot carries nothing `item` selects, or no stack equal to the `Stack` |
 | `target_gone` | there is no container at `container` |
 | `no_space` | the container filled up; `value` is how many went in |
 | `protected` | the container may not be changed: outside the build height or border, or under spawn protection |

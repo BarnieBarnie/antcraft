@@ -117,21 +117,9 @@ public final class WorkApi {
 			return run.start(new Use(run, bot(run, call), target, item, face), call, target);
 		});
 		natives.register("equip", 15, call -> {
-			Object arg = Args.bind("equip", call, 1, "item")[0];
-			Predicate<ItemStack> item;
-			if (arg instanceof Stack want) {
-				// A Stack from inventory() holds that exact stack: item, damage and enchantments (#993).
-				item = stack -> {
-					Stack is = SenseApi.stack(stack);
-					return is.item().equals(want.item()) && is.damage() == want.damage() && is.enchantments().equals(want.enchantments());
-				};
-			} else {
-				Selector selector = Selector.parse(arg);
-				arg = selector;
-				item = selector.items();
-			}
-			boolean held = BotHands.equip(bot(run, call), item);
-			return run.done("equip(" + arg + ")", held ? Result.OK : Result.fail(Result.NO_ITEM));
+			Object item = item(Args.bind("equip", call, 1, "item")[0]);
+			boolean held = BotHands.equip(bot(run, call), items(item));
+			return run.done("equip(" + item + ")", held ? Result.OK : Result.fail(Result.NO_ITEM));
 		});
 		natives.register("eat", call -> {
 			Eat eat = new Eat(bot(run, call), Selector.parse(Args.bind("eat", call, 1, "item")[0]));
@@ -274,6 +262,25 @@ public final class WorkApi {
 			case TAMED -> config.botsAttackTamed();
 			case OTHER -> false;
 		};
+	}
+
+	/** The {@code item} argument of {@code equip}, {@code take} and {@code put}: a {@link Stack} as it is, else a {@link Selector}. */
+	static Object item(Object arg) {
+		return arg instanceof Stack ? arg : Selector.parse(arg);
+	}
+
+	/**
+	 * Which item stacks an {@link #item} picks: for a {@link Stack}, those equal to it in item, damage and enchantments, the
+	 * count aside, so a script moves or holds one exact stack (#993, #997); for a selector, those it selects.
+	 */
+	static Predicate<ItemStack> items(Object item) {
+		if (item instanceof Stack want) {
+			return stack -> {
+				Stack is = SenseApi.stack(stack);
+				return is.item().equals(want.item()) && is.damage() == want.damage() && is.enchantments().equals(want.enchantments());
+			};
+		}
+		return ((Selector) item).items();
 	}
 
 	static AntBot bot(ScriptRun run, NativeCall call) {

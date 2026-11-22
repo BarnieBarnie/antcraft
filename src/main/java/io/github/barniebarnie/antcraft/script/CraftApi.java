@@ -81,13 +81,13 @@ public final class CraftApi {
 		natives.register("put", call -> {
 			Object[] args = Args.bind("put", call, 2, "container", "item", "n");
 			Pos target = Pos.of(args[0]);
-			Selector item = Selector.parse(args[1]);
+			Object item = WorkApi.item(args[1]);
 			return run.start(new Put(run, WorkApi.bot(run, call), target, item, count("put", args[2])), call, target);
 		});
 		natives.register("take", call -> {
 			Object[] args = Args.bind("take", call, 2, "container", "item", "n");
 			Pos target = Pos.of(args[0]);
-			Selector item = Selector.parse(args[1]);
+			Object item = WorkApi.item(args[1]);
 			return run.start(new Take(run, WorkApi.bot(run, call), target, item, count("take", args[2])), call, target);
 		});
 		natives.register("craft", 40, call -> {
@@ -332,16 +332,16 @@ public final class CraftApi {
 
 	// put and take
 
-	/** {@code put(container, item, n=None)}: moves up to {@code n} of the items {@code item} selects into the container. */
+	/** {@code put(container, item, n=None)}: moves up to {@code n} of the items {@code item} selects into the container, or of the stacks equal to a {@link Stack}. */
 	private static final class Put extends WorkApi.OnBlock {
-		private final Selector selector;
+		private final Object selector;
 		private final Predicate<ItemStack> item;
 		private final long n;
 
-		Put(ScriptRun run, AntBot bot, Pos target, Selector selector, long n) {
+		Put(ScriptRun run, AntBot bot, Pos target, Object selector, long n) {
 			super(run, bot, target);
 			this.selector = selector;
-			this.item = selector.items();
+			this.item = WorkApi.items(selector);
 			this.n = n;
 		}
 
@@ -370,16 +370,16 @@ public final class CraftApi {
 		}
 	}
 
-	/** {@code take(container, item, n=None)}: moves up to {@code n} of the items {@code item} selects out of the container. */
+	/** {@code take(container, item, n=None)}: moves up to {@code n} of the items {@code item} selects out of the container, or of the stacks equal to a {@link Stack}. */
 	private static final class Take extends WorkApi.OnBlock {
-		private final Selector selector;
+		private final Object selector;
 		private final Predicate<ItemStack> item;
 		private final long n;
 
-		Take(ScriptRun run, AntBot bot, Pos target, Selector selector, long n) {
+		Take(ScriptRun run, AntBot bot, Pos target, Object selector, long n) {
 			super(run, bot, target);
 			this.selector = selector;
-			this.item = selector.items();
+			this.item = WorkApi.items(selector);
 			this.n = n;
 		}
 

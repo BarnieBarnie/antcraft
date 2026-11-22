@@ -20,12 +20,14 @@ import java.util.Objects;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
@@ -138,6 +140,22 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "r = put(" + at(helper, 4, 7, 4) + ", 'iron_ingot')\nprint(r.ok, r.reason)\n", List.of("False out_of_reach"));
 	}
 
+	/**
+	 * A plain rod and a Lure III one carried: put of the Lure III one's Stack puts only it, and again, with it gone, is
+	 * no_item though the plain rod is still carried (#997).
+	 */
+	@GameTest(maxTicks = 20)
+	public void putOfAStackPutsOnlyTheCarriedStackEqualToIt(GameTestHelper helper) {
+		Container chest = chest(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.FISHING_ROD));
+		bot.getInventory().addItem(lureRod(helper));
+		expect(helper, bot, "s = [x for x in inventory() if x.enchantments][0]\nr = put(" + chestAt(helper) + ", s)\n"
+				+ "t = put(" + chestAt(helper) + ", s)\nprint(r.ok, r.value, t.ok, t.reason, count('fishing_rod'))\n",
+			List.of("True 1 False no_item 1"), () -> helper.assertTrue(chest.countItem(Items.FISHING_ROD) == 1 && chest.getItem(0).isEnchanted(),
+				"chest " + chest.getItem(0)));
+	}
+
 	// take
 
 	@GameTest(maxTicks = 60)
@@ -173,6 +191,26 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 	public void takeWhereNoContainerIsIsTargetGone(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
 		expect(helper, bot, "r = take(" + chestAt(helper) + ", 'oak_log')\nprint(r.ok, r.reason)\n", List.of("False target_gone"));
+	}
+
+	/**
+	 * A plain rod and a Lure III one in a chest: take of the Lure III one's Stack takes only it, and again, with it gone, is
+	 * no_item though the plain rod is still in the chest (#997).
+	 */
+	@GameTest(maxTicks = 20)
+	public void takeOfAStackTakesOnlyTheStackEqualToIt(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.FISHING_ROD), lureRod(helper));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		expect(helper, bot, "s = [x for x in container(" + chestAt(helper) + ") if x.enchantments][0]\nr = take(" + chestAt(helper) + ", s)\n"
+				+ "t = take(" + chestAt(helper) + ", s)\nprint(r.ok, r.value, t.ok, t.reason, [x.enchantments for x in inventory()])\n",
+			List.of("True 1 False no_item [{'minecraft:lure': 3}]"), () -> helper.assertTrue(chest.countItem(Items.FISHING_ROD) == 1
+				&& !chest.getItem(0).isEnchanted(), "chest " + chest.getItem(0) + ", " + chest.getItem(1)));
+	}
+
+	private static ItemStack lureRod(GameTestHelper helper) {
+		ItemStack rod = new ItemStack(Items.FISHING_ROD);
+		rod.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.LURE), 3);
+		return rod;
 	}
 
 	// craft
