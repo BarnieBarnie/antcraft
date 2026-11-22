@@ -1,7 +1,7 @@
 # A job: fishes until a player stops it, for food (fish) and loot. Run it as /antcraft bot run jobs.fish [x y z [radius]]:
 # the water block to cast at (by default the open water fish() finds within 16 blocks, else the nearest open water
 # within radius, which it walks to and keeps in memory["fish"], #994) and how far to look for chests and water
-# (32 by default). Each round it eats when hungry (lib.food.upkeep, which also takes fish back from the chests), fishes
+# (32 by default, and at most 32, #998). Each round it eats when hungry (lib.food.upkeep, which also takes fish back from the chests), fishes
 # BATCH items and sorts them into depot "fish" (lib.depot), a chest per kind: fish, enchanted books, rods and the rest,
 # its row of chests starting by the spot and growing as a new kind is caught (#995). It fishes with the best rod
 # (lib.enchant.best_rod) it carries or the chests within radius hold, switching to a better one it catches; with none
@@ -26,6 +26,7 @@ NAME = "fish"  # the depot, memory["depots"]["fish"]
 CATEGORIES = {"fish": ["#minecraft:fishes"], "books": ["minecraft:enchanted_book"], "rods": [ROD]}
 # The rod it fishes with, held (one: store puts the hand's last, so a worse rod caught goes to the rods chest) and the crafting table lib.get makes a chest with.
 KEEP = [(ROD, 1), "minecraft:crafting_table"]
+MAX_RADIUS = 32  # the largest radius scan and find_nearest take (BlockScan.MAX_RADIUS)
 
 
 def depot(spot, radius=32):
@@ -40,9 +41,33 @@ def depot(spot, radius=32):
     return lib.depot.depot(NAME, None, None, CATEGORIES)
 
 
+def open_water(p):
+    """Whether p is open water: a loaded water source with air over it."""
+    b = block(p)
+    return b is not None and b.id == "minecraft:water" and b.state["level"] == 0 and lib.find.is_air(p.up())
+
+
+def around(p):
+    """How many of p's eight neighbours are open water."""
+    return len([1 for dx in [-1, 0, 1] for dz in [-1, 0, 1] if (dx or dz) and open_water(Pos(p.x + dx, p.y, p.z + dz))])
+
+
 def water(radius=32):
-    """The nearest open water, a water source with air over it, within radius; None if there is none."""
-    return lib.find.nearest("minecraft:water", radius, lambda p: block(p).state["level"] == 0 and lib.find.is_air(p.up()))
+    """Open water within radius to cast at, as fish() picks it (Fishing.spot): from the nearest, it steps to the
+    neighbour with the most open water around it while that has more, so off a pond's edge (#998); None if there is none.
+    ponytail: a climb, so a pond whose open middle lies past a narrower neck can keep a lesser spot."""
+    w = lib.find.nearest("minecraft:water", min(radius, MAX_RADIUS), open_water)
+    while w is not None and around(w) < 8:
+        best = w
+        for dx in [-1, 0, 1]:
+            for dz in [-1, 0, 1]:
+                n = Pos(w.x + dx, w.y, w.z + dz)
+                if open_water(n) and around(n) > around(best):
+                    best = n
+        if best == w:
+            break
+        w = best
+    return w
 
 
 def hold_best():
@@ -73,6 +98,7 @@ def rod(radius=32):
 def run(at=None, radius=32):
     """Fishes at at (else the open water fish() finds) forever, sorting the catch into depot NAME. Gives
     the result of the fish or get that stopped it."""
+    radius = min(radius, MAX_RADIUS)  # a larger radius would stop the scans of chests and water with an error (#998)
     spot = at if at is not None else memory.get("fish")
     looked = False  # whether it looked for a better rod in the chests: once a run, and when its rod broke
     while True:

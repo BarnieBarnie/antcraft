@@ -7,9 +7,9 @@ The job `jobs/fish` fishes by a pond with a fishing rod until a player stops it,
 /antcraft bot run jobs.fish 10 63 12 16
 ```
 
-The arguments are the water block to cast at `x y z` (by default open water within 16 blocks of the bot, as [`fish`](../reference/blocks/fish.md) chooses it) and how far to look for chests and water, in blocks (default 32). The bot sorts its catch into chests it places by the water itself (see [The depot](#the-depot)).
+The arguments are the water block to cast at `x y z` (by default open water within 16 blocks of the bot, as [`fish`](../reference/blocks/fish.md) chooses it) and how far to look for chests and water, in blocks (default 32, and at most 32, the most a [`scan`](../reference/world/scan.md) reads: a larger radius counts as 32, #998). The bot sorts its catch into chests it places by the water itself (see [The depot](#the-depot)).
 
-Without `x y z`, a bot that finds no open water within 16 blocks looks for the nearest open water (a water source with air over it) within that radius, walks to it and fishes there (#994). It keeps that spot in `memory["fish"]`, so later rounds, and the job run again, go back to it; where the spot is no water any more, it looks again. With no open water in reach it warns `fish: no water` and stops.
+Without `x y z`, a bot that finds no open water within 16 blocks looks for the nearest open water (a water source with air over it) within that radius, walks to it and fishes there (#994). Like `fish`, it casts where open water lies all around, so a cast a little off still lands in water: from the nearest open water it steps to the neighbour with the most open water around it while that has more, so off a pond's edge into its middle (#998). It keeps that spot in `memory["fish"]`, so later rounds, and the job run again, go back to it; where the spot is no water any more, it looks again. With no open water in reach it warns `fish: no water` and stops.
 
 ## The rounds
 

@@ -333,6 +333,54 @@ public class FishGameTest implements CustomTestMethodInvoker {
 		return chests;
 	}
 
+	/**
+	 * jobs.fish started some 24 blocks from a 5x5 pond, beyond fish()'s 16, casts at a block with open water on all eight
+	 * sides, not at the pond's nearest edge (#998). fish is stubbed: without at it is the real one (no_water from here),
+	 * with at it prints how many of at's eight neighbours are water and waits. The pond is water at y 1 over x 18 to 22, z 18 to 22.
+	 */
+	// Measured: passes at tick 35 to 42 (red: water around the spot was 3, the pond's corner).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 90, skyAccess = true)
+	public void theJobCastsAtFarWaterWithOpenWaterAllAround(GameTestHelper helper) {
+		for (int x = 0; x < 24; x++) {
+			for (int z = 0; z < 24; z++) {
+				boolean water = x >= 18 && x <= 22 && z >= 18 && z <= 22;
+				helper.setBlock(x, 1, z, water ? Blocks.WATER : Blocks.STONE);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 2, 1);
+		bot.getInventory().addItem(rod(helper));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 3));
+		BotScripts.run(bot, """
+			import jobs.fish
+			real = fish
+			def stub(n=1, at=None):
+			    if at is None:
+			        return real(n)
+			    print(len([1 for dx in [-1, 0, 1] for dz in [-1, 0, 1] if block(Pos(at.x + dx, at.y, at.z + dz)).id == "minecraft:water"]) - 1)
+			    return wait(5)
+			jobs.fish.fish = stub
+			jobs.fish.run()
+			""");
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(!printed.isEmpty(), "never cast at far water");
+			helper.assertValueEqual(printed.get(0), "8", "water around the spot");
+		});
+	}
+
+	/** jobs.fish run with radius 48, over the 32 a scan allows, fishes instead of failing with a radius error (#998). */
+	// Measured: passes at tick 6 (red: lib/stock.py:21: radius must be from 0 to 32, not 48).
+	@GameTest(maxTicks = 40)
+	public void theJobWithARadiusOver32Fishes(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		bot.getInventory().addItem(rod(helper));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 2));
+		BotScripts.run(bot, STUB + "jobs.fish.run(None, 48)\n");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(!BotScripts.log(bot, Output.Level.PRINT).isEmpty(), "never fished"));
+	}
+
 	/** jobs.fish with no water within its radius warns and stops (#994). */
 	// Measured: passes at tick 7 (red: warned fish: no_water).
 	@GameTest(maxTicks = 20)
