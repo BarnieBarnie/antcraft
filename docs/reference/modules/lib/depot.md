@@ -24,7 +24,37 @@ if not r["ok"]:
 
 ## `depot(name, origin=None, facing="east", categories=None)`
 
-The depot `name`, made the first time it is asked for: its row starts at `origin` (a [`Pos`](../../types/pos.md) or tuple) and goes one block at a time towards `facing` (`"north"`, `"south"`, `"east"` or `"west"`); `categories` is a dict of category name to a list of item ids or [selectors](../../types/selectors.md). Asked for again, it gives the depot it made, and `origin` and `facing` are not read: given `categories` replace the old ones, its chests stay as they are. **Returns** the depot, a dict with `origin`, `facing`, `categories`, `chests` (a list of `[category, pos]`, in row order) and, once a chest is added, `next` (the index of the next slot, past any skipped ones). **Pauses** no.
+The depot `name`, made the first time it is asked for: its row starts at `origin` (a [`Pos`](../../types/pos.md) or tuple) and goes one block at a time towards `facing` (`"north"`, `"south"`, `"east"` or `"west"`); `categories` is a dict of category name to a list of item ids or [selectors](../../types/selectors.md). Asked for again, it gives the depot it made, and `origin` and `facing` are not read: given `categories` replace the old ones, its chests stay as they are. **Returns** the depot, a dict with `origin`, `facing`, `categories`, `chests` (a list of `[category, pos]`, in row order) and, once a chest is added, `next` (the index of the next slot, past any skipped ones); in a colony also `published`, its key in `colony_memory["depots"]`, and, once it is the colony store, `kind`. **Pauses** no.
+
+In a colony, the depot is also published (#1018): made, given `categories`, or given a chest (`add_chest`), it is written to [`colony_memory`](../../types/memory.md)`["depots"]["<bot>/<name>"]`, where `<bot>` is the owner's UUID ([`colony()`](../../colony/colony.md)`["me"]`), so every member finds it without passing chest lists around. A bot in no colony (`colony_memory` is `None`) makes and keeps its depot exactly as before.
+
+## Published depots
+
+An entry of `colony_memory["depots"]` is a copy of the depot, plain data a member reads without the owner's `memory`:
+
+- `origin`, `facing`, `categories`, `chests`: as in the depot.
+- `bot`: the owner's UUID string; `name`: the depot's name.
+- `kind`: `"source"`, a gatherer's depot, or `"store"`, the colony store (`publish_store`).
+
+`colony_memory["storage"]` is the key of the colony store, `None` (absent) until a bot calls `publish_store`. A depot whose owner is gone stays listed, as its chests still hold items.
+
+```python
+import lib.depot
+
+key = colony_memory.get("storage")
+if key is not None:
+    store = colony_memory["depots"][key]
+    for cat, chest in store["chests"]:
+        print(cat, chest)
+```
+
+## `publish_store(name)`
+
+Makes depot `name` the colony store: its `kind` becomes `"store"` and `colony_memory["storage"]` its key. **Returns** the key, `"<bot>/<name>"`, or `None` for a bot in no colony. **Pauses** no.
+
+## `published(kind=None)`
+
+The depots published in the bot's colony, those of `kind` (`"source"` or `"store"`) only where it is given. **Returns** a list of entries (see [Published depots](#published-depots)), `[]` for a bot in no colony. **Pauses** no.
 
 ## `store(name, keep=None, radius=32)`
 
@@ -46,4 +76,4 @@ The first category of the depot whose selectors select `item` (an item id or a s
 
 Puts a chest at the depot's next slot and gives it to category `cat`. The chest faces along the row, so it never joins the chest next to it in a double chest. A chest already standing at the slot is taken as it is when it is empty or holds only items of `cat`. A slot that holds a chest of other items, or a block [`place`](../../blocks/place.md) may not replace (it fails `blocked`: dirt, stone, a log, an entity standing there), is skipped for good once a chest goes in a slot past it, and the next slot is tried (at most 8 skipped a call, else `blocked`, and `next` stays where it was, so calls on a blocked row never creep the depot along it, #765): the depot never digs, so it leaves what someone else put there. Otherwise the chest is got with [`lib.get.get`](get.md) within `radius`: one carried, one from a chest, or one crafted from planks, logs carried or stored. After a failed get, the next calls skip it and fail with its reason: 1 call, then 2, 4, doubling to 16, unless the bot carries the logs or planks for a chest, and a chest got ends it (#787), so a job that stores every round does not scan for a chest every round. **Returns** a dict: `ok`, `reason` (`None`, or what getting or placing the chest failed with) and `at` (the chest). **Pauses** yes.
 
-`DepotGameTest` stores logs, saplings, sticks and apples each in a chest of its own, and fills a second logs chest, crafted from the logs, where the first is full; it skips a slot of dirt and one holding a chest of cobblestone, and on a row blocked past what a call skips leaves `next` where it was; with too few logs for a chest it backs off from getting one until it carries them. See also the cookbook page [Store and sort](../../../cookbook/store.md#a-depot-that-grows).
+`DepotGameTest` stores logs, saplings, sticks and apples each in a chest of its own, and fills a second logs chest, crafted from the logs, where the first is full; it skips a slot of dirt and one holding a chest of cobblestone, and on a row blocked past what a call skips leaves `next` where it was; with too few logs for a chest it backs off from getting one until it carries them; in a colony, a second bot reads the first bot's depot from `colony_memory`, first without chests, then with the two it added and as the colony store. See also the cookbook page [Store and sort](../../../cookbook/store.md#a-depot-that-grows).

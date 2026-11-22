@@ -1,7 +1,10 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
@@ -312,6 +315,52 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 			finished(helper, job, bot, List.of("True 1"));
 			helper.assertTrue(bot.getMainHandItem().is(Items.IRON_PICKAXE), "the bot holds " + bot.getMainHandItem());
 			helper.assertTrue(chest(helper, 1).countItem(Items.STONE_PICKAXE) == 1, "the chest holds no stone pickaxe");
+		});
+	}
+
+	/**
+	 * A depot made in a colony is published to colony_memory["depots"] (#1018): bot B reads bot A's depot there, first
+	 * without chests, then, after A stored logs and sticks and made it the colony store, with both chests (add_chest keeps
+	 * the entry current), as kind "store" and colony_memory["storage"].
+	 */
+	// Measured: passes at tick 5 in a class run.
+	@GameTest(maxTicks = 20)
+	public void aDepotInAColonyIsPublishedToColonyMemory(GameTestHelper helper) {
+		helper.setBlock(6, 1, 6, ModBlocks.COLONY_CORE);
+		ColonyManager colonies = ColonyManager.get(helper.getLevel());
+		Colony colony = colonies.byCore(helper.absolutePos(new BlockPos(6, 1, 6))).orElseThrow();
+		AntBot a = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		AntBot b = helper.spawn(ModEntities.ANT_BOT, 5, 1, 3);
+		colonies.join(a, colony);
+		colonies.join(b, colony);
+		a.getInventory().addItem(new ItemStack(Items.OAK_LOG, 5));
+		a.getInventory().addItem(new ItemStack(Items.STICK, 4));
+		a.getInventory().addItem(new ItemStack(Items.CHEST, 2));
+		ScriptRun ja = run(helper, a, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+			colony_memory["step"] = 1
+			while colony_memory.get("seen") != 1:
+			    wait(1)
+			lib.depot.store("wood")
+			lib.depot.publish_store("wood")
+			colony_memory["step"] = 2
+			""");
+		ScriptRun jb = run(helper, b, """
+			import lib.depot
+			while colony_memory.get("step") != 1:
+			    wait(1)
+			p = lib.depot.published()
+			print(len(p), p[0]["bot"] == ME, p[0]["name"], p[0]["kind"], p[0]["origin"] == ORIGIN, p[0]["facing"], len(p[0]["chests"]))
+			colony_memory["seen"] = 1
+			while colony_memory.get("step") != 2:
+			    wait(1)
+			p = lib.depot.published("store")
+			print(len(p), len(lib.depot.published("source")), colony_memory["storage"] == ME + "/wood", sorted(p[0]["categories"]))
+			print([c[0] for c in p[0]["chests"]], p[0]["chests"][0][1] == ORIGIN, p[0]["chests"][1][1] == ORIGIN + (1, 0, 0))
+			""".replace("ME", "'" + a.getStringUUID() + "'").replace("ORIGIN", printed(helper, 1, 1, 1)));
+		helper.succeedWhen(() -> {
+			finished(helper, ja, a, List.of());
+			finished(helper, jb, b, List.of("1 True wood source True east 0",
+				"1 0 True ['apples', 'logs', 'saplings', 'sticks']", "['logs', 'sticks'] True True"));
 		});
 	}
 

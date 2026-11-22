@@ -14,6 +14,7 @@ A dict of plain data, a snapshot taken at the call:
 - `radius`: the colony's radius in blocks, an int.
 - `members`: a list of the members' UUID strings.
 - `owner`: the owning player's UUID string, or `None`.
+- `me`: the bot's own UUID string, as in `members` (#1018).
 
 ## Pauses
 

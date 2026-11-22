@@ -294,7 +294,9 @@ public final class SenseApi {
 			Args.bind("colony", call, 0);
 			return bot(run, call).getColony().<Object>map(found -> {
 				run.charge(COLONY_MEMBER_COST * found.colony().members().size());
-				return colony(found);
+				PyDict dict = colony(found);
+				dict.put("me", bot(run, call).getStringUUID());
+				return dict;
 			}).orElse(PyNone.NONE);
 		});
 		natives.register("deaths", call -> {

@@ -23,9 +23,46 @@ def depot(name, origin=None, facing="east", categories=None):
     depots = memory.setdefault("depots", {})
     if name not in depots:
         depots[name] = {"origin": Pos(origin), "facing": facing, "categories": {}, "chests": []}
+    d = depots[name]
     if categories is not None:
-        depots[name]["categories"] = categories
-    return depots[name]
+        d["categories"] = categories
+    if colony_memory is not None and (categories is not None or "published" not in d):
+        publish(name, d)
+    return d
+
+
+def publish(name, d):
+    """Writes depot name (its dict d) to colony_memory["depots"]["<bot>/<name>"] (#1018), a copy of its origin, facing,
+    categories and chests with bot (the owner's UUID), name and kind ("source", or "store" once publish_store made it the
+    colony store). A bot in no colony publishes nothing."""
+    if colony_memory is None:
+        return
+    if "published" not in d:
+        d["published"] = colony()["me"] + "/" + name
+    colony_memory.setdefault("depots", {})[d["published"]] = {
+        "origin": d["origin"], "facing": d["facing"], "categories": dict(d["categories"]),
+        "chests": [list(c) for c in d["chests"]], "bot": d["published"].split("/")[0], "name": name,
+        "kind": d.get("kind", "source")}
+
+
+def publish_store(name):
+    """Makes depot name the colony store: kind "store" and colony_memory["storage"] = "<bot>/<name>". Gives the key, or
+    None for a bot in no colony."""
+    d = depot(name)
+    d["kind"] = "store"
+    publish(name, d)
+    if colony_memory is None:
+        return None
+    colony_memory["storage"] = d["published"]
+    return d["published"]
+
+
+def published(kind=None):
+    """The depots published in the bot's colony, those of kind ("source" or "store") only where it is given; [] in no
+    colony. A depot whose bot is gone stays listed, as its chests still hold items."""
+    if colony_memory is None:
+        return []
+    return [p for p in colony_memory.get("depots", {}).values() if kind is None or p["kind"] == kind]
 
 
 def chests(name, category=None):
@@ -154,4 +191,5 @@ def add_chest(name, cat, radius=32):
         return result("blocked", p)
     d["next"] = n + 1
     d["chests"].append([cat, p])
+    publish(name, d)
     return result(None, p)
