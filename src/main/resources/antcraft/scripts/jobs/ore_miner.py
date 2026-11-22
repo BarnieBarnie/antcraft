@@ -268,7 +268,7 @@ def unload(item, radius, took=False):
             warn("ore miner: could not smelt", item + ":", r["reason"], r["missing"])
     keep = KEEP
     if better_pickaxe(item, radius) or took:
-        keep = [(held().item, 1)] + KEEP[1:]  # the held pickaxe: put takes from the hand last
+        keep = [(PICKAXES, 1)] + KEEP[1:]  # the held pickaxe counts first (#1010)
     s = lib.depot.store(NAME, keep, radius)
     if not s["ok"]:
         warn("ore miner: no chest has room for", sorted(s["missing"].keys()), "and none to get:", s["reason"])

@@ -290,6 +290,31 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * The bot holds an iron pickaxe and carries a stone one and a chest, keeping ("#minecraft:pickaxes", 1): a selector's
+	 * n caps all it selects together, the held item first (#1010), so the stone pickaxe goes to the pickaxes chest and the
+	 * bot keeps only the iron one.
+	 */
+	// Measured: passes at tick 4.
+	@GameTest(maxTicks = 20)
+	public void aSelectorKeepCapsAllItSelectsTogether(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 1));
+		ScriptRun job = run(helper, bot, """
+			import lib.depot
+			lib.depot.depot("ore", %s, "east", {"pickaxes": ["#minecraft:pickaxes"]})
+			r = lib.depot.store("ore", [("#minecraft:pickaxes", 1)])
+			print(r["ok"], count("#minecraft:pickaxes"))
+			""".formatted(printed(helper, 1, 1, 1)));
+		helper.succeedWhen(() -> {
+			finished(helper, job, bot, List.of("True 1"));
+			helper.assertTrue(bot.getMainHandItem().is(Items.IRON_PICKAXE), "the bot holds " + bot.getMainHandItem());
+			helper.assertTrue(chest(helper, 1).countItem(Items.STONE_PICKAXE) == 1, "the chest holds no stone pickaxe");
+		});
+	}
+
 	/** The chest at (x, 1, 1). */
 	private static Container chest(GameTestHelper helper, int x) {
 		helper.assertBlockPresent(Blocks.CHEST, x, 1, 1);

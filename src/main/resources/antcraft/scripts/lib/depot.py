@@ -46,7 +46,9 @@ def store(name, keep=None, radius=32):
     selects (OTHER) also not lib.storage.KEEP_KINDS or chests, so an apples category takes apples though they are food:
     each item into the chests of its category with room, in row order; where they are full, a new chest at the next slot
     of the row (add_chest) for the category. keep is a list of item ids or selectors, all of which the bot keeps, and of
-    (selector, n) pairs, of which it keeps n and stores the rest, such as ("minecraft:dirt", 64) (#762); the item held when store began is held after it, so a keep of (selector, 1) keeps it (#1000). Gives result():
+    (selector, n) pairs, of which it keeps n in all and stores the rest, such as ("minecraft:dirt", 64) (#762), so
+    ("#minecraft:pickaxes", 1) keeps one pickaxe, not one of each kind (#1010); the item held when store began counts
+    first and is held after it, so a keep of (selector, 1) keeps it (#1000). Gives result():
     ok, or the reason adding a chest failed with and missing, item to how many the bot still carries beyond its keep."""
     whole = [k for k in keep or [] if isinstance(k, str)]
     capped = [k for k in keep or [] if not isinstance(k, str)]
@@ -58,8 +60,16 @@ def store(name, keep=None, radius=32):
     reason = None
     missing = {}
     hand = held()
+    if hand is not None and hand.item in items:
+        items = [hand.item] + [i for i in items if i != hand.item]
+    left = [k[1] for k in capped]  # what each (selector, n) still keeps, of all it selects (#1010)
     for item in items:
-        cap = sum([k[1] for k in capped if matches(item, k[0])])
+        cap = 0
+        for i, k in enumerate(capped):
+            if matches(item, k[0]):
+                n = min(left[i], count(item) - cap)
+                cap += n
+                left[i] -= n
         cat = category(name, item)
         for chest in chests(name, cat):
             if count(item) > cap and room(chest, item):
