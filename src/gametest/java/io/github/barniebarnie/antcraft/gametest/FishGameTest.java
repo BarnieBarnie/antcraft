@@ -105,6 +105,26 @@ public class FishGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** equip of a carried rod's Stack holds that rod, and fish fishes with it, not the plain rod held before (#993). */
+	// Measured: passes at tick 265 (red: a selector is a str or a list of str, not 'Stack'); a bite takes up to some 380 ticks.
+	@GameTest(maxTicks = 900, skyAccess = true)
+	public void fishFishesWithTheRodEquipped(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.FISHING_ROD));
+		bot.getInventory().addItem(rod(helper));
+		ScriptRun run = BotScripts.run(bot, "s = [x for x in inventory() if x.enchantments][0]\nprint(equip(s).ok)\nprint(fish().ok)\n");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True", "True"), "printed");
+			ItemStack hand = bot.getMainHandItem();
+			helper.assertTrue(hand.isEnchanted(), "the bot holds the plain rod");
+			helper.assertValueEqual(hand.getDamageValue(), 1, "the enchanted rod's damage");
+			ItemStack plain = bot.getInventory().getItems().stream().filter(s -> s.is(Items.FISHING_ROD)).findFirst().orElseThrow();
+			helper.assertValueEqual(plain.getDamageValue(), 0, "the plain rod's damage");
+		});
+	}
+
 	@GameTest(maxTicks = 20)
 	public void noRodIsNoRodAtOnce(GameTestHelper helper) {
 		refuses(helper, ground(helper, true), "False no_rod");

@@ -117,9 +117,21 @@ public final class WorkApi {
 			return run.start(new Use(run, bot(run, call), target, item, face), call, target);
 		});
 		natives.register("equip", 15, call -> {
-			Selector item = Selector.parse(Args.bind("equip", call, 1, "item")[0]);
-			boolean held = BotHands.equip(bot(run, call), item.items());
-			return run.done("equip(" + item + ")", held ? Result.OK : Result.fail(Result.NO_ITEM));
+			Object arg = Args.bind("equip", call, 1, "item")[0];
+			Predicate<ItemStack> item;
+			if (arg instanceof Stack want) {
+				// A Stack from inventory() holds that exact stack: item, damage and enchantments (#993).
+				item = stack -> {
+					Stack is = SenseApi.stack(stack);
+					return is.item().equals(want.item()) && is.damage() == want.damage() && is.enchantments().equals(want.enchantments());
+				};
+			} else {
+				Selector selector = Selector.parse(arg);
+				arg = selector;
+				item = selector.items();
+			}
+			boolean held = BotHands.equip(bot(run, call), item);
+			return run.done("equip(" + arg + ")", held ? Result.OK : Result.fail(Result.NO_ITEM));
 		});
 		natives.register("eat", call -> {
 			Eat eat = new Eat(bot(run, call), Selector.parse(Args.bind("eat", call, 1, "item")[0]));

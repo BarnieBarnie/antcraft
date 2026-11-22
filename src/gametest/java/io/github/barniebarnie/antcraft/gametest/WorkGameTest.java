@@ -1024,6 +1024,17 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("False no_item minecraft:stick"));
 	}
 
+	/** A Stack from inventory() the bot no longer carries is no_item (#993). */
+	@GameTest(maxTicks = 20)
+	public void equipOfAStackNoLongerCarriedIsNoItem(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STICK));
+		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
+		expect(helper, bot, "s = [x for x in inventory() if x.item == 'minecraft:diamond_sword'][0]\ndrop('diamond_sword')\n"
+				+ "r = equip(s)\nprint(r.ok, r.reason, held().item)\n",
+			List.of("False no_item minecraft:stick"));
+	}
+
 	// use
 
 	@GameTest(maxTicks = 70)
