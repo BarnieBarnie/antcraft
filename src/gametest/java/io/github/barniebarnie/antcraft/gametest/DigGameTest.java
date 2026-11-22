@@ -550,6 +550,36 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * ore's branches leave every step of its stairs standing (#1017): fenced into the 3x3 columns x 2 to 4, z 2 to 4, the
+	 * stairs from (2, 1, 4) spiral down to (3, -10, 2) as in StripMineGameTest. The branches east and north stop at the
+	 * edge, west at the guarded last steps, and south runs under the earlier leg west at z 4: the coal in its wall at
+	 * (2, -9, 4) is mined, but not the coal above it, (2, -8, 4), the floor of the step (2, -7, 4). The bot climbs back up.
+	 */
+	// Measured: passes at tick 844 in a class run (red: printed True 2 True, the vein's (2, -8, 4) mined too).
+	@GameTest(maxTicks = 1600)
+	public void oreBranchesLeaveEveryStepStanding(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -12, 0, 7, -1, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(2, -9, 4, Blocks.COAL_ORE);
+		helper.setBlock(2, -8, 4, Blocks.COAL_ORE);
+		AntBot bot = miner(helper, 2, 1, 4);
+		BlockPos corner = helper.absolutePos(BlockPos.ZERO);
+		expect(helper, bot, """
+			import lib.dig
+			import lib.find
+			lib.find.WHERE = lambda p: %d <= p.x <= %d and %d <= p.z <= %d
+			s = pos()
+			r = lib.dig.ore("coal", 1, 1, s.y - 11)
+			print(r["ok"], count("coal"), pos() == s)
+			""".formatted(corner.getX() + 2, corner.getX() + 4, corner.getZ() + 2, corner.getZ() + 4), List.of("True 1 True"),
+			() -> {
+				helper.assertBlockPresent(Blocks.AIR, 2, -9, 4);
+				helper.assertBlockPresent(Blocks.COAL_ORE, 2, -8, 4);
+			});
+	}
+
+	/**
 	 * ore at y with a staircase remembered far away (#556): it digs none, branches 4 north past coal beside the tunnel
 	 * and walks back to where it started instead of to the old staircase.
 	 */

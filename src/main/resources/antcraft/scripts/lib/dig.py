@@ -262,24 +262,34 @@ def spiral_to(y, facing="north"):
 
 
 def behind(legs, bottom):
-    """The columns, [x, z], of the two steps above bottom of stairs dug in legs, (start, facing) pairs (spiral_to)."""
-    cells = []
-    x, z = bottom.x, bottom.z
-    for start, way in reversed(legs):
+    """The floor of every step of the stairs dug in legs, (start, facing) pairs (spiral_to), down to bottom, so no
+    branch from there undermines them: the last two steps' floors are in its way, earlier legs' in its ceiling's veins
+    (#1014, #1017)."""
+    floors = []
+    for i in range(len(legs)):
+        p, way = legs[i]
+        end = legs[i + 1][0] if i + 1 < len(legs) else bottom
         d = FACING[way]
-        while len(cells) < 2 and (x, z) != (start.x, start.z):
-            x -= d[0]
-            z -= d[2]
-            cells.append([x, z])
-    return cells
+        while p.y > end.y:
+            p = p + (d[0], -1, d[2])
+            floors.append(p.down())
+    return floors
+
+
+def keyed(cells):
+    """cells as a dict with True for each, for a lookup per block that costs the same for any number of them."""
+    d = {}
+    for c in cells:
+        d[c] = True
+    return d
 
 
 def guarded(legs, where):
-    """lib.find.WHERE where, but for the columns of the two steps above the bot of the stairs spiral_to dug in legs
-    (behind), so no branch turned back towards them digs under them (#1014). ponytail: asks where once a position, so
+    """lib.find.WHERE where, but for the floors of the steps of the stairs spiral_to dug in legs down to the bot
+    (behind), so no branch from their bottom digs them out (#1014, #1017). ponytail: asks where once a position, so
     colony_edge asks colony() once a position: keep it to branches, not searches."""
-    cols = [tuple(c) for c in behind(legs, pos())]
-    return lambda p: (p.x, p.z) not in cols and (where is None or where(p))
+    floors = keyed(behind(legs, pos()))
+    return lambda p: p not in floors and (where is None or where(p))
 
 
 def stairs_up(facing="north"):

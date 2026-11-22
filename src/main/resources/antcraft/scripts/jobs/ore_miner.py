@@ -106,15 +106,15 @@ def point(c, om):
 
 
 def inside(areas, prior, guard=()):
-    """lib.find.WHERE for the columns of areas that prior allows, but those of guard, (x, z) pairs."""
-    return lambda p: (any(a[0] <= p.x <= a[2] and a[1] <= p.z <= a[3] for a in areas) and (p.x, p.z) not in guard
+    """lib.find.WHERE for the columns of areas that prior allows, but the blocks of guard."""
+    return lambda p: (any(a[0] <= p.x <= a[2] and a[1] <= p.z <= a[3] for a in areas) and p not in guard
                       and (prior is None or prior(p)))
 
 
 def where(area, om, prior):
-    """lib.find.WHERE for a trip: the columns of area that prior allows, but those of the last two steps of the stairs
+    """lib.find.WHERE for a trip: the columns of area that prior allows, but the floors of the steps of the stairs
     (om["guard"]), so no branch undermines them."""
-    return inside([area], prior, [tuple(g) for g in om["guard"]])
+    return inside([area], prior, lib.dig.keyed(om["guard"]))
 
 
 def walk(route):
@@ -139,7 +139,7 @@ def back(route):
 def down(y, area, om, prior):
     """Takes the bot from home to where it mines: by the waypoints of om["route"] (walk) to the bottom of its stairs, or
     the end of the tunnel into the chunk it mines, it got to before; else new stairs dug to y towards FACE within area,
-    spiralling clockwise at its edge (lib.dig.spiral_to). Keeps their bottom, last facing, the columns of their last two
+    spiralling clockwise at its edge (lib.dig.spiral_to). Keeps their bottom, last facing, the floors of their
     steps and the route down, the start of each leg and the bottom, in om. Gives result()."""
     if "bottom" in om:
         return walk(om["route"])
@@ -236,7 +236,7 @@ def tunnel(area, to, om, prior):
     w = goto(start)
     if not w:
         return result(w.reason, start)
-    lib.find.WHERE = inside([area, to], prior, [tuple(g) for g in om["guard"]])
+    lib.find.WHERE = inside([area, to], prior, lib.dig.keyed(om["guard"]))
     r = lib.dig.branch(n, n + 1, d)
     if r["ok"]:
         om["route"] = om["route"] + [start, pos()]

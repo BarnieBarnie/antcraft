@@ -39,7 +39,7 @@ The bot starts with the miner's kit of `jobs.strip_mine`, a stone pickaxe, a cra
 
 Before its first trip, and on each trip home, it looks for a better pickaxe with [`lib.enchant.best_pickaxe`](../reference/modules/lib/enchant.md): a higher tier first, then better enchantments (Fortune counts most, then Efficiency and Mending, then Unbreaking), then more uses left. A pickaxe below the tier the ore needs, such as a golden one for iron, is never taken, nor one no better than its own. So an owner, or another bot, that puts a Fortune III pickaxe in one of its chests has it mining with that one from its next trip; it takes only that pickaxe, leaving the other ones in the chest, and its old pickaxe goes into the depot.
 
-Branches 3 blocks apart leave no block of the level unseen: each branch's walls are the blocks beside it, so the blocks between two branches are in the wall of one or the other. The columns of the last two steps of the stairs are left, as a branch through them would dig out those steps.
+Branches 3 blocks apart leave no block of the level unseen: each branch's walls are the blocks beside it, so the blocks between two branches are in the wall of one or the other. The floors of the steps of the stairs are left, as a branch through them, or a vein mined from its ceiling, would dig out those steps.
 
 ## The claim
 
@@ -71,7 +71,7 @@ A chest comes from [`lib.get`](../reference/modules/lib/get.md): carried, from a
 
 ## Where it is
 
-The job keeps its progress in `memory["ore_miner"]`: the home the claim belongs to, its first chunk and the height it mines, how many chunks of the claim it has mined out (`cleared`), where it starts in the chunk it mines (`bottom`, the bottom of the stairs or the end of the tunnel into it, and `way`, the way the stairs or tunnel went), the columns of the last two steps it leaves (`guard`), the waypoints it walks down to `bottom` by (`route`), and the branches of that chunk it has dug (`done`, as `"<column> <facing>"`). A bot that is stopped, or the server restarted, goes back down the same stairs and on with the branches it has not dug; run again on a claim it has mined out, it says it is finished at once. Another home, first chunk or height starts a new claim.
+The job keeps its progress in `memory["ore_miner"]`: the home the claim belongs to, its first chunk and the height it mines, how many chunks of the claim it has mined out (`cleared`), where it starts in the chunk it mines (`bottom`, the bottom of the stairs or the end of the tunnel into it, and `way`, the way the stairs or tunnel went), the floors of the steps it leaves (`guard`), the waypoints it walks down to `bottom` by (`route`), and the branches of that chunk it has dug (`done`, as `"<column> <facing>"`). A bot that is stopped, or the server restarted, goes back down the same stairs and on with the branches it has not dug; run again on a claim it has mined out, it says it is finished at once. Another home, first chunk or height starts a new claim.
 
 ## In a script
 

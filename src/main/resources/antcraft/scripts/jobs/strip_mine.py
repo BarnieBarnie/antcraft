@@ -49,7 +49,7 @@ def strip_mine(item, n, y, radius, facing):
         r = lib.dig.spiral_to(y, way)
         way = None if r["reason"] == "outside" else r["facing"]  # stairs with no room left to spiral: no_ore below
     prior = lib.find.WHERE
-    # No branch digs under the last steps of the stairs (#1014).
+    # No branch digs out the floor of a step of the stairs (#1014, #1017).
     guard = lib.dig.guarded(r["legs"], prior) if "legs" in r else prior
     for _ in range(ROUNDS):
         while r["reason"] == "outside" and way is not None:
