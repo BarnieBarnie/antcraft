@@ -137,25 +137,24 @@ public class FishGameTest implements CustomTestMethodInvoker {
 		refuses(helper, bot, "False no_water");
 	}
 
-	/** jobs.fish fishes the pool and puts the catch in the chest beside it, keeping its rod. */
-	// Measured: passes at tick 130 to 340 (red: No module named 'jobs.fish').
+	/** jobs.fish fishes the pool and puts the catch in a depot chest it places by the spot, keeping its rod (#995). */
+	// Measured: passes at tick 85 to 340 (red: No module named 'jobs.fish'; #995 red: no chest has room for the catch).
 	@GameTest(maxTicks = 1000, skyAccess = true)
 	public void theJobStoresItsCatchInAChestBesideTheSpot(GameTestHelper helper) {
 		AntBot bot = ground(helper, true);
 		bot.getInventory().addItem(rod(helper));
-		helper.setBlock(1, 2, 6, Blocks.CHEST);
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 3));
 		BotScripts.run(bot, "import jobs.fish\njobs.fish.run()\n");
 		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
-			ChestBlockEntity chest = helper.getBlockEntity(new BlockPos(1, 2, 6), ChestBlockEntity.class);
-			helper.assertFalse(chest.isEmpty(), "the chest is empty; said " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertTrue(chests(helper, 8).stream().anyMatch(c -> !c.isEmpty()), "no chest holds the catch");
 			helper.assertTrue(bot.getMainHandItem().is(Items.FISHING_ROD), "the bot does not hold its rod");
 		});
 	}
 
 	/**
 	 * jobs.fish started some 27 blocks from the pool, beyond fish()'s 16, walks to it and stores its catch in the chest
-	 * beside it (#994). The wide area's ground is stone up to y 1; the pool is water at y 1 over x 20 to 22, z 20 to 22.
+	 * in a depot chest by it (#994, #995). The wide area's ground is stone up to y 1; the pool is water at y 1 over x 20 to 22, z 20 to 22.
 	 */
 	// Measured: passes at tick 487 to 640 (red: warned fish: no_water); a bite takes up to some 380 ticks with Lure III.
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1400, skyAccess = true)
@@ -168,13 +167,95 @@ public class FishGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 2, 1);
 		bot.getInventory().addItem(rod(helper));
-		helper.setBlock(18, 2, 21, Blocks.CHEST);
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 3));
 		BotScripts.run(bot, "import jobs.fish\njobs.fish.run()\n");
 		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
-			ChestBlockEntity chest = helper.getBlockEntity(new BlockPos(18, 2, 21), ChestBlockEntity.class);
-			helper.assertFalse(chest.isEmpty(), "the chest is empty; said " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertTrue(chests(helper, 24).stream().anyMatch(c -> !c.isEmpty()), "no chest holds the catch");
 		});
+	}
+
+	/**
+	 * jobs.fish with fish stubbed: it prints the depot's chests and waits, and the test hands the bot a cod on the first
+	 * call and an enchanted book on the second, as if caught. The cod goes to a new chest, the book to another new chest,
+	 * not the fish chest (#995). The bot carries two chests for the depot.
+	 */
+	// Measured: passes at tick 17 to 18 (red: warned fish: no chest has room for ['minecraft:cod'], as no chest stood by).
+	@GameTest(maxTicks = 40)
+	public void theJobSortsItsCatchIntoAChestPerKind(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		bot.getInventory().addItem(rod(helper));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 2));
+		ScriptRun run = BotScripts.run(bot, STUB + "jobs.fish.run()\n");
+		BotScripts.failOnWarning(helper, bot);
+		int[] given = {0};
+		helper.onEachTick(() -> {
+			int calls = BotScripts.log(bot, Output.Level.PRINT).size();
+			if (given[0] < calls && given[0] < 2) {
+				ItemStack catchStack = given[0] == 0 ? new ItemStack(Items.COD) : new ItemStack(Items.ENCHANTED_BOOK);
+				bot.getInventory().addItem(catchStack);
+				given[0]++;
+			}
+		});
+		helper.succeedWhen(() -> {
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(printed.size() >= 3, "printed " + printed);
+			helper.assertValueEqual(printed.subList(0, 3), List.of("0", "1", "2"), "depot chests before each catch");
+			List<ChestBlockEntity> chests = chests(helper, 8);
+			helper.assertValueEqual(chests.size(), 2, "chests");
+			ChestBlockEntity fish = chests.stream().filter(c -> c.countItem(Items.COD) == 1).findFirst().orElse(null);
+			ChestBlockEntity books = chests.stream().filter(c -> c.countItem(Items.ENCHANTED_BOOK) == 1).findFirst().orElse(null);
+			helper.assertTrue(fish != null && books != null && fish != books, "the cod and the book are not each in a chest of their own");
+			helper.assertTrue(bot.getInventory().countItem(Items.FISHING_ROD) == 1, "the bot stored its rod");
+			helper.assertTrue(run.state() != ScriptRun.State.FINISHED, "the job stopped");
+		});
+	}
+
+	/** jobs.fish with fish stubbed and a cod caught but no chest, planks or logs: it warns and stops, keeping the cod (#995). */
+	// Measured: passes at tick 16 (red: warned without the reason, fish: no chest has room for ['minecraft:cod']).
+	@GameTest(maxTicks = 40)
+	public void theJobWithNoChestToGetWarnsAndStops(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		bot.getInventory().addItem(rod(helper));
+		ScriptRun run = BotScripts.run(bot, STUB + "jobs.fish.run()\n");
+		BotScripts.failOnError(helper, bot);
+		boolean[] given = {false};
+		helper.onEachTick(() -> {
+			if (!given[0] && !BotScripts.log(bot, Output.Level.PRINT).isEmpty()) {
+				bot.getInventory().addItem(new ItemStack(Items.COD));
+				given[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(BotScripts.warnings(bot), List.of("fish: no chest has room for ['minecraft:cod'] and none to get: no_logs"), "warned");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.COD), 1, "cod carried");
+		});
+	}
+
+	/** jobs.fish with its fish stubbed: the stub prints how many chests the depot has, then waits 5 ticks for the test to hand over a catch. */
+	private static final String STUB = """
+		import jobs.fish
+		import lib.depot
+		def stub(n=1, at=None):
+		    print(len(lib.depot.chests("fish")) if "fish" in memory.get("depots", {}) else 0)
+		    return wait(5)
+		jobs.fish.fish = stub
+		""";
+
+	/** The chests standing in the area, size blocks square, from y 2 up to y 3. */
+	private static List<ChestBlockEntity> chests(GameTestHelper helper, int size) {
+		List<ChestBlockEntity> chests = new java.util.ArrayList<>();
+		for (int x = 0; x < size; x++) {
+			for (int z = 0; z < size; z++) {
+				for (int y = 2; y <= 3; y++) {
+					if (helper.getBlockState(new BlockPos(x, y, z)).is(Blocks.CHEST)) {
+						chests.add(helper.getBlockEntity(new BlockPos(x, y, z), ChestBlockEntity.class));
+					}
+				}
+			}
+		}
+		return chests;
 	}
 
 	/** jobs.fish with no water within its radius warns and stops (#994). */
