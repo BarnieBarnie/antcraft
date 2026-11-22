@@ -177,6 +177,30 @@ public class StockGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A stone pickaxe in the store (lib.stock.STORAGE) at (1, 1, 1), far from the bot at (20, 1, 20), which carries 3 oak
+	 * logs (#1023): making a wooden pickaxe costs less than the walk, but ensure_tool borrows the store's all the same.
+	 */
+	// Passes at tick 179 alone, 178 in its class run.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 360)
+	public void ensureToolBorrowsAFarStoreToolOverCrafting(GameTestHelper helper) {
+		Container store = chest(helper, FAR, new ItemStack(Items.STONE_PICKAXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 20, 1, 20);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
+		run(helper, bot, IMPORT + """
+			import lib.stock
+			from lib.get import ensure_tool
+			lib.stock.STORAGE = %s
+			r = ensure_tool("pickaxe")
+			print(r["ok"], held().item, count("oak_log"))
+			""".formatted(pos(helper, FAR)));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True minecraft:stone_pickaxe 3");
+			helper.assertTrue(store.isEmpty(), "the store is not empty");
+		});
+	}
+
 	/** get("oak_planks", 16) with planks in the store and the nearer chest (#1019): takes the store's, for good. */
 	@GameTest(maxTicks = 60)
 	public void getTakesMaterialsFromTheColonyStoreForGood(GameTestHelper helper) {

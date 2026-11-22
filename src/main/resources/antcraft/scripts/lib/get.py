@@ -1037,9 +1037,10 @@ def ensure_tool(kind, uses=1, tier=None, radius=32):
     is at least tier (None: any; "hand": none needed, so a tool only where it is cheaper than the hand), by the cheapest
     of options: carried, borrowed from a chest of lib.stock, or made with get; where one fails it tries the next.
     Carried ones that last, else (tier not "hand") one that lasts in the nearest chest where the walk there and the work
-    with it cost no more than making the lowest tier of lib.craft.MADE it may (#580), it takes before costing the
-    options, which scans for each tier it could make; where no tool can be made for want of a raw item (no_wood), it
-    fails at once with that source's reason, as no_logs.
+    with it cost no more than making the lowest tier of lib.craft.MADE it may (#580), or one in the colony store
+    (lib.stock.store) however far (#1023), it takes before costing the options, which scans for each tier it could
+    make; where no tool can be made for want of a raw item (no_wood), it fails at once with that source's reason, as
+    no_logs.
     Gives result(): ok, no_tool where there is no way, or the reason the last tier to make failed with."""
     ok, carried, need = lasting(kind, uses, tier)
     if carried and need <= 0:
@@ -1053,8 +1054,9 @@ def ensure_tool(kind, uses=1, tier=None, radius=32):
         for scanning in (False, True):
             for chest, t in in_chests(kind, ok, need, radius, scanning):
                 c = lib.cost.walk(pos(), chest) + work(kind, uses, t or "wooden")
-                # The work of the lowest tier alone is a bound on making it: below it, no make cost is needed.
-                if low and c > work(kind, uses, low[-1]):
+                # The work of the lowest tier alone is a bound on making it: below it, no make cost is needed. A store
+                # tool is taken however far, as get takes from the store first (#1023).
+                if low and c > work(kind, uses, low[-1]) and chest not in lib.stock.store():
                     if weighed:
                         break
                     weighed = True
