@@ -47,6 +47,7 @@ MAX_RADIUS = 32  # the largest radius scan and find_nearest take (BlockScan.MAX_
 OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east"}
 CLOCKWISE = {"north": "east", "east": "south", "south": "west", "west": "north"}
 SPIRAL = [(1, 0), (0, 1), (-1, 0), (0, -1)]  # east, south, west, north: clockwise seen from above
+DEPTH = 8  # blocks below home it mines at least, for an ore whose best y is at or above home, such as coal (#1006)
 
 
 def chunk(p):
@@ -330,11 +331,13 @@ def ensure_pickaxe(item, y, radius):
 
 def run(ore="raw_iron", chunks=9, radius=32, y=None, area=None):
     """Mines ore in a claim of chunks chunks spiralling out from the home chunk (from area, (x0, z0, x1, z1), in areas
-    of its size, where given) at y (lib.dig.best_y(ore) where None) and keeps it at home, warns where it fails and gives
+    of its size, where given) at y (lib.dig.best_y(ore), but DEPTH below home at least, where None) and keeps it at home, warns where it fails and gives
     back what it borrowed, also when it fails. Gives ore_miner's result()."""
     item = lib.dig.short(ore)
     if y is None:
         y = lib.dig.best_y(item)
+        if y is not None:
+            y = min(y, home().y - DEPTH)
     if area is None:
         area = chunk(home())
     try:

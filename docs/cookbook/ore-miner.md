@@ -7,11 +7,11 @@ The job `jobs/ore_miner` has one task: gather one ore and keep it at home (#1002
 /antcraft bot run jobs.ore_miner raw_iron 9 32
 ```
 
-The words are the ore, an item of [`lib.dig`](../reference/modules/lib/dig.md)'s `ORES` (below), `raw_iron` by default; how many chunks it claims, 9 (below); and how far to look for chests and the kit, 32 blocks (at most 32). It mines at the height where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)). Emerald has no such height, so the job says `no_ore` for it.
+The words are the ore, an item of [`lib.dig`](../reference/modules/lib/dig.md)'s `ORES` (below), `raw_iron` by default; how many chunks it claims, 9 (below); and how far to look for chests and the kit, 32 blocks (at most 32). It mines at the height where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)). Where that height is at or above home, as coal's 96 often is, it mines 8 blocks below home instead (`DEPTH`), so it still digs stairs and mines underground. Emerald has no such height, so the job says `no_ore` for it.
 
 | Ore | Height | Pickaxe | Kept at home as |
 |---|---|---|---|
-| `coal` | y 96 | stone | coal |
+| `coal` | y 96, or 8 below home where home is lower | stone | coal |
 | `raw_copper` | y 48 | stone | copper ingots |
 | `raw_iron` | y 16 | stone | iron ingots |
 | `lapis_lazuli` | y 0 | stone | lapis lazuli |
@@ -80,4 +80,4 @@ import jobs.ore_miner
 jobs.ore_miner.run("raw_iron")
 ```
 
-`run(ore="raw_iron", chunks=9, radius=32, y=None, area=None)` gives the result that ended it: `ok` with `finished` once the claim is mined out. `y` is the height to mine at, the ore's best height where `None`; `area` the columns to mine in place of the home chunk, as `(x0, z0, x1, z1)`, the corners included, for a smaller area or one elsewhere; the rest of the claim is then areas of its size spiralling out from it.
+`run(ore="raw_iron", chunks=9, radius=32, y=None, area=None)` gives the result that ended it: `ok` with `finished` once the claim is mined out. `y` is the height to mine at, the ore's best height where `None` (8 below home where that is lower); `area` the columns to mine in place of the home chunk, as `(x0, z0, x1, z1)`, the corners included, for a smaller area or one elsewhere; the rest of the claim is then areas of its size spiralling out from it.

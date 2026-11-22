@@ -128,6 +128,35 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A coal miner whose home is below coal's best y (96), run with no y, digs its stairs down to DEPTH (8) below home,
+	 * y -7, in the 3x3 area of stairsInASmallAreaSpiralDownPastFourLegs, and mines there, not at home's level (#1006).
+	 */
+	// Measured: passes at tick 584 in a class run (red: the lowest y the bot stood at was 1).
+	@GameTest(maxTicks = 1200)
+	public void aCoalMinerBelowItsBestYMinesBelowHome(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -10, 0, 7, -5, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		AntBot bot = miner(helper);
+		BlockPos a = helper.absolutePos(new BlockPos(2, 0, 4));
+		BlockPos b = helper.absolutePos(new BlockPos(4, 0, 6));
+		ScriptRun run = BotScripts.run(bot, "import jobs.ore_miner\njobs.ore_miner.run(\"coal\", 1, 32, None, (%d, %d, %d, %d))\n"
+			.formatted(Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()), Math.max(a.getZ(), b.getZ())));
+		BotScripts.failOnWarning(helper, bot);
+		double[] lowest = {Double.MAX_VALUE};
+		int floor = helper.absolutePos(BlockPos.ZERO).getY();
+		helper.onEachTick(() -> {
+			if (!bot.isRemoved()) {
+				lowest[0] = Math.min(lowest[0], bot.getY() - floor);
+			}
+		});
+		helper.succeedWhen(() -> {
+			ended(helper, run, bot);
+			helper.assertValueEqual((int) Math.floor(lowest[0]), -7, "the lowest y the bot stood at");
+		});
+	}
+
+	/**
 	 * A claim of 2 areas, x 2 to 6 and east of it x 7 to 11 (z 2 to 6): once the first is dug the bot tunnels east into
 	 * the second at y -2 and digs its grid, a corridor along z through (7, -2, 3) and branches east, mining the iron ore
 	 * there; then it is finished.
