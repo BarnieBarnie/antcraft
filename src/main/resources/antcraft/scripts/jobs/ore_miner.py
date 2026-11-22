@@ -167,7 +167,8 @@ def down(y, area, om, prior):
 
 def trip(item, y, areas, om):
     """Goes down and digs the grid of each area of the claim not cleared yet (the first om["cleared"] are), tunnelling
-    from each into the next, until it is nearly full (FREE) or its pickaxe would not last a branch (USES), then walks
+    from each into the next where its corridor (om["bottom"]) does not lie in it yet, such as a claim run again with more
+    chunks (#1011), until it is nearly full (FREE) or its pickaxe would not last a branch (USES), then walks
     home by its waypoints (back). Gives result(), with dug where the whole claim is cleared."""
     prior = lib.find.WHERE
     try:
@@ -176,13 +177,14 @@ def trip(item, y, areas, om):
             return r
         while om["cleared"] < len(areas):
             k = om["cleared"]
+            if not inside([areas[k]], None)(om["bottom"]):
+                # tunnels on from the last cleared area, also when run again with more chunks (#1011)
+                r = tunnel(areas[k - 1], areas[k], om, prior)
+                if not r["ok"]:
+                    return r
             r = dig(item, areas[k], om, prior)
             if not r["ok"] or "dug" not in r:
                 return r
-            if k + 1 < len(areas):
-                r = tunnel(areas[k], areas[k + 1], om, prior)
-                if not r["ok"]:
-                    return r
             om["cleared"] = k + 1
         r = result()
         r["dug"] = True

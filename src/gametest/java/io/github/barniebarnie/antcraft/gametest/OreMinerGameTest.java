@@ -181,6 +181,40 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A claim of 1 area, x 2 to 6 (z 2 to 6), cleared, then run again with 2: the bot tunnels east from the first into the
+	 * second, x 7 to 11, digs its grid there, a corridor along z through (7, -2, 3) and branches east, mining the iron ore
+	 * at (9, -2, 2), and ends finished with 2 (#1011).
+	 */
+	// Measured: passes at tick 1466 in a class run (red: ore miner: outside, it branched from the first area's corridor).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 3000)
+	public void aClearedClaimRunAgainWithMoreChunksTunnelsOn(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 14, -1, 9)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(9, -2, 2, Blocks.IRON_ORE);
+		AntBot bot = miner(helper);
+		ScriptRun first = run(helper, bot, 1, -2, 2, 2, 6, 6);
+		ScriptRun[] second = {null};
+		helper.onEachTick(() -> {
+			if (second[0] == null && first.state() == ScriptRun.State.FINISHED) {
+				helper.assertBlockPresent(Blocks.STONE, 7, -2, 3);
+				second[0] = BotScripts.run(bot, source(helper, 2, -2, 2, 2, 6, 6));
+			}
+		});
+		String finished = "ore_miner raw_iron: finished my 2 chunks around " + home(helper, HOME) + ", move me or give me a new job";
+		helper.succeedWhen(() -> {
+			helper.assertTrue(second[0] != null, "the first run " + first.state());
+			ended(helper, second[0], bot, HOME);
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains(finished), "never said " + finished);
+			helper.assertBlockPresent(Blocks.AIR, 7, -2, 3);
+			helper.assertBlockPresent(Blocks.AIR, 11, -2, 3);
+			helper.assertBlockPresent(Blocks.AIR, 11, -2, 6);
+			helper.assertBlockPresent(Blocks.STONE, 12, -2, 3);
+			helper.assertValueEqual(stored(helper, Items.IRON_INGOT), 1, "iron ingots stored");
+		});
+	}
+
+	/**
 	 * A claim of 3 areas, x 2 to 6, x 7 to 11 east of it and z 7 to 11 south of that: once the bot has tunnelled into the
 	 * third it is filled up, so it goes home from there, stores the dirt and walks back by its waypoints (stairs, then
 	 * each tunnel's entry) to the third, two tunnels from the stairs, digs its grid and comes home finished (#1007).
