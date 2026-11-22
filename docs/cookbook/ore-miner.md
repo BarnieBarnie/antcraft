@@ -1,13 +1,13 @@
 # Mine ore for home
 
-The job `jobs/ore_miner` has one task: gather one ore and keep it at home (#1002). Iron first: the bot digs down from its home, branch-mines its home chunk for iron ore, smelts the raw iron at home and stores the ingots in chests it places there. Unlike [`jobs.strip_mine`](strip-mine.md), which stops once the bot carries enough, it goes on until the chunk's level is mined out, making as many trips as that takes.
+The job `jobs/ore_miner` has one task: gather one ore and keep it at home (#1002). Iron first: the bot digs down from its home, branch-mines the chunks round it for iron ore, smelts the raw iron at home and stores the ingots in chests it places there. Unlike [`jobs.strip_mine`](strip-mine.md), which stops once the bot carries enough, it goes on until the level of every chunk of its claim is mined out, making as many trips as that takes, and then says it is finished.
 
 ```text
 /antcraft bot run jobs.ore_miner
-/antcraft bot run jobs.ore_miner raw_iron 1 32
+/antcraft bot run jobs.ore_miner raw_iron 9 32
 ```
 
-The words are the ore, a raw item of [`lib.dig`](../reference/modules/lib/dig.md) such as `raw_iron` (the default), `raw_copper` or `coal`; how many chunks it may mine, 1 (taken for later: only the home chunk is mined for now); and how far to look for chests and the kit, 32 blocks (at most 32). It mines at the height where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)), y 16 for iron. Emerald has no such height, so the job says `no_ore` for it.
+The words are the ore, a raw item of [`lib.dig`](../reference/modules/lib/dig.md) such as `raw_iron` (the default), `raw_copper` or `coal`; how many chunks it claims, 9 (below); and how far to look for chests and the kit, 32 blocks (at most 32). It mines at the height where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)), y 16 for iron. Emerald has no such height, so the job says `no_ore` for it.
 
 ## The trips
 
@@ -17,15 +17,28 @@ The bot starts with the miner's kit of `jobs.strip_mine`, a stone pickaxe, a cra
 |---|---|
 | eat | [`lib.food.upkeep`](../reference/modules/lib/food.md), at home |
 | pickaxe | [`lib.get.ensure_tool`](../reference/modules/lib/get.md): one that lasts the stairs and a branch, of the tier the ore needs, stone at least |
-| down | the first time, stairs from home down to the ore's height, setting off north and turning at the chunk's edge ([`lib.dig.stairs_to`](../reference/modules/lib/dig.md)); after that it walks down the stairs it dug |
+| down | the first time, stairs from home down to the ore's height, setting off north and turning clockwise at the home chunk's edge ([`lib.dig.stairs_to`](../reference/modules/lib/dig.md)), so they spiral down round the chunk as deep as they must; after that it walks down the stairs it dug, and along its tunnels to the chunk it mines |
 | branches | from a corridor through the bottom of the stairs, square to their last steps, a branch each way at every third block across the chunk, each to the chunk's edge ([`lib.dig.branch`](../reference/modules/lib/dig.md)), mining the ore in its walls and ceiling and putting a torch every 8 blocks |
-| home | when it has fewer than 3 empty slots, when its pickaxe would not last another branch, or when every branch is dug, it walks back up the stairs and home |
+| next chunk | with every branch of a chunk dug, it tunnels on at the same level into the next chunk of its claim (below) and digs that one's grid from a corridor through the tunnel's end |
+| home | when it has fewer than 3 empty slots, when its pickaxe would not last another branch, or when its claim is mined out, it walks back up the stairs and home |
 | smelt | it smelts the ore it carries with [`lib.craft.smelt_here`](../reference/modules/lib/craft.md), in the furnace it carries or one it crafts from the cobblestone it dug, burning coal; where it carries too little coal (one smelts 8), it gets more with [`lib.get`](../reference/modules/lib/get.md), from its chests first |
 | store | all it carries goes into its depot (below) but its pickaxe, crafting table, furnace and torches |
 
-Branches 3 blocks apart leave no block of the level unseen: each branch's walls are the blocks beside it, so the blocks between two branches are in the wall of one or the other. The two columns just behind the bottom of the stairs are left, as a branch through them would dig out the last steps.
+Branches 3 blocks apart leave no block of the level unseen: each branch's walls are the blocks beside it, so the blocks between two branches are in the wall of one or the other. The columns of the last two steps of the stairs are left, as a branch through them would dig out those steps.
 
-Once every branch is dug the job prints `ore miner: dug the chunk` and ends with the bot at home. Where something stops it, it warns `ore miner:` with the reason: a pickaxe it cannot get, a step it could not dig, `full` where it stays nearly full after storing, or a chest it cannot get for the depot (`ore miner: no chest has room for [...] and none to get: <reason>`).
+## The claim
+
+An ore miner has to go further from home to keep finding ore, but not forever: it works a claim of `chunks` chunks, 9 by default, starting with its home chunk and spiralling out clockwise from it (east, south, west, west, north, north, east, east), so 9 is the 3 by 3 chunks round home. Only the home chunk has stairs: there is one staircase, from home, and the bot reaches every other chunk by a tunnel at the ore's height from the chunk before it, which is cheaper than walking over the surface and digging new stairs in each. The tunnel runs on from the end of the corridor where the next chunk lies along it, else along the branch farthest from the stairs.
+
+With its whole claim mined out, the bot goes home and says
+
+```text
+ore_miner raw_iron: finished my 9 chunks around <x> <y> <z>, move me or give me a new job
+```
+
+and the job ends `ok`, its result's `finished` true. Run again, it says the same at once and stops, mining nothing. To have it mine on, move it: a bot with another home makes a new claim round that one. Running it with a larger `chunks` goes on with the chunks of the claim it has not mined.
+
+Where something stops it, it warns `ore miner:` with the reason: a pickaxe it cannot get, a step it could not dig, `full` where it stays nearly full after storing, or a chest it cannot get for the depot (`ore miner: no chest has room for [...] and none to get: <reason>`).
 
 ## The depot
 
@@ -41,7 +54,7 @@ A chest comes from [`lib.get`](../reference/modules/lib/get.md): carried, from a
 
 ## Where it is
 
-The job keeps its progress in `memory["ore_miner"]`: the chunk and height it mines, the bottom of its stairs and the branches it has dug (`done`, as `"<column> <facing>"`). A bot that is stopped, or the server restarted, goes back down the same stairs and on with the branches it has not dug; run again on a chunk it has dug, it ends at once. Mining another chunk or height starts afresh.
+The job keeps its progress in `memory["ore_miner"]`: the home the claim belongs to, its first chunk and the height it mines, how many chunks of the claim it has mined out (`cleared`), where it starts in the chunk it mines (`bottom`, the bottom of the stairs or the end of the tunnel into it, and `way`, the way the stairs or tunnel went), the columns of the last two steps it leaves (`guard`), and the branches of that chunk it has dug (`done`, as `"<column> <facing>"`). A bot that is stopped, or the server restarted, goes back down the same stairs and on with the branches it has not dug; run again on a claim it has mined out, it says it is finished at once. Another home, first chunk or height starts a new claim.
 
 ## In a script
 
@@ -50,4 +63,4 @@ import jobs.ore_miner
 jobs.ore_miner.run("raw_iron")
 ```
 
-`run(ore="raw_iron", chunks=1, radius=32, y=None, area=None)` gives the result that ended it: `ok` once the chunk is dug. `y` is the height to mine at, the ore's best height where `None`; `area` the columns to mine in place of the home chunk, as `(x0, z0, x1, z1)`, the corners included, for a smaller area or one elsewhere.
+`run(ore="raw_iron", chunks=9, radius=32, y=None, area=None)` gives the result that ended it: `ok` with `finished` once the claim is mined out. `y` is the height to mine at, the ore's best height where `None`; `area` the columns to mine in place of the home chunk, as `(x0, z0, x1, z1)`, the corners included, for a smaller area or one elsewhere; the rest of the claim is then areas of its size spiralling out from it.

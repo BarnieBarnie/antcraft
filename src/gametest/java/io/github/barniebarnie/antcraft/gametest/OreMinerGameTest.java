@@ -4,7 +4,9 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
+import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
+import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -99,6 +101,108 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Stairs fenced into the 3x3 area x 2 to 4, z 4 to 6 down to y -10 spiral clockwise round its edge, six legs, and the
+	 * grid at their bottom (4, -10, 4) is dug: one branch west at z 5.
+	 */
+	// Measured: passes at tick 824 (red: ore miner: outside at y -5, after four legs).
+	@GameTest(maxTicks = 1700)
+	public void stairsInASmallAreaSpiralDownPastFourLegs(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -12, 0, 7, -5, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		AntBot bot = miner(helper);
+		ScriptRun run = run(helper, bot, 1, -10, 2, 4, 4, 6);
+		helper.succeedWhen(() -> {
+			ended(helper, run, bot, HOME);
+			helper.assertBlockPresent(Blocks.AIR, 4, -10, 4);
+			helper.assertBlockPresent(Blocks.AIR, 2, -10, 5);
+		});
+	}
+
+	/**
+	 * A claim of 2 areas, x 2 to 6 and east of it x 7 to 11 (z 2 to 6): once the first is dug the bot tunnels east into
+	 * the second at y -2 and digs its grid, a corridor along z through (7, -2, 3) and branches east, mining the iron ore
+	 * there; then it is finished.
+	 */
+	// Measured: passes at tick 1305 (red: (7, -2, 3) still stone, only the first area dug).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 2600)
+	public void afterItsFirstChunkItMinesTheNextOfTheSpiral(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 14, -1, 9)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(9, -2, 2, Blocks.IRON_ORE);
+		AntBot bot = miner(helper);
+		ScriptRun run = run(helper, bot, 2, -2, 2, 2, 6, 6);
+		helper.succeedWhen(() -> {
+			ended(helper, run, bot, HOME);
+			helper.assertBlockPresent(Blocks.AIR, 7, -2, 3);
+			helper.assertBlockPresent(Blocks.AIR, 11, -2, 3);
+			helper.assertBlockPresent(Blocks.AIR, 11, -2, 6);
+			helper.assertBlockPresent(Blocks.STONE, 12, -2, 3);
+			helper.assertValueEqual(stored(helper, Items.IRON_INGOT), 1, "iron ingots stored");
+		});
+	}
+
+	/**
+	 * A claim of the one-column area x 2 to 4, z 2 to 6: once dug the bot is at home and says it is finished; run again,
+	 * it says so once more and stays at home.
+	 */
+	// Measured: passes at tick 217 (red: said "ore miner: dug the chunk", not finished).
+	@GameTest(maxTicks = 450)
+	public void aClearedClaimEndsFinishedAndASecondRunDoesNotMine(GameTestHelper helper) {
+		AntBot bot = miner(helper);
+		ScriptRun first = run(helper, bot, 1, -2, 2, 2, 4, 6);
+		String finished = "ore_miner raw_iron: finished my 1 chunks around " + home(helper, HOME) + ", move me or give me a new job";
+		ScriptRun[] second = {null};
+		double[] away = {0};
+		helper.onEachTick(() -> {
+			if (second[0] == null && first.state() == ScriptRun.State.FINISHED) {
+				second[0] = BotScripts.run(bot, source(helper, 1, -2, 2, 2, 4, 6));
+			} else if (second[0] != null) {
+				away[0] = Math.max(away[0], Math.sqrt(bot.blockPosition().distSqr(helper.absolutePos(HOME))));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(second[0] != null, "the first run " + first.state());
+			ended(helper, second[0], bot, HOME);
+			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertValueEqual(said.stream().filter(finished::equals).count(), 2L, "times said finished in " + said);
+			helper.assertTrue(away[0] <= 1, "the second run went " + away[0] + " blocks from home");
+		});
+	}
+
+	/**
+	 * A bot whose claim of x 2 to 4, z 2 to 6 is finished, given a new home (4, 1, 6) in it, claims it afresh: it digs
+	 * new stairs from there to (4, -2, 3) and the branch south at x 3 it did not dig before.
+	 */
+	// Measured: passes at tick 512 (red: (4, -2, 3) still stone, the second run ended at once).
+	@GameTest(maxTicks = 1000)
+	public void aNewHomeStartsANewClaim(GameTestHelper helper) {
+		AntBot bot = miner(helper);
+		ScriptRun first = run(helper, bot, 1, -2, 2, 2, 4, 6);
+		BlockPos moved = new BlockPos(4, 1, 6);
+		ScriptRun[] second = {null};
+		helper.onEachTick(() -> {
+			if (second[0] == null && first.state() == ScriptRun.State.FINISHED) {
+				helper.assertBlockPresent(Blocks.STONE, 3, -2, 6);
+				bot.setHome(helper.absolutePos(moved));
+				second[0] = BotScripts.run(bot, source(helper, 1, -2, 2, 2, 4, 6));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(second[0] != null, "the first run " + first.state());
+			ended(helper, second[0], bot, moved);
+			helper.assertBlockPresent(Blocks.AIR, 4, -2, 3);
+			helper.assertBlockPresent(Blocks.AIR, 3, -2, 6);
+		});
+	}
+
+	private static String home(GameTestHelper helper, BlockPos home) {
+		BlockPos h = helper.absolutePos(home);
+		return h.getX() + " " + h.getY() + " " + h.getZ();
+	}
+
 	private static AntBot miner(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, HOME.getX(), HOME.getY(), HOME.getZ());
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
@@ -111,19 +215,35 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 
 	/** Runs jobs.ore_miner for raw iron at y -2 in the area x0..x1, z0..z1 (relative), failing at once on a warning. */
 	private static ScriptRun run(GameTestHelper helper, AntBot bot, int x0, int z0, int x1, int z1) {
-		BlockPos a = helper.absolutePos(new BlockPos(x0, -2, z0));
-		BlockPos b = helper.absolutePos(new BlockPos(x1, -2, z1));
-		String source = "import jobs.ore_miner\njobs.ore_miner.run(\"raw_iron\", 1, 32, %d, (%d, %d, %d, %d))\n".formatted(a.getY(),
-			Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()), Math.max(a.getZ(), b.getZ()));
-		ScriptRun run = BotScripts.run(bot, source);
+		return run(helper, bot, 1, -2, x0, z0, x1, z1);
+	}
+
+	/**
+	 * Runs jobs.ore_miner for raw iron with a claim of chunks areas the size of x0..x1, z0..z1 (relative), the first of
+	 * them, at y, failing at once on a warning.
+	 */
+	private static ScriptRun run(GameTestHelper helper, AntBot bot, int chunks, int y, int x0, int z0, int x1, int z1) {
+		ScriptRun run = BotScripts.run(bot, source(helper, chunks, y, x0, z0, x1, z1));
 		BotScripts.failOnWarning(helper, bot);
 		return run;
 	}
 
+	private static String source(GameTestHelper helper, int chunks, int y, int x0, int z0, int x1, int z1) {
+		BlockPos a = helper.absolutePos(new BlockPos(x0, y, z0));
+		BlockPos b = helper.absolutePos(new BlockPos(x1, y, z1));
+		return "import jobs.ore_miner\njobs.ore_miner.run(\"raw_iron\", %d, 32, %d, (%d, %d, %d, %d))\n".formatted(chunks, a.getY(),
+			Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()), Math.max(a.getZ(), b.getZ()));
+	}
+
 	/** The job finished with the bot at home. */
 	private static void ended(GameTestHelper helper, ScriptRun run, AntBot bot) {
+		ended(helper, run, bot, HOME);
+	}
+
+	/** The job finished with the bot at home, relative. */
+	private static void ended(GameTestHelper helper, ScriptRun run, AntBot bot, BlockPos home) {
 		helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "the job " + run.state());
-		helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(HOME)), "the bot is at " + TestPositions.relative(helper, bot.blockPosition()));
+		helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(home)), "the bot is at " + TestPositions.relative(helper, bot.blockPosition()));
 	}
 
 	/** How many of item the chests standing in the area at y 1 to 2 hold. */
