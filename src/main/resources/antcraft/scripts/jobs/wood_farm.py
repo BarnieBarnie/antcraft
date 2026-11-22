@@ -1,5 +1,5 @@
 # A job: grows a wood farm from nothing and farms it until a player stops it. Run it as
-# /antcraft bot run jobs.wood_farm <kind> [x y z [cells [radius]]], such as jobs.wood_farm birch_sapling: a kind of
+# /antcraft bot run jobs.wood_farm <kind> [x y z [cells [radius]]] [storage x y z], such as jobs.wood_farm birch_sapling: a kind of
 # lib.treefarm.KINDS (a sapling, mangrove_propagule, or giant_spruce or giant_jungle), the farm's first corner, by default where the bot stands (or where a stopped run of the kind
 # started), the most cells it grows to (by default most of the ticks a tree takes, learnt as it farms, else HARVEST[kind], and no
 # more than the cells that get random ticks round its corner, #812) and how far to look for what it needs, in

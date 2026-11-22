@@ -1,5 +1,5 @@
 # A job: strip-mines for an ore until the bot carries n of it, then comes back up and home. Run it as
-# /antcraft bot run jobs.strip_mine <ore> [n] [y] [radius] [facing], such as jobs.strip_mine raw_iron 12: ore is a raw
+# /antcraft bot run jobs.strip_mine <ore> [n] [y] [radius] [facing] [storage x y z], such as jobs.strip_mine raw_iron 12: ore is a raw
 # item of lib.dig.ORES, n 8 by default, y the height to mine at, lib.dig.best_y(ore) by default (emerald has none: give
 # y), radius how far it looks for chests and the kit, 32, facing the way it digs, north (docs/design/library.md, Example
 # jobs). Another script runs it with run(ore, n, y, radius, facing); imported, this runs nothing.

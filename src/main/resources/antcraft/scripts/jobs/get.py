@@ -1,5 +1,5 @@
 # A job: gets any item from what is around, with the tools to get it, by lib.get's resolver. Run it with
-# `/antcraft bot run jobs.get <item> [n] [radius]`, such as `jobs.get iron_pickaxe`: logs, a wooden pickaxe,
+# `/antcraft bot run jobs.get <item> [n] [radius] [storage x y z]`, such as `jobs.get iron_pickaxe`: logs, a wooden pickaxe,
 # cobblestone, a stone pickaxe, iron ore, a furnace and the iron pickaxe. It says what it got or why not, and gives back
 # what it borrowed on the way, also when it fails; the n it asked for it keeps (docs/cookbook/get.md). Another script
 # runs it with run(item, n, radius); imported, this runs nothing.

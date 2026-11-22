@@ -1,5 +1,5 @@
 # A job: builds a blueprint, getting what its site lacks by lib.get first. Run it with
-# `/antcraft bot run jobs.build <blueprint> x y z [turn] [radius]`, such as `jobs.build antcraft:cobble_step 10 64 10`.
+# `/antcraft bot run jobs.build <blueprint> x y z [turn] [radius] [storage x y z]`, such as `jobs.build antcraft:cobble_step 10 64 10`.
 # It says whether it built it or why not, and gives back what it borrowed on the way, also when it fails
 # (docs/cookbook/build.md). Another script runs it with run(id, at, turn, radius); imported, this runs nothing.
 #

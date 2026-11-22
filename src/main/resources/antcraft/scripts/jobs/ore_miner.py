@@ -1,4 +1,4 @@
-# A job: gathers one ore and keeps it at home (#1002). Run it as /antcraft bot run jobs.ore_miner [ore] [chunks] [radius],
+# A job: gathers one ore and keeps it at home (#1002). Run it as /antcraft bot run jobs.ore_miner [ore] [chunks] [radius] [storage x y z],
 # such as jobs.ore_miner raw_iron: ore is a raw item of lib.dig.ORES, raw_iron by default, chunks how many chunks it
 # claims, 9, in a spiral out from the home chunk (#1003), radius how far it looks for chests and the kit, 32. It digs
 # stairs from home down to lib.dig.best_y(ore), spiralling within the home chunk, branch-mines the chunk there in a grid

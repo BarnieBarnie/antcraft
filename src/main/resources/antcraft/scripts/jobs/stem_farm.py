@@ -1,5 +1,5 @@
 # A job: grows a pumpkin or melon farm from a few seeds and farms it until a player stops it. Run it as /antcraft bot
-# run jobs.stem_farm <pumpkin|melon> [x y z [cells [radius]]]: the kind, the farm's first corner (by default where the
+# run jobs.stem_farm <pumpkin|melon> [x y z [cells [radius]]] [storage x y z]: the kind, the farm's first corner (by default where the
 # bot stands, or where a stopped run of the kind started), the most cells it grows to (by default 24 till it learns its
 # harvest ticks, and no more than the cells that get random ticks round its corner) and how far to look for what it
 # needs, in blocks (32 by default). A cell is 3 by 3: a stem on farmland at each corner, a dirt fruit spot between each
