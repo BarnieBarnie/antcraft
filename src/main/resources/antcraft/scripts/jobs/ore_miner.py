@@ -117,19 +117,6 @@ def where(area, om, prior):
     return inside([area], prior, [tuple(g) for g in om["guard"]])
 
 
-def behind(legs, bottom):
-    """The columns, [x, z], of the two steps above bottom of stairs dug in legs, (start, facing) pairs."""
-    cells = []
-    x, z = bottom.x, bottom.z
-    for start, way in reversed(legs):
-        d = FACING[way]
-        while len(cells) < 2 and (x, z) != (start.x, start.z):
-            x -= d[0]
-            z -= d[2]
-            cells.append([x, z])
-    return cells
-
-
 def walk(route):
     """Walks to each point of route in turn, so no one goto has to find its way down a long staircase and through
     tunnels (#1007). Gives result(), with at the point a leg failed at."""
@@ -162,7 +149,7 @@ def down(y, area, om, prior):
         om["bottom"] = pos()
         om["route"] = [start for start, _ in r["legs"][1:]] + [pos()]
         om["way"] = r["facing"]
-        om["guard"] = behind(r["legs"], pos())
+        om["guard"] = lib.dig.behind(r["legs"], pos())
     return r
 
 

@@ -5,6 +5,7 @@ A job that digs for an ore until the bot carries enough of it, then climbs back 
 ```python
 import lib.bootstrap
 import lib.dig
+import lib.find
 import lib.food
 import lib.tools
 from lib.borrow import borrowed, give_back
@@ -43,6 +44,9 @@ def strip_mine(item, n, y, radius, facing):
     if r["ok"]:
         r = lib.dig.spiral_to(y, way)
         way = None if r["reason"] == "outside" else r["facing"]  # stairs with no room left to spiral: no_ore below
+    prior = lib.find.WHERE
+    # No branch digs under the last steps of the stairs (#1014).
+    guard = lib.dig.guarded(r["legs"], prior) if "legs" in r else prior
     for _ in range(ROUNDS):
         while r["reason"] == "outside" and way is not None:
             # The edge of lib.find.WHERE ends a branch: it goes on square to it, as lib.dig.ore (#561).
@@ -55,7 +59,11 @@ def strip_mine(item, n, y, radius, facing):
         # A new pickaxe where the one it holds would break in the branch: stone from the cobblestone it dug.
         r = ensure_tool("pickaxe", USES, tier(item), radius)
         if r["ok"]:
-            r = lib.dig.branch(LENGTH, facing=way)
+            lib.find.WHERE = guard
+            try:
+                r = lib.dig.branch(LENGTH, facing=way)
+            finally:
+                lib.find.WHERE = prior
     if r["reason"] == "outside":
         r = result()  # the last branch ended at the edge: no_ore below where it carries too few
     if lib.dig.stairs() is not None:

@@ -127,15 +127,20 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     tried = []
     r = spiral_to(y, facing)
     facing = None if r["reason"] == "outside" else r["facing"]  # stairs with no room left to spiral: no_ore below
-    for _ in range(rounds(key, target - count(key))):
-        while r["reason"] == "outside" and facing is not None:
-            # At the edge of lib.find.WHERE it goes on square to it, down or along (#561).
-            tried.append(facing)
-            facing = turn(facing, tried)
-            r = stairs_to(y, facing) if facing is not None else result()
-        if not r["ok"] or count(key) >= target or facing is None:
-            break
-        r = branch(length, facing=facing, left=left)
+    prior = lib.find.WHERE
+    lib.find.WHERE = guarded(r["legs"], prior)
+    try:
+        for _ in range(rounds(key, target - count(key))):
+            while r["reason"] == "outside" and facing is not None:
+                # At the edge of lib.find.WHERE it goes on square to it, down or along (#561).
+                tried.append(facing)
+                facing = turn(facing, tried)
+                r = stairs_to(y, facing) if facing is not None else result()
+            if not r["ok"] or count(key) >= target or facing is None:
+                break
+            r = branch(length, facing=facing, left=left)
+    finally:
+        lib.find.WHERE = prior
     if r["reason"] == "outside":
         r = result()  # it gives no_ore below
     # Where it dug no staircase, as at y already, or remembers one it is not on (#556), it walks back to start: digging
@@ -254,6 +259,27 @@ def spiral_to(y, facing="north"):
     r["facing"] = facing
     r["legs"] = legs
     return r
+
+
+def behind(legs, bottom):
+    """The columns, [x, z], of the two steps above bottom of stairs dug in legs, (start, facing) pairs (spiral_to)."""
+    cells = []
+    x, z = bottom.x, bottom.z
+    for start, way in reversed(legs):
+        d = FACING[way]
+        while len(cells) < 2 and (x, z) != (start.x, start.z):
+            x -= d[0]
+            z -= d[2]
+            cells.append([x, z])
+    return cells
+
+
+def guarded(legs, where):
+    """lib.find.WHERE where, but for the columns of the two steps above the bot of the stairs spiral_to dug in legs
+    (behind), so no branch turned back towards them digs under them (#1014). ponytail: asks where once a position, so
+    colony_edge asks colony() once a position: keep it to branches, not searches."""
+    cols = [tuple(c) for c in behind(legs, pos())]
+    return lambda p: (p.x, p.z) not in cols and (where is None or where(p))
 
 
 def stairs_up(facing="north"):

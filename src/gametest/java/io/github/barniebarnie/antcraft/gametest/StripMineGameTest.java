@@ -132,6 +132,35 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The same spiral with the coal at (3, -10, 3) (#1014): the branch east from the bottom (3, -10, 2) stops at the edge,
+	 * north stops at once, and the branch turns west, back under the stairs. It mines the coal from (3, -10, 2) but never
+	 * digs the columns of the last two steps, (2, -9, 2) and (2, -8, 3), so their floors stay and the bot climbs back up.
+	 */
+	// Measured: passes at tick 775 (red: the branch dug the floor of the step (2, -9, 2), at (2, -10, 2)).
+	@GameTest(maxTicks = 1600)
+	public void aBranchTurnedBackLeavesTheLastStepsStanding(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -12, 0, 7, -1, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(3, -10, 3, Blocks.COAL_ORE);
+		BlockPos start = new BlockPos(2, 1, 4);
+		AntBot bot = miner(helper, start, new ItemStack(Items.STONE_PICKAXE));
+		BlockPos corner = helper.absolutePos(BlockPos.ZERO);
+		String name = BotScripts.libraryScript(helper, "strip_", """
+			import lib.find
+			import jobs.strip_mine
+			lib.find.WHERE = lambda p: %d <= p.x <= %d and %d <= p.z <= %d
+			jobs.strip_mine.run("coal", 1, int(ARGS[0]) - 8)
+			""".formatted(corner.getX() + 2, corner.getX() + 4, corner.getZ() + 2, corner.getZ() + 4));
+		ScriptRun job = run(helper, bot, name, "%d");
+		helper.succeedWhen(() -> {
+			mined(helper, job, bot, start, 1);
+			helper.assertBlockPresent(Blocks.STONE, 2, -10, 2);
+			helper.assertBlockPresent(Blocks.STONE, 2, -9, 3);
+		});
+	}
+
+	/**
 	 * A colony member running the job keeps to the colony (#594): with the core at the area's south-east corner and radius
 	 * 5, the stairs end at the edge (z 4), so the branch north stops at once and the job branches east along the edge,
 	 * through stone filled past the area's east edge, mining the two coal in its north wall. Nothing past the edge is dug,
