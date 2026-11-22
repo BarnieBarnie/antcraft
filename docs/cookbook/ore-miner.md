@@ -9,6 +9,8 @@ The job `jobs/ore_miner` has one task: gather one ore and keep it at home (#1002
 
 The words are the ore, an item of [`lib.dig`](../reference/modules/lib/dig.md)'s `ORES` (below), `raw_iron` by default; how many chunks it claims, 9 (below); and how far to look for chests and the kit, 32 blocks (at most 32). It mines at the height where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)). Where that height is at or above home, as coal's 96 often is, it mines 8 blocks below home instead (`DEPTH`), so it still digs stairs and mines underground. Emerald has no such height, so the job says `no_ore` for it.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 | Ore | Height | Pickaxe | Kept at home as |
 |---|---|---|---|
 | `coal` | y 96, or 8 below home where home is lower | stone | coal |

@@ -1,7 +1,10 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
@@ -146,6 +149,101 @@ public class StockGameTest implements CustomTestMethodInvoker {
 			printed(helper, bot, "True", "False {'oak_planks': 2} 0");
 			helper.assertTrue(count(near, Items.OAK_PLANKS) == 2 && count(out, Items.OAK_PLANKS) == 6, "planks taken");
 		});
+	}
+
+	/**
+	 * The colony store first (#1019): a wooden pickaxe in the store chest at FAR, published as colony_memory["storage"],
+	 * and another in the nearer chest at NEAR. ensure_tool borrows the store's and give_back puts it back there.
+	 */
+	@GameTest(maxTicks = 60)
+	public void ensureToolBorrowsFromTheColonyStoreFirst(GameTestHelper helper) {
+		Container near = chest(helper, NEAR, new ItemStack(Items.WOODEN_PICKAXE));
+		Container store = chest(helper, FAR, new ItemStack(Items.WOODEN_PICKAXE));
+		AntBot bot = colonyBot(helper);
+		run(helper, bot, IMPORT + STORE.formatted(pos(helper, FAR)) + """
+			from lib.get import ensure_tool
+			from lib.borrow import give_back
+			print(chests()[0] == far)
+			r = ensure_tool("pickaxe")
+			print(r["ok"], [b["chest"] == far for b in borrowed()])
+			give_back()
+			print(count("#minecraft:pickaxes"), borrowed())
+			""");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True", "True [True]", "0 []");
+			helper.assertTrue(count(near, Items.WOODEN_PICKAXE) == 1, "pickaxes in the near chest " + count(near, Items.WOODEN_PICKAXE));
+			helper.assertTrue(count(store, Items.WOODEN_PICKAXE) == 1, "pickaxes in the store " + count(store, Items.WOODEN_PICKAXE));
+		});
+	}
+
+	/** get("oak_planks", 16) with planks in the store and the nearer chest (#1019): takes the store's, for good. */
+	@GameTest(maxTicks = 60)
+	public void getTakesMaterialsFromTheColonyStoreForGood(GameTestHelper helper) {
+		Container near = chest(helper, NEAR, new ItemStack(Items.OAK_PLANKS, 16));
+		Container store = chest(helper, FAR, new ItemStack(Items.OAK_PLANKS, 16));
+		AntBot bot = colonyBot(helper);
+		run(helper, bot, IMPORT + STORE.formatted(pos(helper, FAR)) + """
+			from lib.get import get
+			from lib.borrow import give_back
+			r = get("oak_planks", 16)
+			give_back()
+			print(r["ok"], count("oak_planks"), borrowed())
+			""");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True 16 []");
+			helper.assertTrue(count(near, Items.OAK_PLANKS) == 16, "planks in the near chest " + count(near, Items.OAK_PLANKS));
+			helper.assertTrue(count(store, Items.OAK_PLANKS) == 0, "planks in the store " + count(store, Items.OAK_PLANKS));
+		});
+	}
+
+	/**
+	 * A bot in no colony with lib.stock.STORAGE set (#1019) finds the store by a scan around it: the chest at (1, 1, 1),
+	 * which lib.find.WHERE leaves out and which lies past get's radius of 8 from the bot at (12, 1, 12). It takes the
+	 * store's planks, for good, before the 4 in the chest beside it.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 200)
+	public void aStorageOutsideWhereAndRadiusIsFoundByAScan(GameTestHelper helper) {
+		Container near = chest(helper, new BlockPos(13, 1, 12), new ItemStack(Items.OAK_PLANKS, 4));
+		Container store = chest(helper, FAR, new ItemStack(Items.OAK_PLANKS, 16));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 12);
+		run(helper, bot, IMPORT + """
+			import lib.find
+			import lib.stock
+			from lib.get import get
+			from lib.borrow import give_back
+			far = %s
+			lib.stock.STORAGE = far
+			lib.find.WHERE = lambda p: p != far
+			print(chests(8)[0] == far, len(chests(8)))
+			r = get("oak_planks", 16, 8)
+			give_back()
+			print(r["ok"], count("oak_planks"), borrowed())
+			""".formatted(pos(helper, FAR)));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True 2", "True 16 []");
+			helper.assertTrue(count(near, Items.OAK_PLANKS) == 4, "planks in the near chest " + count(near, Items.OAK_PLANKS));
+			helper.assertTrue(count(store, Items.OAK_PLANKS) == 0, "planks in the store " + count(store, Items.OAK_PLANKS));
+		});
+	}
+
+	/** Publishes the chest at far (formatted in) as the colony store, as lib.depot.publish_store would (#1018). */
+	private static final String STORE = """
+		far = %s
+		colony_memory["depots"] = {"me/store": {"chests": [["tools", far]], "kind": "store"}}
+		colony_memory["storage"] = "me/store"
+		""";
+
+	/** A bot at (5, 1, 5) in a colony whose core is at (2, 1, 6). */
+	private static AntBot colonyBot(GameTestHelper helper) {
+		helper.setBlock(2, 1, 6, ModBlocks.COLONY_CORE);
+		ColonyManager colonies = ColonyManager.get(helper.getLevel());
+		Colony colony = colonies.byCore(helper.absolutePos(new BlockPos(2, 1, 6))).orElseThrow();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		colonies.join(bot, colony);
+		return bot;
 	}
 
 	private static Container chest(GameTestHelper helper, BlockPos at, ItemStack... stacks) {

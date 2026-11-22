@@ -8,10 +8,13 @@ The job `jobs/build` builds a blueprint at a spot, getting what the site lacks f
 
 The arguments are the blueprint's id, the lowest corner `x y z`, the quarters it is turned clockwise (default 0) and how far to look for materials, in blocks (default 32): `/antcraft bot run jobs.build antcraft:farm 10 64 10 1 48`. The bot says `built antcraft:cobble_step`, or why not, such as `not built antcraft:cobble_step: no_logs {'minecraft:oak_stairs': 1}`.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 The job, `config/antcraft/scripts/jobs/build.py`:
 
 ```python
 import lib.food
+import lib.stock
 from lib.build import build_here
 
 def run(id, at, turn=0, radius=32):
@@ -26,8 +29,9 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     if len(args) < 4:
-        say("usage: jobs.build <blueprint> x y z [turn] [radius]")
+        say("usage: jobs.build <blueprint> x y z [turn] [radius] [storage x y z]")
         stop()
     run(args[0], Pos(int(args[1]), int(args[2]), int(args[3])), int(args[4]) if len(args) > 4 else 0,
         int(args[5]) if len(args) > 5 else 32)

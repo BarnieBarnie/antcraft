@@ -6,6 +6,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 import lib.food
+import lib.stock
 from lib.build import build_here
 
 def run(id, at, turn=0, radius=32):
@@ -20,8 +21,9 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     if len(args) < 4:
-        say("usage: jobs.build <blueprint> x y z [turn] [radius]")
+        say("usage: jobs.build <blueprint> x y z [turn] [radius] [storage x y z]")
         stop()
     run(args[0], Pos(int(args[1]), int(args[2]), int(args[3])), int(args[4]) if len(args) > 4 else 0,
         int(args[5]) if len(args) > 5 else 32)

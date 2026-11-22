@@ -6,6 +6,7 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
+import lib.stock
 from lib.get import get, key
 from lib.borrow import give_back, keep
 
@@ -26,7 +27,8 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     if not args:
-        say("usage: jobs.get <item> [n] [radius]")
+        say("usage: jobs.get <item> [n] [radius] [storage x y z]")
         stop()
     run(args[0], int(args[1]) if len(args) > 1 else 1, int(args[2]) if len(args) > 2 else 32)

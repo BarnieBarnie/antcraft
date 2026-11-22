@@ -4,16 +4,36 @@ The chests a bot may take from, which of them hold an item, and fetching an item
 
 What it takes from a chest is borrowed: [`lib/borrow`](borrow.md) records it, and `give_back()` returns what is left at the end of the job. What it takes from the bot's [Colony Core](../../colony/colony.md) is not: colony storage is the colony's own, so a builder or miner taking its materials there takes them for good, as `colony/common`'s `store` always did.
 
+The colony store comes first (#1019): gatherers and builders take their toolkit and materials there before they take from another chest, craft or gather. From a store chest the bot borrows tools and weapons ([`lib.storage.KEEP_KINDS`](storage.md)), which `give_back()` returns there, and takes everything else for good, as from the Colony Core.
+
+## `STORAGE`
+
+Where the colony store is: a [`Pos`](../../types/pos.md), or `None` (the default). Set it as [`lib.find.WHERE`](find.md#where) is set, `lib.stock.STORAGE = Pos(10, 64, 10)`; a job's `storage x y z` argument sets it (`storage_arg`). Unset, a colony member uses the store its colony published, `colony_memory["storage"]` ([`lib.depot.publish_store`](depot.md)).
+
+## `store()`
+
+The chests of the colony store: where `STORAGE` is set, the chests, trapped chests and barrels within 8 blocks of it (a scan); else the chests of the published depot `colony_memory["storage"]` names; else none, as for a bot in no colony without `STORAGE`.
+
+- **Returns** a list of [`Pos`](../../types/pos.md).
+- **Pauses** no.
+
+## `storage_arg(args)`
+
+A job's command-line arguments without `storage x y z`, wherever it stands among them, which sets `STORAGE` to `Pos(x, y, z)`. The jobs `jobs.get`, `jobs.build`, `jobs.strip_mine`, `jobs.ore_miner` and `jobs.wood_farm` call it on their arguments.
+
+- **Returns** the list of arguments left.
+- **Pauses** no.
+
 ## `chests(radius=32)`
 
-The chests the bot may take from, nearest first: its colony's core (none for a bot in no colony), the positions listed in [`memory`](../../types/memory.md)`["chests"]`, and the chests, trapped chests and barrels within `radius` blocks. Each is listed once, and one in another [dimension](../../types/pos.md#dimension) than the bot's is left out, as is one [`lib.find.WHERE`](find.md#where) is false for (outside the colony, for a bot in one), asking [`colony()`](../../colony/colony.md) for it once a call, not once a chest (#631). With `scanning=False` it gives only the core and `memory["chests"]`, without the scan, which reads the sphere from a block budget all bots share; [`lib.get.ensure_tool`](get.md) looks there first.
+The chests the bot may take from: the colony store's first (`store()`), whatever `radius` and `lib.find.WHERE` say, as the store may lie far away; then, nearest first, its colony's core (none for a bot in no colony), the positions listed in [`memory`](../../types/memory.md)`["chests"]`, and the chests, trapped chests and barrels within `radius` blocks. Each is listed once, and one in another [dimension](../../types/pos.md#dimension) than the bot's is left out, as is one [`lib.find.WHERE`](find.md#where) is false for (outside the colony, for a bot in one), asking [`colony()`](../../colony/colony.md) for it once a call, not once a chest (#631). With `scanning=False` it gives only the store, the core and `memory["chests"]`, without the scan of `radius`, which reads the sphere from a block budget all bots share; [`lib.get.ensure_tool`](get.md) looks there first.
 
 - **Returns** a list of [`Pos`](../../types/pos.md); `[]` when there is none.
 - **Pauses** no.
 
 ## `where(item, radius=32)`
 
-The chests of `chests(radius)` that hold `item`, an item id or a [selector](../../types/selectors.md), nearest first. For a cost estimate: a chest that holds an iron axe beats crafting one.
+The chests of `chests(radius)` that hold `item`, an item id or a [selector](../../types/selectors.md), in the order of `chests`: the store's first, then nearest first. For a cost estimate: a chest that holds an iron axe beats crafting one.
 
 - **Returns** a list of [`Pos`](../../types/pos.md); `[]` when no chest holds it.
 - **Pauses** no.

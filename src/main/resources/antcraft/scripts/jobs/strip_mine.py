@@ -11,6 +11,7 @@ import lib.bootstrap
 import lib.dig
 import lib.find
 import lib.food
+import lib.stock
 import lib.tools
 from lib.borrow import borrowed, give_back
 from lib.get import ensure_tool
@@ -103,5 +104,6 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(args[0], int(args[1]) if len(args) > 1 else 8, int(args[2]) if len(args) > 2 else None,
         int(args[3]) if len(args) > 3 else 32, args[4] if len(args) > 4 else "north")

@@ -10,6 +10,8 @@ The job `jobs/wood_farm` starts a wood farm with an empty-handed bot and farms i
 
 The arguments are the kind, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md): a sapling (oak, birch, spruce, jungle, dark oak, pale oak, acacia, cherry or poplar), `mangrove_propagule` or `giant_spruce` or `giant_jungle`, which grow from four spruce or jungle saplings (see Giants); the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started), the most cells it grows to (by default `most` of the ticks a tree takes, which the farm learns, but no more than the cells that get random ticks while the bot is at the corner, see How big) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells. A full farm that learns it may grow (see How big) says its new limit, `cells 3/5`, and builds on.
 
+
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
 The farm, from the corner `x y z` (the cells' floor is the block under it):
 
 | What | Where, from the corner |

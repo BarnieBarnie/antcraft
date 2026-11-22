@@ -142,6 +142,29 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * jobs.get with storage x y z (#1019): 4 oak planks in the store at (1, 1, 1) and 4 in the nearer chest at (6, 1, 3);
+	 * the job takes the store's.
+	 */
+	@GameTest(maxTicks = 20)
+	public void takesFromTheStorageGiven(GameTestHelper helper) {
+		BlockPos near = new BlockPos(6, 1, 3);
+		BlockPos store = new BlockPos(1, 1, 1);
+		helper.setBlock(near, Blocks.CHEST);
+		helper.setBlock(store, Blocks.CHEST);
+		Container nearChest = helper.getBlockEntity(near, ChestBlockEntity.class);
+		Container storeChest = helper.getBlockEntity(store, ChestBlockEntity.class);
+		nearChest.setItem(0, new ItemStack(Items.OAK_PLANKS, 4));
+		storeChest.setItem(0, new ItemStack(Items.OAK_PLANKS, 4));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BlockPos p = helper.absolutePos(store);
+		run(helper, bot, "oak_planks 4 storage %d %d %d".formatted(p.getX(), p.getY(), p.getZ()), "got 4 oak_planks", () -> {
+			helper.assertTrue(GameTests.carried(bot, Items.OAK_PLANKS) == 4, "planks " + GameTests.carried(bot, Items.OAK_PLANKS));
+			helper.assertTrue(storeChest.isEmpty(), "the store is not empty");
+			helper.assertTrue(nearChest.countItem(Items.OAK_PLANKS) == 4, "planks in the near chest " + nearChest.countItem(Items.OAK_PLANKS));
+		});
+	}
+
+	/**
 	 * Runs jobs.get with args by the command; the test succeeds once the bot said {@code says} and {@code then} holds, and
 	 * fails at once when the script fails or says something else.
 	 */

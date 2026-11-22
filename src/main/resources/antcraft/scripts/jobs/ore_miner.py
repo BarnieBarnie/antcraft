@@ -397,4 +397,5 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(args[0] if args else "raw_iron", int(args[1]) if len(args) > 1 else 9, int(args[2]) if len(args) > 2 else 32)

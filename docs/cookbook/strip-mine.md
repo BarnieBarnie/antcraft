@@ -2,11 +2,14 @@
 
 A job that digs for an ore until the bot carries enough of it, then climbs back up and goes home. It starts with a small miner's kit, a stone pickaxe, a crafting table and 16 torches, taken from what is around, and keeps a pickaxe that lasts by making a new stone one from the cobblestone it dug. The mod bundles it as `jobs/strip_mine.py`; start it with `/antcraft bot run jobs.strip_mine raw_iron 12`. The words are the ore, a raw item such as `coal`, `raw_iron` or `diamond`; how many, 8 by default; the height to mine at, by default where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)); how far to look for chests, 32 blocks; and the way it digs, `north` by default, or `south`, `east` or `west`. Emerald has no default height, as it is only in mountains: give it one.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 ```python
 import lib.bootstrap
 import lib.dig
 import lib.find
 import lib.food
+import lib.stock
 import lib.tools
 from lib.borrow import borrowed, give_back
 from lib.get import ensure_tool
@@ -99,6 +102,7 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(args[0], int(args[1]) if len(args) > 1 else 8, int(args[2]) if len(args) > 2 else None,
         int(args[3]) if len(args) > 3 else 32, args[4] if len(args) > 4 else "north")
 ```

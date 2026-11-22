@@ -1,6 +1,8 @@
 # The chests a bot may take from, and fetching from them, for any script: `from lib.stock import chests, where, fetch`.
-# A module of the mod's default library (lib/), a skill: it imports lib.borrow and lib.result. What it takes from a chest
-# is borrowed (lib.borrow), but what it takes from its colony's core is not: colony storage is the colony's own, not a loan.
+# A module of the mod's default library (lib/), a skill: it imports lib.borrow, lib.find and lib.result, and lib.storage
+# when it takes. What it takes from a chest is borrowed (lib.borrow), but what it takes from its colony's core is not:
+# colony storage is the colony's own, not a loan.
+# The colony store (STORAGE, store) comes first and lends only tools and weapons; the rest it gives for good (#1019).
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -9,19 +11,44 @@ import lib.find
 from lib.borrow import CHESTS, borrow
 from lib.result import result
 
+# Where the colony store is, a Pos, or None: a job's storage argument sets it (storage_arg), as lib.find.WHERE is set
+# (#1019). Unset, a colony member uses the store its colony published (colony_memory["storage"], lib.depot.publish_store).
+STORAGE = None
+
+
+def store():
+    """The chests of the colony store: where STORAGE is set, the chests, trapped chests and barrels within 8 blocks of
+    it; else those of the depot colony_memory["storage"] names; else none."""
+    if STORAGE is not None:
+        return scan(CHESTS, radius=8, around=STORAGE)
+    d = colony_memory.get("depots", {}).get(colony_memory.get("storage")) if colony_memory is not None else None
+    return [c[1] for c in d["chests"]] if d else []
+
 
 def chests(radius=32, scanning=True):
-    """The chests the bot may take from, nearest first: its colony's core, the positions in memory["chests"], and, with
-    scanning, the chests, trapped chests and barrels within radius blocks (a scan reads the sphere from a block budget
-    all bots share). A position in another dimension than the bot's is left out, and one lib.find.WHERE leaves out."""
+    """The chests the bot may take from: the colony store's first (store), whatever radius and lib.find.WHERE say, then,
+    nearest first, its colony's core, the positions in memory["chests"], and, with scanning, the chests, trapped chests
+    and barrels within radius blocks (a scan reads the sphere from a block budget all bots share). A position in another
+    dimension than the bot's is left out, and one lib.find.WHERE leaves out."""
     c = colony()
-    found = []
     here = dimension()
+    found = [p for p in store() if p.dimension in (None, here)]
+    first = len(found)
     allowed = lib.find.resolve()
     for p in ([c["core"]] if c else []) + list(memory.get("chests", [])) + (scan(CHESTS, radius=radius) if scanning else []):
         if p.dimension in (None, here) and p not in found and (allowed is None or allowed(p)):
             found.append(p)
-    return sorted(found, key=distance)
+    return found[:first] + sorted(found[first:], key=distance)
+
+
+def storage_arg(args):
+    """A job's command-line args without "storage x y z", which sets STORAGE to Pos(x, y, z) (#1019)."""
+    if "storage" not in args:
+        return args
+    import lib.stock  # this module, to set its STORAGE
+    i = args.index("storage")
+    lib.stock.STORAGE = Pos(int(args[i + 1]), int(args[i + 2]), int(args[i + 3]))
+    return args[:i] + args[i + 4:]
 
 
 def where(item, radius=32):
@@ -74,9 +101,12 @@ def fetch_all(more, chests):
 
 
 def take_from(chest, item, n):
-    """Takes up to n of item from chest: borrowed, but from the colony's core plainly."""
+    """Takes up to n of item from chest: borrowed, but from the colony's core plainly, and from the colony store (store)
+    plainly but tools and weapons (lib.storage.KEEP_KINDS), which it lends.
+    ponytail: store() again each take, a scan of 8 blocks where STORAGE is set."""
+    import lib.storage  # here, as lib.storage imports this module
     c = colony()
-    if c and chest == c["core"]:
+    if (c and chest == c["core"]) or (chest in store() and not matches(item, lib.storage.KEEP_KINDS)):
         take(chest, item, n)
     else:
         borrow(chest, item, n)

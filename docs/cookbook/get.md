@@ -8,9 +8,12 @@ The job `jobs/get` gets any item from what is around, the tools to get it includ
 
 A script in a folder runs by its dotted name: `jobs.get`, not `jobs/get`. The arguments are the item, how many (default 1) and how far to look, in blocks (default 32): `/antcraft bot run jobs.get torch 16 48`. The bot says `got 1 iron_pickaxe`, or why not, such as `no ender_pearl: no_recipe {'minecraft:ender_pearl': 1}`.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 The job, `config/antcraft/scripts/jobs/get.py`:
 
 ```python
+import lib.stock
 from lib.get import get, key
 from lib.borrow import give_back, keep
 
@@ -31,8 +34,9 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     if not args:
-        say("usage: jobs.get <item> [n] [radius]")
+        say("usage: jobs.get <item> [n] [radius] [storage x y z]")
         stop()
     run(args[0], int(args[1]) if len(args) > 1 else 1, int(args[2]) if len(args) > 2 else 32)
 ```
