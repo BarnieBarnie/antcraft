@@ -4,9 +4,9 @@
 # (32 by default, and at most 32, #998). Each round it eats when hungry (lib.food.upkeep, which also takes fish back from the chests), fishes
 # BATCH items and sorts them into depot "fish" (lib.depot), a chest per kind: fish, enchanted books, rods and the rest,
 # its row of chests starting by the spot and growing as a new kind is caught (#995). It fishes with the best rod
-# (lib.enchant.best_rod) it carries or the chests within radius hold, switching to a better one it catches; with none
-# (its rod broke) it gets one (lib.get.get: from a chest, or crafted from string and sticks), and warns and stops where
-# it cannot (#962, #996; docs/cookbook/fish.md). Another job fishes with run(at, radius); imported, this runs nothing.
+# (lib.enchant.best_rod) it carries or the chests within radius hold, taking only that rod from a chest (#999), switching
+# to a better one it catches; when its rod broke it looks again, and with none it gets one (lib.get.get: from a chest,
+# or crafted from string and sticks), and warns and stops where it cannot (#962, #996; docs/cookbook/fish.md). Another job fishes with run(at, radius); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -80,13 +80,13 @@ def hold_best():
 
 def rod(radius=32):
     """Holds the best fishing rod the bot carries or a chest within radius holds: from a chest whose best rod beats the
-    bot's it takes every rod, as take takes by item, and the next store puts back the worse ones. With none it gets one
+    bot's it takes only that rod (take of its Stack, #999), so worse ones stay where they are. With none it gets one
     with lib.get.get. Gives result(): ok, or the reason get failed with."""
     for chest in lib.stock.where(ROD, radius):
         best = lib.enchant.best_rod(inventory())
         there = lib.enchant.best_rod(container(chest) or [])
         if there is not None and (best is None or lib.enchant.better(there, best, lib.enchant.ROD)):
-            take(chest, ROD)
+            take(chest, there)
     if not count(ROD):
         r = lib.get.get(ROD, 1, radius)
         if not r["ok"]:
@@ -100,11 +100,10 @@ def run(at=None, radius=32):
     the result of the fish or get that stopped it."""
     radius = min(radius, MAX_RADIUS)  # a larger radius would stop the scans of chests and water with an error (#998)
     spot = at if at is not None else memory.get("fish")
-    looked = False  # whether it looked for a better rod in the chests: once a run, and when its rod broke
+    look = True  # whether to look for the best rod in the chests: in the first round, and when its rod broke
     while True:
         lib.food.upkeep(radius)
-        if not looked or not count(ROD):
-            looked = True
+        if look:
             r = rod(radius)
             if not r["ok"]:
                 warn("fish: no fishing rod, and none to get:", r["reason"])
@@ -115,6 +114,8 @@ def run(at=None, radius=32):
             memory["fish"] = spot
             if spot is not None:
                 r = fish(BATCH, spot)
+        h = held()
+        look = h is None or h.item != ROD  # its rod broke: fish holds the next one carried only for its next cast (#999)
         depot(spot, radius)
         hold_best()  # a better rod caught is held, so store keeps it and stores the worse
         s = lib.depot.store(NAME, KEEP, radius)

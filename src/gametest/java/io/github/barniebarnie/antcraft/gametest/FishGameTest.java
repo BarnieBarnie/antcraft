@@ -253,6 +253,68 @@ public class FishGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** jobs.fish with no rod and a chest holding a plain and a Lure III rod takes only the Lure III one; the plain one stays in that chest (#999). */
+	// Measured: passes at tick 43 to 44 (red: the bot holds the plain rod, the Lure III one stored as the worse).
+	@GameTest(maxTicks = 90)
+	public void theJobTakesOnlyTheBestRodFromAChest(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 2));
+		helper.setBlock(6, 2, 0, Blocks.CHEST);
+		ChestBlockEntity chest = helper.getBlockEntity(new BlockPos(6, 2, 0), ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.FISHING_ROD));
+		chest.setItem(1, rod(helper));
+		ScriptRun run = BotScripts.run(bot, STUB + "jobs.fish.run()\n");
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).size() >= 2, "fished fewer than two rounds");
+			helper.assertTrue(bot.getMainHandItem().isEnchanted(), "the bot holds " + bot.getMainHandItem());
+			helper.assertValueEqual(rods(bot), 1, "rods carried");
+			helper.assertValueEqual(chest.countItem(Items.FISHING_ROD), 1, "rods left in the chest");
+			helper.assertTrue(run.state() != ScriptRun.State.FINISHED, "the job stopped");
+		});
+	}
+
+	/**
+	 * jobs.fish holding a Lure III rod at 1 use left, a plain rod carried and a Lure I rod in a chest: the real fish catches
+	 * once and the rod breaks, then fish is stubbed. The bot fishes on with the next best rod, the stored Lure I one, not
+	 * the plain one it carries (#999).
+	 */
+	// Measured: passes at tick 227 to 430 (red: the bot holds the plain rod); a bite takes up to some 380 ticks with Lure III.
+	@GameTest(maxTicks = 900, skyAccess = true)
+	public void theJobWhoseRodBreaksFishesOnWithTheNextBest(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		ItemStack worn = rod(helper);
+		worn.setDamageValue(worn.getMaxDamage() - 1);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, worn);
+		bot.getInventory().addItem(new ItemStack(Items.FISHING_ROD));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 3));
+		ItemStack lureOne = new ItemStack(Items.FISHING_ROD);
+		lureOne.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.LURE), 1);
+		helper.setBlock(6, 2, 0, Blocks.CHEST);
+		helper.getBlockEntity(new BlockPos(6, 2, 0), ChestBlockEntity.class).setItem(0, lureOne);
+		ScriptRun run = BotScripts.run(bot, """
+			import jobs.fish
+			real = fish
+			calls = [0]
+			def stub(n=1, at=None):
+			    calls[0] += 1
+			    if calls[0] == 1:
+			        return real(n, at)
+			    print(calls[0])
+			    return wait(5)
+			jobs.fish.fish = stub
+			jobs.fish.run()
+			""");
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertFalse(BotScripts.log(bot, Output.Level.PRINT).isEmpty(), "never fished after the rod broke");
+			ItemStack hand = bot.getMainHandItem();
+			helper.assertTrue(hand.is(Items.FISHING_ROD) && hand.isEnchanted() && hand.getDamageValue() == 0, "the bot holds " + hand);
+			helper.assertValueEqual(rods(bot), 1, "rods carried");
+			helper.assertTrue(run.state() != ScriptRun.State.FINISHED, "the job stopped");
+		});
+	}
+
 	/**
 	 * jobs.fish with fish stubbed, holding a plain rod: the test hands over a Lure III rod on the first call, as if caught,
 	 * and a plain one on the second. The bot switches to the Lure III rod and stores both plain ones (#996).

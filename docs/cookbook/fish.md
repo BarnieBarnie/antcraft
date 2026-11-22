@@ -22,11 +22,11 @@ Each round:
 | fish | it catches one item with [`fish`](../reference/blocks/fish.md), at the water farther off where `fish` finds none |
 | store | what it caught goes into its depot, a chest per kind (below); where no chest has room and it cannot get another, it warns `fish: no chest has room for [...] and none to get: <reason>` and stops |
 
-A rod that breaks (`rod_broke`) only starts the next round, which takes the next best rod carried or stored, else gets a new one. Any other failure of `fish` it warns about and stops: `no_water` as `fish: no water`.
+A rod that breaks, on the last catch or before it (`rod_broke`), only starts the next round, which holds the next best rod carried or stored, else gets a new one (#999). Any other failure of `fish` it warns about and stops: `no_water` as `fish: no water`.
 
 ## The best rod
 
-Rods are treasure, often enchanted, so the bot fishes with the best one it has (#996), by [`lib.enchant.best_rod`](../reference/modules/lib/enchant.md): Lure counts most, then Luck of the Sea and Mending, then Unbreaking; of equal rods, the one with more uses left. Where a chest within the radius holds a rod better than its own, the bot takes that chest's rods and holds the best. After each catch it holds the best rod it carries, so a better rod caught replaces the one it fished with, which goes to the `rods` chest with any worse rod caught.
+Rods are treasure, often enchanted, so the bot fishes with the best one it has (#996), by [`lib.enchant.best_rod`](../reference/modules/lib/enchant.md): Lure counts most, then Luck of the Sea and Mending, then Unbreaking; of equal rods, the one with more uses left. Where a chest within the radius holds a rod better than its own, the bot takes only that rod and holds it; the chest's worse rods stay where they are (#999). After each catch it holds the best rod it carries, so a better rod caught replaces the one it fished with, which goes to the `rods` chest with any worse rod caught.
 
 ## The depot
 
