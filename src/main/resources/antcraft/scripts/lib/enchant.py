@@ -7,14 +7,19 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
-from lib.tools import uses_left
+from lib.tools import TIERS, rank, uses_left
 
 # The highest level of each enchantment the weights name. ponytail: listed by hand, as a Stack gives only the level;
 # add an enchantment here with its weights.
-MAX = {"minecraft:lure": 3, "minecraft:luck_of_the_sea": 3, "minecraft:mending": 1, "minecraft:unbreaking": 3}
+MAX = {"minecraft:lure": 3, "minecraft:luck_of_the_sea": 3, "minecraft:mending": 1, "minecraft:unbreaking": 3,
+       "minecraft:fortune": 3, "minecraft:efficiency": 5}
 
 # A fishing rod's: Lure catches sooner, Luck of the Sea more treasure, Mending and Unbreaking keep it.
 ROD = {"minecraft:lure": 3, "minecraft:luck_of_the_sea": 2, "minecraft:mending": 2, "minecraft:unbreaking": 1}
+
+# A pickaxe's: Fortune drops more ore, Efficiency mines faster, Mending and Unbreaking keep it. Silk Touch counts
+# nothing (ore blocks still smelt).
+PICKAXE = {"minecraft:fortune": 3, "minecraft:efficiency": 2, "minecraft:mending": 2, "minecraft:unbreaking": 1}
 
 
 def score(stack, weights):
@@ -44,3 +49,15 @@ def best(stacks, weights):
 def best_rod(stacks):
     """The best fishing rod of stacks by ROD, other items left out; None where there is none."""
     return best([s for s in stacks if s.item == "minecraft:fishing_rod"], ROD)
+
+
+def best_pickaxe(stacks, need_tier=None):
+    """The best pickaxe of stacks by tier (lib.tools.TIERS), then by PICKAXE; other items, and pickaxes below need_tier
+    (a TIERS name), left out. None where there is none."""
+    worst = TIERS.index(need_tier) if need_tier else len(TIERS)
+    top = None
+    for s in stacks:
+        if matches(s, "#minecraft:pickaxes") and rank(s) <= worst:
+            if top is None or rank(s) < rank(top) or (rank(s) == rank(top) and better(s, top, PICKAXE)):
+                top = s
+    return top

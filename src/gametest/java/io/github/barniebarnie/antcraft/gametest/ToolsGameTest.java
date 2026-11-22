@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -162,6 +163,54 @@ public class ToolsGameTest implements CustomTestMethodInvoker {
 			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
 			helper.assertTrue(log.equals(List.of("50 4 True False", "{'minecraft:lure': 1} 0", "None None")), "printed " + log);
 		});
+	}
+
+	/**
+	 * lib.enchant (#1001): best_pickaxe ranks tier first, then Fortune 3, Efficiency 2, Mending 2, Unbreaking 1: a plain
+	 * diamond pickaxe beats an enchanted iron one; of iron ones Fortune III beats Efficiency V beats plain; Silk Touch
+	 * counts nothing, so of two equal pickaxes the one with more uses left wins; need_tier="iron" leaves out a Fortune III
+	 * stone pickaxe, and with none of that tier gives None; non-pickaxes are left out.
+	 */
+	@GameTest(maxTicks = 10)
+	public void bestPickaxeRanksTierThenEnchantments(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		ItemStack sword = new ItemStack(Items.NETHERITE_SWORD);
+		enchant(helper, sword, Enchantments.SHARPNESS, 5);
+		bot.getInventory().addItem(sword);
+		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_PICKAXE));
+		bot.getInventory().addItem(pickaxe(helper, Items.IRON_PICKAXE, 0, Enchantments.FORTUNE, 3));
+		bot.getInventory().addItem(pickaxe(helper, Items.IRON_PICKAXE, 0, Enchantments.EFFICIENCY, 5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_PICKAXE));
+		bot.getInventory().addItem(pickaxe(helper, Items.STONE_PICKAXE, 0, Enchantments.FORTUNE, 3));
+		bot.getInventory().addItem(pickaxe(helper, Items.GOLDEN_PICKAXE, 5, Enchantments.SILK_TOUCH, 1));
+		bot.getInventory().addItem(pickaxe(helper, Items.GOLDEN_PICKAXE, 0, Enchantments.SILK_TOUCH, 0));
+		String name = BotScripts.libraryScript(helper, "enchant_", """
+			from lib.enchant import best_pickaxe
+			inv = inventory()
+			iron = [s for s in inv if s.item == "minecraft:iron_pickaxe"]
+			fortune = [s for s in iron if s.enchantments]
+			stone = [s for s in inv if s.item == "minecraft:stone_pickaxe"]
+			gold = [s for s in inv if s.item == "minecraft:golden_pickaxe"]
+			print(best_pickaxe(inv).item, best_pickaxe(iron).enchantments, best_pickaxe([s for s in iron if s.enchantments != {"minecraft:fortune": 3}]).enchantments)
+			print(best_pickaxe(stone + gold).item, best_pickaxe(gold).damage, best_pickaxe(stone + iron, "iron").enchantments)
+			print(best_pickaxe(stone + gold, "iron"), best_pickaxe([]), best_pickaxe([inv[0]]))
+			""");
+		run(helper, bot, name);
+		helper.succeedWhen(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(log.equals(List.of(
+				"minecraft:diamond_pickaxe {'minecraft:fortune': 3} {'minecraft:efficiency': 5}",
+				"minecraft:stone_pickaxe 0 {'minecraft:fortune': 3}",
+				"None None None")), "printed " + log);
+		});
+	}
+
+	/** A pickaxe of {@code item} at {@code damage} with {@code key} at {@code level} (0: none). */
+	private static ItemStack pickaxe(GameTestHelper helper, Item item, int damage, ResourceKey<Enchantment> key, int level) {
+		ItemStack pickaxe = new ItemStack(item);
+		pickaxe.setDamageValue(damage);
+		enchant(helper, pickaxe, key, level);
+		return pickaxe;
 	}
 
 	/** A fishing rod at {@code damage} with the given levels of Lure, Luck of the Sea, Mending and Unbreaking (0: none). */
