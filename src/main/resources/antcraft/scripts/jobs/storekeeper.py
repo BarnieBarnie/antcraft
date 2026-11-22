@@ -17,31 +17,26 @@ import lib.storage
 NAME = "storage"
 WIDTH = 8  # chests a row of the store, after which it starts the next row (lib.depot.slot, #1021)
 WAIT = 100  # ticks between rounds with nothing to haul
-# The store's categories, in the order lib.depot.category tries them: crops before food, so carrots go with the wheat.
+# The store's categories, in the order lib.depot.category tries them: crops before food, so carrots go with the wheat,
+# and mob drops before food, as #c:foods takes rotten flesh and spider eyes. Item tags where one covers it, so modded
+# items and every colour of wool sort too (#1025): the c: tags are Fabric's convention tags, which mods add their items
+# to. Ids only where no tag covers them.
 CATEGORIES = {
     "logs": ["#minecraft:logs"],
     "planks": ["#minecraft:planks"],
-    "stone": ["#minecraft:stone_crafting_materials", "minecraft:stone", "minecraft:deepslate", "minecraft:granite",
-              "minecraft:diorite", "minecraft:andesite", "minecraft:tuff", "minecraft:gravel", "minecraft:sand"],
-    "ores": ["#minecraft:coal_ores", "#minecraft:iron_ores", "#minecraft:copper_ores", "#minecraft:gold_ores",
-             "#minecraft:redstone_ores", "#minecraft:lapis_ores", "#minecraft:diamond_ores", "#minecraft:emerald_ores",
-             "minecraft:coal", "minecraft:raw_iron", "minecraft:raw_copper", "minecraft:raw_gold",
-             "minecraft:iron_ingot", "minecraft:copper_ingot", "minecraft:gold_ingot", "minecraft:iron_nugget",
-             "minecraft:gold_nugget", "minecraft:redstone", "minecraft:lapis_lazuli", "minecraft:diamond",
-             "minecraft:emerald", "minecraft:quartz"],
-    "crops": ["minecraft:wheat", "minecraft:carrot", "minecraft:potato", "minecraft:beetroot", "minecraft:sugar_cane",
-              "minecraft:pumpkin", "minecraft:melon", "minecraft:melon_slice", "minecraft:cocoa_beans",
-              "minecraft:kelp", "minecraft:bamboo", "minecraft:cactus", "minecraft:nether_wart",
-              "minecraft:sweet_berries", "minecraft:brown_mushroom", "minecraft:red_mushroom"],
-    "food": lib.food.ITEMS,
-    "mob_drops": ["minecraft:rotten_flesh", "minecraft:bone", "minecraft:string", "minecraft:spider_eye",
-                  "minecraft:gunpowder", "minecraft:arrow", "minecraft:ender_pearl", "minecraft:leather",
-                  "minecraft:feather", "minecraft:slime_ball", "minecraft:ink_sac", "minecraft:egg",
-                  "minecraft:white_wool", "minecraft:phantom_membrane", "minecraft:blaze_rod"],
+    "stone": ["#c:stones", "#c:cobblestones", "#minecraft:stone_crafting_materials", "#c:gravels", "#c:sands"],
+    "ores": ["#c:ores", "#c:raw_materials", "#c:ingots", "#c:nuggets", "#c:gems", "#c:dusts/redstone",
+             "#minecraft:coals"],
+    "crops": ["#c:crops", "#c:seeds", "#c:mushrooms", "minecraft:melon_slice", "minecraft:sweet_berries",
+              "minecraft:kelp", "minecraft:bamboo"],
+    "mob_drops": ["#c:bones", "#c:strings", "#c:gunpowders", "#c:ender_pearls", "#c:leathers", "#c:feathers",
+                  "#c:slime_balls", "#c:eggs", "#c:rods/blaze", "#c:rods/breeze", "#minecraft:wool",
+                  "minecraft:rotten_flesh", "minecraft:spider_eye", "minecraft:arrow", "minecraft:ink_sac",
+                  "minecraft:phantom_membrane"],
+    "food": lib.food.ITEMS + ["#c:foods"],
 }
 # What a source chest keeps by default, as the gatherers take it back out: seeds, saplings, torches and bone meal.
-KEEP = ["#minecraft:saplings", "minecraft:wheat_seeds", "minecraft:beetroot_seeds", "minecraft:melon_seeds",
-        "minecraft:pumpkin_seeds", "minecraft:torch", "minecraft:bone_meal"]
+KEEP = ["#minecraft:saplings", "#c:seeds", "minecraft:torch", "minecraft:bone_meal"]
 # What the storekeeper keeps of its own when it stores: some food to eat.
 OWN = [(lib.food.COOKED, lib.food.STOCK)]
 UNSORTED = lib.storage.KEEP_KINDS + [lib.depot.CHEST]  # what store leaves on the bot where no category takes it

@@ -246,6 +246,30 @@ public class StorekeeperGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * CATEGORIES come from item tags (#1025): red wool (#minecraft:wool) and a gold ingot (#c:ingots) each go into a
+	 * chest of their own category, not the "other" chest that takes the paper, so the three end up in three chests.
+	 */
+	// Measured: passes at tick 7 (red: chest (1, 1, 1) holds 2 of the kinds, the wool with the paper in "other").
+	@GameTest(maxTicks = 20)
+	public void woolAndIngotsAreSortedByTheirTags(GameTestHelper helper) {
+		Container source = chestAt(helper, 5, 1, 5);
+		source.setItem(0, new ItemStack(Items.WOOL.red(), 3));
+		source.setItem(1, new ItemStack(Items.GOLD_INGOT, 2));
+		source.setItem(2, new ItemStack(Items.PAPER, 4));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 3));
+		BotScripts.run(bot, "import jobs.storekeeper\njobs.storekeeper.run(%s, \"east\", [%s])\n"
+			.formatted(printed(helper, 1, 1, 1), printed(helper, 5, 1, 5)));
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(source.isEmpty(), "the source chest still holds items");
+			for (int x = 1; x <= 3; x++) {
+				holdsOnly(helper, x, 1, 1, Items.WOOL.red(), Items.GOLD_INGOT, Items.PAPER);
+			}
+		});
+	}
+
 	/** The chest at (x, y, z) holds no item but those given. */
 	private static void holdsOnly(GameTestHelper helper, int x, int y, int z, Item... kinds) {
 		Container c = chest(helper, x, y, z);
