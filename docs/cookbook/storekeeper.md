@@ -17,7 +17,7 @@ jobs.storekeeper.run(Pos(100, 64, 100), "east")
 - With nothing to haul it eats ([`lib.food.upkeep`](../reference/modules/lib/food.md)) and waits 100 ticks.
 - When the store cannot grow, as no chest can be got for a full category, it warns once and hauls nothing until a later `store` succeeds, so nothing it takes is dropped.
 
-`StorekeeperGameTest` runs the bundled job: a source chest of logs and cobblestone sorted into two chests of the store, a wood farm's published depot hauled with its saplings left behind, and a chest of 27 stacks taken in more than one load with nothing dropped.
+`StorekeeperGameTest` runs the bundled job: a source chest of logs and cobblestone sorted into two chests of the store, a wood farm's published depot hauled with its saplings left behind, a chest of 27 stacks taken in more than one load with nothing dropped, a source some 28 blocks from the store walked to and back, a store that cannot grow (one warning, nothing hauled until the bot is given a chest), and a `keep` by depot name and by chest position leaving exactly what it names.
 
 ## See also
 
