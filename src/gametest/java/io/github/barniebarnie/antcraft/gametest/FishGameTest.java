@@ -206,7 +206,7 @@ public class FishGameTest implements CustomTestMethodInvoker {
 			ChestBlockEntity fish = chests.stream().filter(c -> c.countItem(Items.COD) == 1).findFirst().orElse(null);
 			ChestBlockEntity books = chests.stream().filter(c -> c.countItem(Items.ENCHANTED_BOOK) == 1).findFirst().orElse(null);
 			helper.assertTrue(fish != null && books != null && fish != books, "the cod and the book are not each in a chest of their own");
-			helper.assertTrue(bot.getInventory().countItem(Items.FISHING_ROD) == 1, "the bot stored its rod");
+			helper.assertTrue(rods(bot) == 1, "the bot stored its rod");
 			helper.assertTrue(run.state() != ScriptRun.State.FINISHED, "the job stopped");
 		});
 	}
@@ -231,6 +231,81 @@ public class FishGameTest implements CustomTestMethodInvoker {
 			helper.assertValueEqual(BotScripts.warnings(bot), List.of("fish: no chest has room for ['minecraft:cod'] and none to get: no_logs"), "warned");
 			helper.assertValueEqual(bot.getInventory().countItem(Items.COD), 1, "cod carried");
 		});
+	}
+
+	/** jobs.fish with a plain rod carried and a Lure III one in a chest fishes with the Lure III one; the plain one goes to the depot's rods chest (#996). */
+	// Measured: passes at tick 43 (red: the bot holds 0 minecraft:air, the plain rod stored as caught).
+	@GameTest(maxTicks = 90)
+	public void theJobFishesWithTheBestRodCarriedOrStored(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		bot.getInventory().addItem(new ItemStack(Items.FISHING_ROD));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 2));
+		helper.setBlock(6, 2, 0, Blocks.CHEST);
+		helper.getBlockEntity(new BlockPos(6, 2, 0), ChestBlockEntity.class).setItem(0, rod(helper));
+		ScriptRun run = BotScripts.run(bot, STUB + "jobs.fish.run()\n");
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).size() >= 2, "fished fewer than two rounds");
+			helper.assertTrue(bot.getMainHandItem().isEnchanted(), "the bot holds " + bot.getMainHandItem());
+			helper.assertValueEqual(rods(bot), 1, "rods carried");
+			helper.assertTrue(chests(helper, 8).stream().anyMatch(c -> c.countItem(Items.FISHING_ROD) == 1), "no chest holds the plain rod");
+			helper.assertTrue(run.state() != ScriptRun.State.FINISHED, "the job stopped");
+		});
+	}
+
+	/**
+	 * jobs.fish with fish stubbed, holding a plain rod: the test hands over a Lure III rod on the first call, as if caught,
+	 * and a plain one on the second. The bot switches to the Lure III rod and stores both plain ones (#996).
+	 */
+	// Measured: passes at tick 18 (red: the bot holds 1 minecraft:chest, its rods stored).
+	@GameTest(maxTicks = 40)
+	public void theJobSwitchesToABetterRodCaughtAndStoresAWorseOne(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		bot.getInventory().addItem(new ItemStack(Items.FISHING_ROD));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 2));
+		ScriptRun run = BotScripts.run(bot, STUB + "jobs.fish.run()\n");
+		BotScripts.failOnWarning(helper, bot);
+		int[] given = {0};
+		helper.onEachTick(() -> {
+			int calls = BotScripts.log(bot, Output.Level.PRINT).size();
+			if (given[0] < calls && given[0] < 2) {
+				bot.getInventory().addItem(given[0] == 0 ? rod(helper) : new ItemStack(Items.FISHING_ROD));
+				given[0]++;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).size() >= 3, "fished fewer than three rounds");
+			helper.assertTrue(bot.getMainHandItem().isEnchanted(), "the bot holds " + bot.getMainHandItem());
+			helper.assertValueEqual(rods(bot), 1, "rods carried");
+			helper.assertValueEqual(chests(helper, 8).stream().mapToInt(c -> c.countItem(Items.FISHING_ROD)).sum(), 2, "rods stored");
+			helper.assertTrue(run.state() != ScriptRun.State.FINISHED, "the job stopped");
+		});
+	}
+
+	/**
+	 * jobs.fish with no rod, string and planks in a chest but no sticks crafts sticks, a crafting table and a rod and fishes
+	 * with it (#996; lib.get, as before #996, so it passed at once).
+	 */
+	// Measured: passes at tick 127.
+	@GameTest(maxTicks = 260)
+	public void theJobWithNoRodCraftsOneFromStringAndPlanks(GameTestHelper helper) {
+		AntBot bot = ground(helper, true);
+		helper.setBlock(6, 2, 0, Blocks.CHEST);
+		ChestBlockEntity chest = helper.getBlockEntity(new BlockPos(6, 2, 0), ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.STRING, 2));
+		// 6 for the sticks and the crafting table, 8 for a depot chest for what is left over
+		chest.setItem(1, new ItemStack(Items.OAK_PLANKS, 16));
+		BotScripts.run(bot, STUB + "jobs.fish.run()\n");
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertFalse(BotScripts.log(bot, Output.Level.PRINT).isEmpty(), "never fished");
+			helper.assertTrue(bot.getMainHandItem().is(Items.FISHING_ROD), "the bot holds " + bot.getMainHandItem());
+		});
+	}
+
+	/** How many fishing rods the bot carries, held and in its inventory. */
+	private static int rods(AntBot bot) {
+		return bot.getInventory().countItem(Items.FISHING_ROD) + (bot.getMainHandItem().is(Items.FISHING_ROD) ? 1 : 0);
 	}
 
 	/** jobs.fish with its fish stubbed: the stub prints how many chests the depot has, then waits 5 ticks for the test to hand over a catch. */
