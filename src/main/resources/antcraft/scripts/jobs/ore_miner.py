@@ -45,7 +45,6 @@ COAL = "minecraft:coal"
 SMELTS = 8  # items one coal smelts
 MAX_RADIUS = 32  # the largest radius scan and find_nearest take (BlockScan.MAX_RADIUS)
 OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east"}
-CLOCKWISE = {"north": "east", "east": "south", "south": "west", "west": "north"}
 SPIRAL = [(1, 0), (0, 1), (-1, 0), (0, -1)]  # east, south, west, north: clockwise seen from above
 DEPTH = 8  # blocks below home it mines at least, for an ore whose best y is at or above home, such as coal (#1006)
 
@@ -128,25 +127,18 @@ def behind(legs, bottom):
 
 def down(y, area, om, prior):
     """Takes the bot from home to where it mines: the bottom of its stairs, or the end of the tunnel into the chunk it
-    mines, it got to before; else new stairs dug to y towards FACE within area, turning clockwise at its edge, so they
-    spiral down as deep as they must (lib.dig.turn gives up after four legs). Keeps their bottom, last facing and the
-    columns of their last two steps in om. Gives result()."""
+    mines, it got to before; else new stairs dug to y towards FACE within area, spiralling clockwise at its edge
+    (lib.dig.spiral_to). Keeps their bottom, last facing and the columns of their last two steps in om. Gives
+    result()."""
     if "bottom" in om:
         r = goto(om["bottom"])
         return result() if r else result(r.reason, om["bottom"])
     lib.find.WHERE = inside([area], prior)
-    way = FACE
-    legs = [(pos(), way)]
-    r = lib.dig.stairs_to(y, way)
-    # A turned leg without a step has no room to go on: a second turn would dig back under the last steps.
-    while r["reason"] == "outside" and (len(legs) == 1 or pos() != legs[-1][0]):
-        way = CLOCKWISE[way]
-        legs.append((pos(), way))
-        r = lib.dig.stairs_to(y, way)
+    r = lib.dig.spiral_to(y, FACE)
     if r["ok"]:
         om["bottom"] = pos()
-        om["way"] = way
-        om["guard"] = behind(legs, pos())
+        om["way"] = r["facing"]
+        om["guard"] = behind(r["legs"], pos())
     return r
 
 

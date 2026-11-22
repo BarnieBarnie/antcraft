@@ -32,8 +32,9 @@ def tier(item):
 
 def strip_mine(item, n, y, radius, facing):
     """Gets the kit, digs stairs down to y towards facing and branches on until the bot carries n of item, making sure
-    before the stairs and each branch that its pickaxe lasts them, then climbs back up and goes home. Where the stairs or
-    a branch reach the edge of lib.find.WHERE, it turns square to it (lib.dig.turn). Gives result()."""
+    before the stairs and each branch that its pickaxe lasts them, then climbs back up and goes home. Where the stairs
+    reach the edge of lib.find.WHERE they turn clockwise (lib.dig.spiral_to), where a branch does it turns square to it
+    (lib.dig.turn). Gives result()."""
     if item not in lib.dig.ORES:
         return result("no_recipe", None, {"minecraft:" + item: n})
     if y is None:
@@ -44,10 +45,11 @@ def strip_mine(item, n, y, radius, facing):
     way = facing
     tried = []
     if r["ok"]:
-        r = lib.dig.stairs_to(y, way)
+        r = lib.dig.spiral_to(y, way)
+        way = None if r["reason"] == "outside" else r["facing"]  # stairs with no room left to spiral: no_ore below
     for _ in range(ROUNDS):
         while r["reason"] == "outside" and way is not None:
-            # The edge of lib.find.WHERE ends a branch or the stairs: it goes on square to it, as lib.dig.ore (#561).
+            # The edge of lib.find.WHERE ends a branch: it goes on square to it, as lib.dig.ore (#561).
             tried.append(way)
             way = lib.dig.turn(way, tried)
             r = lib.dig.stairs_to(y, way) if way is not None else result()

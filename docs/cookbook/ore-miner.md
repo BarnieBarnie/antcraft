@@ -29,7 +29,7 @@ The bot starts with the miner's kit of `jobs.strip_mine`, a stone pickaxe, a cra
 |---|---|
 | eat | [`lib.food.upkeep`](../reference/modules/lib/food.md), at home |
 | pickaxe | [`lib.get.ensure_tool`](../reference/modules/lib/get.md): one that lasts the stairs and a branch, of the tier the ore needs, stone at least |
-| down | the first time, stairs from home down to the ore's height, setting off north and turning clockwise at the home chunk's edge ([`lib.dig.stairs_to`](../reference/modules/lib/dig.md)), so they spiral down round the chunk as deep as they must; after that it walks down the stairs it dug, and along its tunnels to the chunk it mines |
+| down | the first time, stairs from home down to the ore's height, setting off north and turning clockwise at the home chunk's edge ([`lib.dig.spiral_to`](../reference/modules/lib/dig.md#spiral_toy-facingnorth)), so they spiral down round the chunk as deep as they must; after that it walks down the stairs it dug, and along its tunnels to the chunk it mines |
 | branches | from a corridor through the bottom of the stairs, square to their last steps, a branch each way at every third block across the chunk, each to the chunk's edge ([`lib.dig.branch`](../reference/modules/lib/dig.md)), mining the ore in its walls and ceiling and putting a torch every 8 blocks |
 | next chunk | with every branch of a chunk dug, it tunnels on at the same level into the next chunk of its claim (below) and digs that one's grid from a corridor through the tunnel's end |
 | home | when it has fewer than 3 empty slots, when its pickaxe would not last another branch, or when its claim is mined out, it walks back up the stairs and home |

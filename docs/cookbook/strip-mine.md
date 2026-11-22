@@ -28,8 +28,9 @@ def tier(item):
 
 def strip_mine(item, n, y, radius, facing):
     """Gets the kit, digs stairs down to y towards facing and branches on until the bot carries n of item, making sure
-    before the stairs and each branch that its pickaxe lasts them, then climbs back up and goes home. Where the stairs or
-    a branch reach the edge of lib.find.WHERE, it turns square to it (lib.dig.turn). Gives result()."""
+    before the stairs and each branch that its pickaxe lasts them, then climbs back up and goes home. Where the stairs
+    reach the edge of lib.find.WHERE they turn clockwise (lib.dig.spiral_to), where a branch does it turns square to it
+    (lib.dig.turn). Gives result()."""
     if item not in lib.dig.ORES:
         return result("no_recipe", None, {"minecraft:" + item: n})
     if y is None:
@@ -40,10 +41,11 @@ def strip_mine(item, n, y, radius, facing):
     way = facing
     tried = []
     if r["ok"]:
-        r = lib.dig.stairs_to(y, way)
+        r = lib.dig.spiral_to(y, way)
+        way = None if r["reason"] == "outside" else r["facing"]  # stairs with no room left to spiral: no_ore below
     for _ in range(ROUNDS):
         while r["reason"] == "outside" and way is not None:
-            # The edge of lib.find.WHERE ends a branch or the stairs: it goes on square to it, as lib.dig.ore (#561).
+            # The edge of lib.find.WHERE ends a branch: it goes on square to it, as lib.dig.ore (#561).
             tried.append(way)
             way = lib.dig.turn(way, tried)
             r = lib.dig.stairs_to(y, way) if way is not None else result()
@@ -96,13 +98,13 @@ if args is not None:
 ## How it works
 
 - [`kit(MINER)`](../reference/modules/lib/bootstrap.md) makes sure the bot carries the kit: a carried or chest pickaxe of at least stone does, the rest it gets with [`get`](../reference/modules/lib/get.md), borrowing from chests or making it.
-- [`stairs_to`](../reference/modules/lib/dig.md) digs a staircase down to the height, towards `facing`, and remembers its top; [`branch`](../reference/modules/lib/dig.md) digs a tunnel two blocks tall, 8 blocks at a time, mining each ore vein it uncovers and putting a torch at the end. The job branches on until the bot carries enough, at most 16 times. Where [`lib.find.WHERE`](../reference/modules/lib/find.md#where) is set, as it is for a bot in a colony or by a script that imports the job and calls `jobs.strip_mine.run(...)` (#594), the edge of it ends a branch or the stairs, and the job turns square to the way it was going with [`lib.dig.turn`](../reference/modules/lib/dig.md#turnfacing-tried) instead of stopping with a warning.
+- [`stairs_to`](../reference/modules/lib/dig.md) digs a staircase down to the height, towards `facing`, and remembers its top; [`branch`](../reference/modules/lib/dig.md) digs a tunnel two blocks tall, 8 blocks at a time, mining each ore vein it uncovers and putting a torch at the end. The job branches on until the bot carries enough, at most 16 times. Where [`lib.find.WHERE`](../reference/modules/lib/find.md#where) is set, as it is for a bot in a colony or by a script that imports the job and calls `jobs.strip_mine.run(...)` (#594), the edge of it ends a branch or the stairs: the stairs turn clockwise and spiral on down ([`lib.dig.spiral_to`](../reference/modules/lib/dig.md#spiral_toy-facingnorth)), and at the end of a branch the job turns square to the way it was going with [`lib.dig.turn`](../reference/modules/lib/dig.md#turnfacing-tried) instead of stopping with a warning.
 - Before the stairs and before each branch, [`ensure_tool`](../reference/modules/lib/get.md) makes sure the pickaxes the bot carries last the blocks it will break: about three a step, and twice the branch's length plus a few for ore. Where they do not, it takes the cheapest that does, usually a new stone pickaxe from the cobblestone the stairs and branches gave and the crafting table of the kit. An ore that needs a better pickaxe, such as diamond, asks for that tier ([`tier_for`](../reference/modules/lib/tools.md)).
 - [`stairs_up`](../reference/modules/lib/dig.md) walks back up the staircase, also when a branch failed, and [`go_home`](../reference/modules/lib/home.md) walks home.
 - [`give_back`](../reference/modules/lib/borrow.md) in `finally` returns what was borrowed, also when a step failed or the script stopped with an error.
 - A step that fails ends the job with a `warn` of its reason, such as `no_tool`, or `no_ore` with what is missing where 16 branches found too little or there is no height to dig to (emerald without `y`), which the bot's log shows (`/antcraft bot log`).
 
-`StripMineGameTest` runs the bundled job in a test area with stone filled under its floor and three coal ore beside where the branch goes, as `jobs.strip_mine coal 3 <y> 8` with `y` three blocks under the bot: the bot ends at the top of its stairs with the coal. Another starts at the west edge with `east` and mines the coal beside its eastward branch. A third run starts with a pickaxe ten uses from breaking and two sticks: the job makes a new stone pickaxe before the branch, and the old one breaks. A fourth asks for emerald without `y` and gets `no_ore`. The bots carry the kit already, so the test does not bootstrap one.
+`StripMineGameTest` runs the bundled job in a test area with stone filled under its floor and three coal ore beside where the branch goes, as `jobs.strip_mine coal 3 <y> 8` with `y` three blocks under the bot: the bot ends at the top of its stairs with the coal. Another starts at the west edge with `east` and mines the coal beside its eastward branch. A third run starts with a pickaxe ten uses from breaking and two sticks: the job makes a new stone pickaxe before the branch, and the old one breaks. A fourth asks for emerald without `y` and gets `no_ore`. Another, fenced into 3 by 3 columns, spirals its stairs down past four legs to the coal. The bots carry the kit already, so the test does not bootstrap one.
 
 ## See also
 

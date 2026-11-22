@@ -29,6 +29,7 @@ ORES = {
 # The height where each is most common.
 BEST_Y = {"coal": 96, "raw_iron": 16, "raw_copper": 48, "raw_gold": -16, "redstone": -59, "diamond": -59, "lapis_lazuli": 0}
 FACING = {"north": (0, 0, -1), "south": (0, 0, 1), "east": (1, 0, 0), "west": (-1, 0, 0)}
+CLOCKWISE = {"north": "east", "east": "south", "south": "west", "west": "north"}
 # How many branches ore digs at its depth at least (rounds), and how long.
 ROUNDS = 4
 LENGTH = 32
@@ -93,7 +94,7 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     within radius, nearest first, but for those its pickaxe does not drop (lib.tools.drops); where they give too few, digs stairs down to y (best_y(item) where None) towards
     facing, branches of length on from there and climbs back up it, or walks back to where it started where it dug no
     staircase. Gives result(): ok, no_recipe for an item that is no ore, no_ore with missing where rounds(item, n)
-    branches found too little, where its staircase and branches reach the edge of lib.find.WHERE whichever way it turns (turn), or there
+    branches found too little, where its staircase can spiral no deeper (spiral_to) or its branches reach the edge of lib.find.WHERE whichever way they turn (turn), or there
     is no y to dig to (emerald),
     or where a step failed. A no_ore where it left veins also has tier, the lowest pickaxe tier that drops them all
     (#555), for lib.get to try again with."""
@@ -124,7 +125,8 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
         return no_ore(key, target, left)
     start = pos()
     tried = []
-    r = stairs_to(y, facing)
+    r = spiral_to(y, facing)
+    facing = None if r["reason"] == "outside" else r["facing"]  # stairs with no room left to spiral: no_ore below
     for _ in range(rounds(key, target - count(key))):
         while r["reason"] == "outside" and facing is not None:
             # At the edge of lib.find.WHERE it goes on square to it, down or along (#561).
@@ -175,7 +177,7 @@ def cut(p, stand, opened):
 
 
 def turn(facing, tried):
-    """A facing square to facing that is not in tried, for ore, dig_up and jobs.strip_mine to go on in where facing
+    """A facing square to facing that is not in tried, for the branches of ore and jobs.strip_mine and dig_up to go on in where facing
     reached the edge of lib.find.WHERE (#561); None where both are tried. Never back the way it came, which would dig
     under the steps of the staircase behind it."""
     s = FACING[facing]
@@ -236,6 +238,22 @@ def stairs_to(y, facing="north"):
         here = down
         memory["stairs"] = {"top": top, "bottom": here}
     return result()
+
+
+def spiral_to(y, facing="north"):
+    """stairs_to y towards facing, turning clockwise where a leg reaches the edge of lib.find.WHERE, so in a small area
+    they spiral down as deep as they must (#1003, #1009); turn gives up after four legs. Gives stairs_to's result() with
+    facing, the way of the last leg, and legs, the (start, facing) of each: outside where a turned leg has no room for a
+    step, as a second turn would dig back under the last steps."""
+    legs = [(pos(), facing)]
+    r = stairs_to(y, facing)
+    while r["reason"] == "outside" and (len(legs) == 1 or pos() != legs[-1][0]):
+        facing = CLOCKWISE[facing]
+        legs.append((pos(), facing))
+        r = stairs_to(y, facing)
+    r["facing"] = facing
+    r["legs"] = legs
+    return r
 
 
 def stairs_up(facing="north"):
