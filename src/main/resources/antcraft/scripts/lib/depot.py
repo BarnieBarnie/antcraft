@@ -46,7 +46,7 @@ def store(name, keep=None, radius=32):
     selects (OTHER) also not lib.storage.KEEP_KINDS or chests, so an apples category takes apples though they are food:
     each item into the chests of its category with room, in row order; where they are full, a new chest at the next slot
     of the row (add_chest) for the category. keep is a list of item ids or selectors, all of which the bot keeps, and of
-    (selector, n) pairs, of which it keeps n and stores the rest, such as ("minecraft:dirt", 64) (#762). Gives result():
+    (selector, n) pairs, of which it keeps n and stores the rest, such as ("minecraft:dirt", 64) (#762); the item held when store began is held after it, so a keep of (selector, 1) keeps it (#1000). Gives result():
     ok, or the reason adding a chest failed with and missing, item to how many the bot still carries beyond its keep."""
     whole = [k for k in keep or [] if isinstance(k, str)]
     capped = [k for k in keep or [] if not isinstance(k, str)]
@@ -57,6 +57,7 @@ def store(name, keep=None, radius=32):
             items.append(s.item)
     reason = None
     missing = {}
+    hand = held()
     for item in items:
         cap = sum([k[1] for k in capped if matches(item, k[0])])
         cat = category(name, item)
@@ -65,6 +66,9 @@ def store(name, keep=None, radius=32):
                 put(chest, item, count(item) - cap)
         while count(item) > cap:
             r = add_chest(name, cat, radius)
+            # Placing the chest moved the held item into the inventory, where put would store it before the rest (#1000).
+            if hand is not None:
+                equip(hand)
             if not r["ok"]:
                 reason = reason or r["reason"]
                 missing[item] = count(item) - cap

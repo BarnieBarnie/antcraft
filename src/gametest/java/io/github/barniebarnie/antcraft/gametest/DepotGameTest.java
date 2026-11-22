@@ -10,11 +10,14 @@ import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.state.properties.ChestType;
@@ -256,6 +259,34 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(foreign.countItem(Items.OAK_LOG) == 0, "logs in the cobblestone chest");
 			helper.assertTrue(foreign.countItem(Items.COBBLESTONE) == 10, "cobblestone: " + foreign.countItem(Items.COBBLESTONE));
 			helper.assertTrue(chest(helper, 2).countItem(Items.OAK_LOG) == 5, "logs in the new chest: " + chest(helper, 2).countItem(Items.OAK_LOG));
+		});
+	}
+
+	/**
+	 * The bot holds a Lure III rod and carries a plain rod and a chest, keeping one rod: store places the rods chest and
+	 * puts the plain rod in it; the bot still holds the Lure III rod (#1000). Placing the chest moved the held rod into
+	 * the inventory, so put stored it.
+	 */
+	// Measured: passes at tick 4.
+	@GameTest(maxTicks = 20)
+	public void storeThatPlacesAChestKeepsTheHeldItem(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		ItemStack lure = new ItemStack(Items.FISHING_ROD);
+		lure.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.LURE), 3);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, lure);
+		bot.getInventory().addItem(new ItemStack(Items.FISHING_ROD));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 1));
+		ScriptRun job = run(helper, bot, """
+			import lib.depot
+			lib.depot.depot("fish", %s, "east", {"rods": ["minecraft:fishing_rod"]})
+			r = lib.depot.store("fish", [("minecraft:fishing_rod", 1)])
+			print(r["ok"], count("minecraft:fishing_rod"))
+			""".formatted(printed(helper, 1, 1, 1)));
+		helper.succeedWhen(() -> {
+			finished(helper, job, bot, List.of("True 1"));
+			helper.assertTrue(bot.getMainHandItem().isEnchanted(), "the bot holds " + bot.getMainHandItem());
+			ItemStack stored = chest(helper, 1).getItem(0);
+			helper.assertTrue(stored.is(Items.FISHING_ROD) && !stored.isEnchanted(), "the chest holds " + stored);
 		});
 	}
 
