@@ -27,13 +27,13 @@ The bot starts with the miner's kit of `jobs.strip_mine`, a stone pickaxe, a cra
 
 | Step | How |
 |---|---|
-| eat | [`lib.food.upkeep`](../reference/modules/lib/food.md), at home |
+| eat | [`lib.food.upkeep`](../reference/modules/lib/food.md) at home; between branches only food it carries ([`eat_if_hungry`](../reference/modules/lib/food.md)), so it never walks off for food underground (#1008) |
 | pickaxe | [`lib.get.ensure_tool`](../reference/modules/lib/get.md): one that lasts the stairs and a branch, of the tier the ore needs, stone at least |
 | down | the first time, stairs from home down to the ore's height, setting off north and turning clockwise at the home chunk's edge ([`lib.dig.spiral_to`](../reference/modules/lib/dig.md#spiral_toy-facingnorth)), so they spiral down round the chunk as deep as they must; after that it walks down the stairs it dug, and along its tunnels to the chunk it mines, by waypoints: the corner of each turn of the stairs, their bottom, and the start and end of each tunnel, one short walk to each in turn. Where one fails the job ends with that waypoint as `at` |
 | branches | from a corridor through the bottom of the stairs, square to their last steps, a branch each way at every third block across the chunk, each to the chunk's edge ([`lib.dig.branch`](../reference/modules/lib/dig.md)), mining the ore in its walls and ceiling and putting a torch every 8 blocks |
 | next chunk | with every branch of a chunk dug, it tunnels on at the same level into the next chunk of its claim (below) and digs that one's grid from a corridor through the tunnel's end |
 | home | when it has fewer than 3 empty slots, when its pickaxe would not last another branch, or when its claim is mined out, it walks back by the same waypoints, from the one nearest it, up the stairs and home |
-| smelt | raw copper, iron or gold only: it smelts the ore it carries with [`lib.craft.smelt_here`](../reference/modules/lib/craft.md), in the furnace it carries or one it crafts from the cobblestone it dug, burning coal; where it carries too little coal (one smelts 8), it gets more with [`lib.get`](../reference/modules/lib/get.md), from its chests first |
+| smelt | raw copper, iron or gold only: it smelts the ore it carries with [`lib.craft.smelt_here`](../reference/modules/lib/craft.md), in the furnace it carries or one it crafts from the cobblestone it dug, burning coal, charcoal, logs or planks (coal or charcoal smelts 8, a log or plank 1.5); where it carries too little it takes more from its chests in that order, coal first, such as the coal it mined and stored, but never mines or crafts any. With no fuel at all it stores the raw ore as it is and warns once, until it has fuel again (#1008) |
 | better pickaxe | where a chest within the radius, its depot's or any other, holds a better pickaxe than its own (below), it takes that one and holds it |
 | store | all it carries goes into its depot (below) but its pickaxe, crafting table, furnace and torches; after taking a better pickaxe, its old ones go too |
 

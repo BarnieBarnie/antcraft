@@ -403,6 +403,90 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot carrying bread that gets hungry (5 food) once it is below the floor eats it between branches, before it is home
+	 * again, in the grid of minesSmeltsAndStoresTheIronAtHome (#1008).
+	 */
+	// Measured: passes at tick 786 (red: ate no bread below the floor).
+	@GameTest(maxTicks = 1600)
+	public void aHungryBotWithFoodCarriedEatsBetweenBranches(GameTestHelper helper) {
+		AntBot bot = miner(helper);
+		bot.getInventory().addItem(new ItemStack(Items.BREAD, 3));
+		ScriptRun run = run(helper, bot, 2, 0, 6, 7);
+		int floor = helper.absolutePos(BlockPos.ZERO).getY();
+		boolean[] state = {false, false}; // hungry, ate below the floor
+		helper.onEachTick(() -> {
+			if (bot.isRemoved() || bot.getY() >= floor) {
+				return;
+			}
+			if (!state[0]) {
+				state[0] = true;
+				bot.getFood().setFoodLevel(5);
+				bot.getFood().setSaturation(0);
+			} else if (GameTests.carried(bot, Items.BREAD) < 3) {
+				state[1] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(state[1], "ate no bread below the floor");
+			ended(helper, run, bot);
+		});
+	}
+
+	/**
+	 * A bot with no coal nor other fuel anywhere mines the iron ore of aDugGridEndsTheJobAtHome's area and stores the raw
+	 * iron unsmelted, warning once that it has no fuel, rather than go off mining coal (#1008): it never goes below the
+	 * grid's level, y -2.
+	 */
+	// Measured: passes at tick 226 (red: warned [ore miner: could not smelt raw_iron: missing_ingredients {'minecraft:coal': 1}]).
+	@GameTest(maxTicks = 450)
+	public void withNoFuelTheRawIronIsStoredWithAWarning(GameTestHelper helper) {
+		helper.setBlock(3, -2, 2, Blocks.IRON_ORE);
+		AntBot bot = miner(helper);
+		noCoal(bot);
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		ScriptRun run = BotScripts.run(bot, source(helper, "raw_iron", 1, -2, 2, 2, 4, 6));
+		String warning = "ore miner: no fuel to smelt raw_iron, stored raw: put coal, charcoal, logs or planks in a chest";
+		int floor = helper.absolutePos(BlockPos.ZERO).getY();
+		helper.onEachTick(() -> {
+			List<String> warnings = BotScripts.warnings(bot);
+			if (!warnings.isEmpty() && !warnings.equals(List.of(warning))) {
+				helper.fail("warned " + warnings);
+			}
+			if (!bot.isRemoved() && bot.getY() < floor - 2) {
+				helper.fail("went below the grid, to " + TestPositions.relative(helper, bot.blockPosition()));
+			}
+		});
+		helper.succeedWhen(() -> {
+			ended(helper, run, bot);
+			helper.assertValueEqual(BotScripts.warnings(bot), List.of(warning), "warnings");
+			helper.assertTrue(stored(helper, Items.RAW_IRON) >= 1, "no raw iron stored");
+			helper.assertValueEqual(stored(helper, Items.IRON_INGOT), 0, "iron ingots stored");
+		});
+	}
+
+	/**
+	 * A bot with no coal of its own smelts the raw iron it mines (as withNoFuelTheRawIronIsStoredWithAWarning) with coal
+	 * stored in a chest at home (#1008).
+	 */
+	// Measured: passes at tick 454 (green before too: lib.get took the coal from the chest first).
+	@GameTest(maxTicks = 900)
+	public void coalStoredAtHomeIsUsedToSmelt(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.COAL, 2));
+		helper.setBlock(3, -2, 2, Blocks.IRON_ORE);
+		AntBot bot = miner(helper);
+		noCoal(bot);
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		ScriptRun run = BotScripts.run(bot, source(helper, "raw_iron", 1, -2, 2, 2, 4, 6));
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			ended(helper, run, bot);
+			helper.assertTrue(stored(helper, Items.IRON_INGOT) >= 1, "no iron ingots stored");
+			helper.assertValueEqual(stored(helper, Items.RAW_IRON), 0, "raw iron stored");
+			helper.assertValueEqual(stored(helper, Items.COAL), 1, "coal left in the chests");
+		});
+	}
+
+	/**
 	 * Has a bot holding pickaxe mine ore with block at (3, -2, 2) in the one-column area of aDugGridEndsTheJobAtHome;
 	 * succeeds once it went down holding a pickaxe of item down and is home with at least n of stored in its depot and,
 	 * for a raw ore, none of it stored. A bot that smelts carries a furnace, as the area gives too little cobblestone.
@@ -426,6 +510,15 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 				helper.assertValueEqual(stored(helper, raw), 0, ore + " stored");
 			}
 		});
+	}
+
+	/** Takes the coal miner gives bot out of its inventory. */
+	private static void noCoal(AntBot bot) {
+		for (int i = 0; i < bot.getInventory().getContainerSize(); i++) {
+			if (bot.getInventory().getItem(i).is(Items.COAL)) {
+				bot.getInventory().setItem(i, ItemStack.EMPTY);
+			}
+		}
 	}
 
 	/** What bot holds when it first goes below the floor, null till then. */
