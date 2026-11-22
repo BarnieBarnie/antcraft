@@ -9,12 +9,16 @@ import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 
-/** {@code lib/tools.py} and {@code lib/cost.py} (#507): carried tools, their uses left and effort estimates. */
+/** {@code lib/tools.py} and {@code lib/cost.py} (#507): carried tools, their uses left and effort estimates; {@code lib/enchant.py} (#992). */
 public class ToolsGameTest implements CustomTestMethodInvoker {
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
@@ -119,6 +123,62 @@ public class ToolsGameTest implements CustomTestMethodInvoker {
 			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
 			helper.assertTrue(log.equals(List.of("iron diamond wooden", "iron")), "printed " + log);
 		});
+	}
+
+	/**
+	 * lib.enchant (#992): best_rod of the inventory picks the perfect rod (Unbreaking III, Mending, Lure III, Luck of the
+	 * Sea III), though the most worn, over each rod one level short of it and over an enchanted sword; an enchanted rod
+	 * beats a plain one, of two plain rods the one with more uses left wins, and no rod gives None.
+	 */
+	@GameTest(maxTicks = 10)
+	public void bestRodPicksThePerfectRod(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
+		enchant(helper, sword, Enchantments.SHARPNESS, 5);
+		enchant(helper, sword, Enchantments.UNBREAKING, 3);
+		enchant(helper, sword, Enchantments.MENDING, 1);
+		bot.getInventory().addItem(sword);
+		bot.getInventory().addItem(rod(helper, 30, 0, 0, 0, 0));
+		bot.getInventory().addItem(rod(helper, 0, 0, 0, 0, 0));
+		bot.getInventory().addItem(rod(helper, 0, 1, 0, 0, 0));
+		bot.getInventory().addItem(rod(helper, 0, 3, 3, 1, 2));
+		bot.getInventory().addItem(rod(helper, 0, 3, 3, 0, 3));
+		bot.getInventory().addItem(rod(helper, 0, 3, 2, 1, 3));
+		bot.getInventory().addItem(rod(helper, 0, 2, 3, 1, 3));
+		bot.getInventory().addItem(rod(helper, 50, 3, 3, 1, 3));
+		String name = BotScripts.libraryScript(helper, "enchant_", """
+			from lib.enchant import best_rod, better, ROD
+			inv = inventory()
+			rods = [s for s in inv if s.item == "minecraft:fishing_rod"]
+			plain = [s for s in rods if not s.enchantments]
+			lure = [s for s in rods if s.enchantments == {"minecraft:lure": 1}]
+			b = best_rod(inv)
+			print(b.damage, len(b.enchantments), better(b, lure[0], ROD), better(lure[0], b, ROD))
+			print(best_rod(plain + lure).enchantments, best_rod(plain).damage)
+			print(best_rod([]), best_rod([s for s in inv if s.item != "minecraft:fishing_rod"]))
+			""");
+		run(helper, bot, name);
+		helper.succeedWhen(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(log.equals(List.of("50 4 True False", "{'minecraft:lure': 1} 0", "None None")), "printed " + log);
+		});
+	}
+
+	/** A fishing rod at {@code damage} with the given levels of Lure, Luck of the Sea, Mending and Unbreaking (0: none). */
+	private static ItemStack rod(GameTestHelper helper, int damage, int lure, int luck, int mending, int unbreaking) {
+		ItemStack rod = new ItemStack(Items.FISHING_ROD);
+		rod.setDamageValue(damage);
+		enchant(helper, rod, Enchantments.LURE, lure);
+		enchant(helper, rod, Enchantments.LUCK_OF_THE_SEA, luck);
+		enchant(helper, rod, Enchantments.MENDING, mending);
+		enchant(helper, rod, Enchantments.UNBREAKING, unbreaking);
+		return rod;
+	}
+
+	private static void enchant(GameTestHelper helper, ItemStack stack, ResourceKey<Enchantment> key, int level) {
+		if (level > 0) {
+			stack.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(key), level);
+		}
 	}
 
 	/** The position {@code (x, y, z)} of the test area as a script tuple. */

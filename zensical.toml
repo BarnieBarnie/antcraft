@@ -79,6 +79,7 @@ nav = [
       "reference/modules/lib/treefarm.md",
       "reference/modules/lib/cellfarm.md",
       "reference/modules/lib/food.md",
+      "reference/modules/lib/enchant.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },

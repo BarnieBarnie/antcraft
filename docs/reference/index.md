@@ -202,6 +202,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/explore`](modules/lib/explore.md): `spiral(centre, step=32, rings=4)`, `look(radius=64, around=16)`, `explore(rings=4, step=32, until=None)`, `seen(what)`, `report()`, the biomes and structures a bot has seen, kept in `memory["seen"]`.
 - [`lib/build`](modules/lib/build.md): `materials(id, at, turn=0, mirror=False)`, `build_here(id, at, turn=0, mirror=False, radius=32)`, a blueprint built end to end: what its site lacks got, built, the borrowed given back.
 - [`lib/food`](modules/lib/food.md): `upkeep(radius=32)`, `eat_if_hungry()`, `ensure_food(n=STOCK, radius=32)`, `FOODS`, `MADE`, a bot that keeps itself fed; the long-running default jobs and colony scripts call `upkeep` each round.
+- [`lib/enchant`](modules/lib/enchant.md): `score(stack, weights)`, `better(a, b, weights)`, `best(stacks, weights)`, `best_rod(stacks)`, `ROD`, the best of several enchantable items, such as fishing rods.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 Kept for old scripts, each now a wrapper of the library function after it; new scripts call that one:
