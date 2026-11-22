@@ -91,6 +91,7 @@ nav = [
     "cookbook/mining-loop.md",
     "cookbook/stock-chest.md",
     "cookbook/store.md",
+    "cookbook/storekeeper.md",
     "cookbook/memory.md",
     "cookbook/giant-tree.md",
     "cookbook/bootstrap.md",
