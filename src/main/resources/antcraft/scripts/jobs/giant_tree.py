@@ -1,10 +1,11 @@
 # A job: fells the giant tree (a 2x2 trunk: jungle, spruce or dark oak) nearest to a position, or to the bot, and replants
-# it. Run it as /antcraft bot run jobs.giant_tree [x y z] [radius] (docs/design/library.md, Example jobs). Another
+# it. Run it as /antcraft bot run jobs.giant_tree [x y z] [radius] [storage x y z] (docs/design/library.md, Example jobs). Another
 # script runs it with run(at, radius); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.stock
 import lib.trees
 from lib.borrow import borrowed, give_back
 from lib.get import ensure_tool, get
@@ -59,5 +60,6 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(Pos(int(args[0]), int(args[1]), int(args[2])) if len(args) >= 3 else None,
         int(args[-1]) if len(args) in (1, 4) else 32)

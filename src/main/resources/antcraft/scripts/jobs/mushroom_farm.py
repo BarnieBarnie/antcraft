@@ -1,5 +1,5 @@
 # A job: grows a mushroom farm, for mushroom stew, and farms it until a player stops it. Run it as
-# /antcraft bot run jobs.mushroom_farm [x y z [cells [radius]]]: the farm's corner (by default where the bot stands, or
+# /antcraft bot run jobs.mushroom_farm [x y z [cells [radius]]] [storage x y z]: the farm's corner (by default where the bot stands, or
 # where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, most()
 # most) and how far to look for what it needs (32 by default). A cell is a row of three floor blocks of podzol, which a
 # mushroom grows on in any light, so the farm needs no roof or dark room: a brown mushroom on the west one and a red one
@@ -227,5 +227,6 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(Pos(int(args[0]), int(args[1]), int(args[2])) if len(args) > 2 else None,
         int(args[3]) if len(args) > 3 else None, int(args[4]) if len(args) > 4 else 32)

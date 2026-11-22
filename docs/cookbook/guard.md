@@ -2,8 +2,11 @@
 
 A job that guards the bot's home: it fights the hostile mobs that come near, and when it is hurt it walks home, eats and heals before it fights again. The mod bundles it as `jobs/guard.py`; start it with `/antcraft bot run jobs.guard`, or `jobs.guard 24` to fight up to 24 blocks from home (16 by default). It runs until it is stopped. Give it a sword and some food, or keep food in the colony's chests.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its food from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 ```python
 import lib.food
+import lib.stock
 from lib.home import go_home
 from lib.tools import hold
 
@@ -88,6 +91,7 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(int(args[0]) if len(args) > 0 else 16)
 ```
 

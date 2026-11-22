@@ -12,6 +12,8 @@ The job `jobs/kelp_farm` farms kelp in a pool of water until a player stops it. 
 
 The arguments are the corners `x1 y1 z1 x2 y2 z2` of the pool's floor, the blocks the kelp stands on (by default those of the last run), how far to look for kelp to plant, a furnace, a crafting table and fuel, in blocks (default 32), `dry` to make dried kelp and dried kelp blocks of it ([Drying the kelp](#drying-the-kelp)), and after it how many dried kelp to keep as food, not pressed into blocks (default 0). The bot says `planted 6 kelp` once it has planted the pool, and `cut 2 kelp` each round that cut some.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 ## The pool
 
 Without `cells` ([Growing water cells](#growing-water-cells)) the farm builds no water: it farms a pool that is already there, such as one dug into the ground and filled with a few water buckets. The pool is **two blocks deep or more**, water source blocks over a floor kelp stands on (any solid block but magma), with ground round it level with the top of the water, where the bot walks.

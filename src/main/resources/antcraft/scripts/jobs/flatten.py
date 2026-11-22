@@ -1,4 +1,4 @@
-# A job: levels a plot before building on it. Run it as /antcraft bot run jobs.flatten <x1> <z1> <x2> <z2> [y] [fill],
+# A job: levels a plot before building on it. Run it as /antcraft bot run jobs.flatten <x1> <z1> <x2> <z2> [y] [fill] [storage x y z],
 # such as jobs.flatten 10 10 18 18 64 cobblestone: the two corners of the plot, the height of its top, by default the
 # middle (median) height of its ground, and the block to fill with, by default whichever of FILLS the bot carries or
 # digs, getting dirt once it has none of them. It digs everything above y, up to
@@ -11,6 +11,7 @@
 # delete it and the default comes back when the server starts.
 
 import lib.food
+import lib.stock
 import lib.terrain
 from lib.borrow import borrowed, give_back
 from lib.get import ensure_tool, get
@@ -71,6 +72,7 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     rest = args[4:]
     y = int(rest.pop(0)) if rest and rest[0][0] in "-0123456789" else None
     run(int(args[0]), int(args[1]), int(args[2]), int(args[3]), y, rest[0] if rest else None)

@@ -10,6 +10,8 @@ The job `jobs/crop_farm` grows a farm of wheat, carrots, potatoes or beetroot fr
 
 The arguments are the crop, a crop, seed or harvest of [`lib.farm.CROPS`](../reference/modules/lib/farm.md) (`wheat`, `wheat_seeds`, `carrot`, `potato`, `beetroot`, ...); the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that crop started); the most cells it grows to (by default as many as the bot can keep harvested while a cell ripens, from 600 ticks a harvest till it has learnt its own, see [`lib.cellfarm.most`](../reference/modules/lib/cellfarm.md#mostname-growth-guess), no more than the cells that get random ticks round its corner, see [`lib.cellfarm.limit`](../reference/modules/lib/cellfarm.md#limitf-name-size)); and how far to look for what it needs, in blocks (default 32). The farm is named after the crop block, `wheat_farm`, `carrots_farm`, `potatoes_farm` or `beetroots_farm`, and keeps its corner in `memory["crop_farms"]`.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 | What | Where, from the corner |
 |---|---|
 | cell 1, 9 by 9 soil, its water source in the middle | `(0, -1, 0)` east and south, the water at `(4, -1, 4)` |

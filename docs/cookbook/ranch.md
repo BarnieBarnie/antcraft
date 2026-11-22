@@ -9,6 +9,8 @@ The job `jobs/ranch` keeps cows, sheep, pigs and chickens in a fenced pen, for m
 
 The arguments are two opposite corners of the pen's inside `x y z x y z`, at the level the animals stand on, then the most adults of each kind it keeps (by default as many as one bot keeps up with, below) and how far to look for chests, in blocks (default 32).
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 ## The pen
 
 | What | Where |

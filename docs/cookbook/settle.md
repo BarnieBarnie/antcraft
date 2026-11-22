@@ -10,6 +10,8 @@ The job `jobs/settle` settles a base with an empty-handed bot: it gets a kit, le
 
 The arguments are the lowest corner of the house `x y z` (by default where the bot stands, or where a stopped run started) how far to look for what it needs, in blocks (default 32), and the house's blueprint (default `antcraft:starter_house`; another blueprint that fits in 5 by 5 will do, with home at its first work spot, or beside the chest where it has none). The bot says one line per step it starts, `settle 3/7: hut`, then `settled`, or why not, such as `not settled: no_logs at hut, left ['hut', 'furnish', 'field', 'store', 'home']`.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 The plot, from the corner `x y z` east and south:
 
 | What | Where, from the corner |

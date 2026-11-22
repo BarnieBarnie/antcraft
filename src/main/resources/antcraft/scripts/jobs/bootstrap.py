@@ -1,10 +1,11 @@
-# bot run jobs.bootstrap [radius]: an empty-handed bot gets lib.bootstrap.KIT from what is within radius (32), then
+# bot run jobs.bootstrap [radius] [storage x y z]: an empty-handed bot gets lib.bootstrap.KIT from what is within radius (32), then
 # gives back what it borrowed, also when it fails (docs/design/library.md, Example jobs). Another script runs it with run(radius); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
 import lib.bootstrap
+import lib.stock
 from lib.borrow import give_back
 
 def run(radius=32):
@@ -23,4 +24,5 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(int(args[0]) if args else 32)

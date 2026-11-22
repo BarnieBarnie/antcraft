@@ -1,4 +1,4 @@
-# A job: settles a new base from an empty-handed bot. Run it as /antcraft bot run jobs.settle [x y z [radius [hut]]],
+# A job: settles a new base from an empty-handed bot. Run it as /antcraft bot run jobs.settle [x y z [radius [hut]]] [storage x y z],
 # such as jobs.settle 10 64 10: the lowest corner of the house, by default where the bot stands (or where a stopped run
 # started), how far to look for what it needs, in blocks (32 by default), and the house's blueprint (the bundled starter
 # house by default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, levels
@@ -14,6 +14,7 @@ import lib.bootstrap
 import lib.farm
 import lib.food
 import lib.project
+import lib.stock
 import lib.storage
 import lib.terrain
 from lib.build import build_here
@@ -108,5 +109,6 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(Pos(int(args[0]), int(args[1]), int(args[2])) if len(args) > 2 else None, int(args[3]) if len(args) > 3 else 32,
         args[4] if len(args) > 4 else HUT)

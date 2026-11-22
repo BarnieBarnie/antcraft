@@ -10,6 +10,8 @@ The job `jobs/cactus_farm` grows a cactus farm, for green dye (cactus smelted) a
 
 The arguments are the farm's corner `x y z` (by default where the bot stands, or where the last run started; another corner moves the farm there), the most cells it grows to (by default as many as keep growing while the bot stands at its corner, [`limit`](../reference/modules/lib/cellfarm.md#limitf-name-size)) and how far to look for what it needs, in blocks (default 32). The bot says `built cell 2` and `cells 2/12` as the farm grows, and `farm full` once it has all its cells.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 ## A cell
 
 A cactus breaks when any block stands beside it, so a cell is 2 by 2 floor blocks, the floor being the block under the corner, with cactus on sand at two opposite corners: a checkerboard, with nothing beside either cactus.

@@ -1,5 +1,5 @@
 # A job: farms kelp in a pool of water until a player stops it, for dried kelp (food) and dried kelp blocks (fuel). Run
-# it as /antcraft bot run jobs.kelp_farm [x1 y1 z1 x2 y2 z2 [radius [dry [food]]]]: the corners of the pool's floor, the
+# it as /antcraft bot run jobs.kelp_farm [x1 y1 z1 x2 y2 z2 [radius [dry [food]]]] [storage x y z]: the corners of the pool's floor, the
 # blocks kelp stands on (by default those of the last run), how far to look for kelp to plant (32 by default), dry to
 # smelt the kelp to dried kelp and craft each 9 to a dried kelp block (#841), and food, how many dried kelp to keep as
 # food, uncrafted (0 by default; #858). The pool is one
@@ -273,6 +273,7 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     if args and args[0] == "cells":
         grow(Pos(int(args[1]), int(args[2]), int(args[3])) if len(args) > 3 else None,
              int(args[4]) if len(args) > 4 else None, int(args[5]) if len(args) > 5 else 32,

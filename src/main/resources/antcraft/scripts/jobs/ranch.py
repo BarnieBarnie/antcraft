@@ -1,5 +1,5 @@
 # A job: keeps animals in a fenced pen until a player stops it, for meat, leather, wool, eggs and milk. Run it as
-# /antcraft bot run jobs.ranch x1 y1 z1 x2 y2 z2 [cap [radius]]: the pen's inside from one corner to the other (its floor
+# /antcraft bot run jobs.ranch x1 y1 z1 x2 y2 z2 [cap [radius]] [storage x y z]: the pen's inside from one corner to the other (its floor
 # level y1), the most adults of each kind it keeps (default_cap by default) and how far to look for chests (32 by default). Each
 # round, for cows, sheep, pigs and chickens, it lures one of a kind that is outside the pen in with its food while the
 # kind is under the cap, kills the adults over it (attack; babies never), breeds pairs with their food (use) while it has fewer babies than the cap, shears the
@@ -214,5 +214,6 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(Pos(int(args[0]), int(args[1]), int(args[2])), Pos(int(args[3]), int(args[4]), int(args[5])),
         int(args[6]) if len(args) > 6 else None, int(args[7]) if len(args) > 7 else 32)

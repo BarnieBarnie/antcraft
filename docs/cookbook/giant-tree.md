@@ -2,7 +2,10 @@
 
 A job that fells a whole giant tree, a 2x2 trunk of jungle, spruce or dark oak, and replants it. The bot need not own an axe or scaffold blocks: it takes them from what is around and gives back what it borrowed. The mod bundles it as `jobs/giant_tree.py`; start it by a giant tree with `/antcraft bot run jobs.giant_tree`, or give the tree's position: `/antcraft bot run jobs.giant_tree 120 64 -35`. A fourth word, or a single one, is how far to look, 32 blocks by default.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 ```python
+import lib.stock
 import lib.trees
 from lib.borrow import borrowed, give_back
 from lib.get import ensure_tool, get
@@ -57,6 +60,7 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(Pos(int(args[0]), int(args[1]), int(args[2])) if len(args) >= 3 else None,
         int(args[-1]) if len(args) in (1, 4) else 32)
 ```

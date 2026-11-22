@@ -19,7 +19,7 @@ The chests of the colony store: where `STORAGE` is set, the chests, trapped ches
 
 ## `storage_arg(args)`
 
-A job's command-line arguments without `storage x y z`, wherever it stands among them, which sets `STORAGE` to `Pos(x, y, z)`. The jobs `jobs.get`, `jobs.build`, `jobs.strip_mine`, `jobs.ore_miner` and `jobs.wood_farm` call it on their arguments.
+A job's command-line arguments without `storage x y z`, wherever it stands among them, which sets `STORAGE` to `Pos(x, y, z)`. The jobs that take from chests through `lib.get`, `lib.stock` or `lib.food` call it on their arguments (#1022): `jobs.get`, `jobs.build`, `jobs.strip_mine`, `jobs.ore_miner`, `jobs.bootstrap`, `jobs.settle`, `jobs.flatten`, `jobs.giant_tree`, `jobs.guard`, `jobs.explore`, `jobs.fish`, `jobs.ranch`, `jobs.farm`, `jobs.forester` and the farms `jobs.wood_farm`, `jobs.crop_farm`, `jobs.stem_farm`, `jobs.cane_farm`, `jobs.cactus_farm`, `jobs.bamboo_farm`, `jobs.berry_farm`, `jobs.cocoa_farm`, `jobs.kelp_farm`, `jobs.mushroom_farm` and `jobs.wart_farm`.
 
 - **Returns** the list of arguments left.
 - **Pauses** no.

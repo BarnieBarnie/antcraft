@@ -1,5 +1,5 @@
 # A job: grows a crop farm from a cell's worth of seed and farms it until a player stops it. Run it as
-# /antcraft bot run jobs.crop_farm <crop> [x y z [cells [radius]]], such as jobs.crop_farm carrot: a crop, seed or harvest
+# /antcraft bot run jobs.crop_farm <crop> [x y z [cells [radius]]] [storage x y z], such as jobs.crop_farm carrot: a crop, seed or harvest
 # of lib.farm.CROPS (wheat, carrot, potato, beetroot), the farm's first corner (by default where the bot stands, or where
 # a stopped run of the crop started), the most cells it grows to (by default most of the ticks a cell takes to ripen,
 # no more than the cells that get random ticks round its corner) and how far to look for what it needs (32 by default).
@@ -177,5 +177,6 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(args[0], Pos(int(args[1]), int(args[2]), int(args[3])) if len(args) > 3 else None,
         int(args[4]) if len(args) > 4 else None, int(args[5]) if len(args) > 5 else 32)

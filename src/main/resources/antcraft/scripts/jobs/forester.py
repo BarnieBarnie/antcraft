@@ -1,5 +1,5 @@
 # A job: picks a tree kind by itself and starts its wood farm where the bot stands. Run it as
-# /antcraft bot run jobs.forester [radius]: how far to look for saplings in chests and for trees, and for what the farm
+# /antcraft bot run jobs.forester [radius] [storage x y z]: how far to look for saplings in chests and for trees, and for what the farm
 # needs, in blocks (32 by default). The candidates are the kinds of lib.treefarm.KINDS whose saplings a chest within
 # radius holds (lib.stock), then those of a tree within radius (trees); it says its choice and why, then
 # runs jobs.wood_farm for that kind, which never returns (docs/cookbook/wood-farm.md, A forester). With no candidate it
@@ -74,4 +74,5 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(int(args[0]) if args else 32)

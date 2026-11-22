@@ -67,6 +67,8 @@ For carrots, potatoes and beetroot, and for colonies, see the default `colony.fa
 
 The mod bundles a farm job over [`lib/farm`](../reference/modules/lib/farm.md) as `jobs/farm.py`. Start it with `/antcraft bot run jobs.farm 10 63 10 14 63 14 carrot 0`: the two corners of the field's soil, the crop to plant (a crop, seed or harvest such as `wheat`, `carrot`, `potato` or `beetroot`; wheat by default) and how many rounds to tend it: 1 by default, `0` for round after round until a round fails or you stop the bot.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 ```python
 import lib.farm
 import lib.food
@@ -194,6 +196,7 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(Pos(int(args[0]), int(args[1]), int(args[2])), Pos(int(args[3]), int(args[4]), int(args[5])),
         args[6] if len(args) > 6 else "wheat", int(args[7]) if len(args) > 7 else 1)
 ```

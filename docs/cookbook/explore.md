@@ -2,9 +2,12 @@
 
 A job that walks a spiral around the bot until it sees what it was sent for, a biome or a structure, then goes home and reports what it found on the way. The mod bundles it as `jobs/explore.py`; start it with `/antcraft bot run jobs.explore village`. The words are what to look for, an id such as `minecraft:desert`, a biome tag such as `#minecraft:is_forest` for any forest, or a part of an id such as `village` or `ocean` (`all`, the default, walks the whole spiral); how many rings, 4 by default; and how far apart the waypoints are, 32 blocks. With the defaults the bot looks up to 128 blocks out, 81 waypoints in all.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its food from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 ```python
 import lib.explore
 import lib.food
+import lib.stock
 from lib.home import go_home
 
 def run(what=None, rings=4, step=32):
@@ -26,6 +29,7 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(args[0] if len(args) > 0 and args[0] != "all" else None, int(args[1]) if len(args) > 1 else 4,
         int(args[2]) if len(args) > 2 else 32)
 ```

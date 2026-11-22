@@ -1,5 +1,5 @@
 # A job: guards the bot's home, fighting the hostile mobs that come near it, and retreats home to eat and heal when hurt
-# (#705). Run it as /antcraft bot run jobs.guard [radius], such as jobs.guard 24: radius how far from home it fights
+# (#705). Run it as /antcraft bot run jobs.guard [radius] [storage x y z], such as jobs.guard 24: radius how far from home it fights
 # (16 by default). It runs until stopped: each round, under RETREAT health it walks home and eats until it has HEALED
 # health (heal), keeps itself fed (lib.food.upkeep), then attacks the mob of MOBS nearest the bot within radius of
 # home until it dies or the bot's health drops under RETREAT (#718), or waits at home (docs/cookbook/guard.md); a mob it
@@ -11,6 +11,7 @@
 # delete it and the default comes back when the server starts.
 
 import lib.food
+import lib.stock
 from lib.home import go_home
 from lib.tools import hold
 
@@ -95,4 +96,5 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(int(args[0]) if len(args) > 0 else 16)

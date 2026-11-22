@@ -149,6 +149,32 @@ public class CropFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The storage argument (#1022): an iron hoe in the supplies and another in a chest at (2, 1, 20), far from the bot,
+	 * given as the colony store with {@code storage x y z}. The bot borrows the store's hoe and leaves the supplies' one.
+	 */
+	// Measured: passes at tick 238 alone, 270 in its class run (red: invalid literal for int() 'storage', tick 6).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 540)
+	public void theStorageGivenLendsTheHoe(GameTestHelper helper) {
+		AntBot bot = farm(helper, Items.WHEAT_SEEDS, 80, 0);
+		Container supplies = helper.getBlockEntity(new BlockPos(22, 1, 20), ChestBlockEntity.class);
+		BlockPos at = new BlockPos(2, 1, 20);
+		helper.setBlock(at, Blocks.CHEST);
+		Container store = helper.getBlockEntity(at, ChestBlockEntity.class);
+		store.setItem(0, new ItemStack(Items.IRON_HOE));
+		BlockPos p = helper.absolutePos(at);
+		run(helper, bot, "wheat", 1, " storage " + p.getX() + " " + p.getY() + " " + p.getZ());
+		helper.onEachTick(() -> {
+			if (supplies.countItem(Items.IRON_HOE) == 0) {
+				helper.fail("took the supplies' hoe; the store holds " + store.countItem(Items.IRON_HOE));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(store.countItem(Items.IRON_HOE), 0, "hoes in the store");
+			helper.assertValueEqual(GameTests.carried(bot, Items.IRON_HOE), 1, "hoes carried");
+		});
+	}
+
+	/**
 	 * A cell short of seed, with its water, is not tended (#844): the bot carries no seed and no chest holds any, so
 	 * there is nothing to plant, and it walked to the cell every round. A cell that lost its water still is. Cell 1 is
 	 * farmland round its water, cell 2 farmland with none; tend_cell is stood in for, to say which it tends.
@@ -273,9 +299,14 @@ public class CropFarmGameTest implements CustomTestMethodInvoker {
 
 	/** Runs jobs.crop_farm of crop at AT, up to cells cells, and fails the test on a script error or warning (the farm stopping, #951). */
 	private static void run(GameTestHelper helper, AntBot bot, String crop, int cells) {
+		run(helper, bot, crop, cells, "");
+	}
+
+	/** As above, with more words after the cells, such as {@code " storage x y z"}. */
+	private static void run(GameTestHelper helper, AntBot bot, String crop, int cells, String more) {
 		BlockPos at = helper.absolutePos(AT);
 		List<String> said = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.crop_farm " + crop + " "
-			+ at.getX() + " " + at.getY() + " " + at.getZ() + " " + cells);
+			+ at.getX() + " " + at.getY() + " " + at.getZ() + " " + cells + more);
 		helper.assertTrue(bot.getScript() != null, "not run: " + said);
 		BotScripts.failOnWarning(helper, bot);
 	}

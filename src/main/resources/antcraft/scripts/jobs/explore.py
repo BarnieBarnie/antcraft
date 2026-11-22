@@ -1,5 +1,5 @@
 # A job: explores a square spiral around the bot until it sees what, a biome or structure, then goes home and reports
-# what it found. Run it as /antcraft bot run jobs.explore [what] [rings] [step], such as jobs.explore village: what an
+# what it found. Run it as /antcraft bot run jobs.explore [what] [rings] [step] [storage x y z], such as jobs.explore village: what an
 # id, a biome tag such as #minecraft:is_forest or part of an id (lib.explore.matches), all (the default) to walk the
 # whole spiral; rings 4 and step 32, so it looks up to 128 blocks out (docs/cookbook/explore.md). Another script runs
 # it with run(what, rings, step); imported, this runs nothing.
@@ -9,6 +9,7 @@
 
 import lib.explore
 import lib.food
+import lib.stock
 from lib.home import go_home
 
 def run(what=None, rings=4, step=32):
@@ -30,5 +31,6 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(args[0] if len(args) > 0 and args[0] != "all" else None, int(args[1]) if len(args) > 1 else 4,
         int(args[2]) if len(args) > 2 else 32)

@@ -1,5 +1,5 @@
 # A job: grows a cactus farm and farms it until a player stops it, for green dye and furnace fuel. Run it as
-# /antcraft bot run jobs.cactus_farm [x y z [cells [radius]]]: the farm's corner (by default where the bot stands, or
+# /antcraft bot run jobs.cactus_farm [x y z [cells [radius]]] [storage x y z]: the farm's corner (by default where the bot stands, or
 # where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, most()
 # most) and how far to look for what it needs (32 by default). A cell is 2 by 2 floor blocks with cactus on sand at two
 # opposite corners, a checkerboard, as a cactus breaks with a block beside it. Each round it cuts the cactus two or more
@@ -118,5 +118,6 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(Pos(int(args[0]), int(args[1]), int(args[2])) if len(args) > 2 else None,
         int(args[3]) if len(args) > 3 else None, int(args[4]) if len(args) > 4 else 32)

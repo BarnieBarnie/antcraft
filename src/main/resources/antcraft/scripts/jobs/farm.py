@@ -1,5 +1,5 @@
 # A job: tends a field and stores the harvest, round after round as the crops ripen. Run it as
-# /antcraft bot run jobs.farm <x1> <y1> <z1> <x2> <y2> <z2> [crop] [rounds], such as jobs.farm 10 63 10 18 63 18 carrot 0:
+# /antcraft bot run jobs.farm <x1> <y1> <z1> <x2> <y2> <z2> [crop] [rounds] [storage x y z], such as jobs.farm 10 63 10 18 63 18 carrot 0:
 # the two corners of the field's soil, crop the one to plant (a crop, seed or harvest of lib.farm.CROPS, wheat by
 # default) and rounds how often to tend it (1 by default, 0 until a round fails or the bot is stopped). Each round it
 # waters a dry field with a bucket, a source per dry patch (pour, which jobs.settle uses too), gets a hoe for the soil to
@@ -137,5 +137,6 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(Pos(int(args[0]), int(args[1]), int(args[2])), Pos(int(args[3]), int(args[4]), int(args[5])),
         args[6] if len(args) > 6 else "wheat", int(args[7]) if len(args) > 7 else 1)

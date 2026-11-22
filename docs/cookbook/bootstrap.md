@@ -7,10 +7,13 @@ An empty-handed bot gets a starting kit from what is around it: logs by hand, a 
 /antcraft bot run jobs.bootstrap 8
 ```
 
+After the radius, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 The argument is the radius it looks for trees, stone and chests in (32 by default). The job is one of the mod's default scripts, in `config/antcraft/scripts/jobs/bootstrap.py`:
 
 ```python
 import lib.bootstrap
+import lib.stock
 from lib.borrow import give_back
 
 def run(radius=32):
@@ -29,6 +32,7 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(int(args[0]) if args else 32)
 ```
 

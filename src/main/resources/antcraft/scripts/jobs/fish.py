@@ -1,4 +1,4 @@
-# A job: fishes until a player stops it, for food (fish) and loot. Run it as /antcraft bot run jobs.fish [x y z [radius]]:
+# A job: fishes until a player stops it, for food (fish) and loot. Run it as /antcraft bot run jobs.fish [x y z [radius]] [storage x y z]:
 # the water block to cast at (by default the open water fish() finds within 16 blocks, else the nearest open water
 # within radius, which it walks to and keeps in memory["fish"], #994) and how far to look for chests and water
 # (32 by default, and at most 32, #998). Each round it eats when hungry (lib.food.upkeep, which also takes fish back from the chests), fishes
@@ -135,4 +135,5 @@ try:
 except NameError:
     args = None  # imported: the importer calls run
 if args is not None:
+    args = lib.stock.storage_arg(args)  # storage x y z: take from that colony store first (#1019)
     run(Pos(int(args[0]), int(args[1]), int(args[2])) if len(args) > 2 else None, int(args[3]) if len(args) > 3 else 32)

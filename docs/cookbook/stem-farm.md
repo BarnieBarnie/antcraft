@@ -10,6 +10,8 @@ The job `jobs/stem_farm` grows a pumpkin or melon farm from a few seeds and farm
 
 The arguments are the kind, `pumpkin` or `melon`; the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started; another corner moves the farm there); the most cells it grows to (by default 24 till the farm has learnt how long its harvests take, then as many as the bot keeps up with, see [`lib.cellfarm.most`](../reference/modules/lib/cellfarm.md#mostname-growth-guess), but no more than the cells that get random ticks while the bot is at the corner, see [`lib.cellfarm.limit`](../reference/modules/lib/cellfarm.md#limitf-name-size)) and how far to look for what it needs, in blocks (default 32). The bot says `built cell 2` and `cells 2/9` as the farm grows, and `farm full` once it has all its cells.
 
+After the other arguments, `storage x y z` gives the colony store: the job takes its tools and materials from the chests within 8 blocks of `x y z` first, however far and wherever they are ([`lib.stock.STORAGE`](../reference/modules/lib/stock.md#storage)). A colony member without it uses the store its colony published ([`lib.depot.publish_store`](../reference/modules/lib/depot.md)).
+
 ## The cell
 
 A cell is 3 by 3 blocks, its floor the block under the corner's level:
