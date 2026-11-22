@@ -125,18 +125,37 @@ def behind(legs, bottom):
     return cells
 
 
+def walk(route):
+    """Walks to each point of route in turn, so no one goto has to find its way down a long staircase and through
+    tunnels (#1007). Gives result(), with at the point a leg failed at."""
+    for p in route:
+        r = goto(p)
+        if not r:
+            return result(r.reason, p)
+    return result()
+
+
+def back(route):
+    """Walks route back from its point nearest the bot (walk) towards the first. Gives walk's result()."""
+    if not route:
+        return result()
+    # ponytail: nearest in a straight line; a waypoint behind rock (a tighter spiral of stairs) may be picked over the right one
+    i = min(range(len(route)), key=lambda j: pos().distance(route[j]))
+    return walk(reversed(route[:i + 1]))
+
+
 def down(y, area, om, prior):
-    """Takes the bot from home to where it mines: the bottom of its stairs, or the end of the tunnel into the chunk it
-    mines, it got to before; else new stairs dug to y towards FACE within area, spiralling clockwise at its edge
-    (lib.dig.spiral_to). Keeps their bottom, last facing and the columns of their last two steps in om. Gives
-    result()."""
+    """Takes the bot from home to where it mines: by the waypoints of om["route"] (walk) to the bottom of its stairs, or
+    the end of the tunnel into the chunk it mines, it got to before; else new stairs dug to y towards FACE within area,
+    spiralling clockwise at its edge (lib.dig.spiral_to). Keeps their bottom, last facing, the columns of their last two
+    steps and the route down, the start of each leg and the bottom, in om. Gives result()."""
     if "bottom" in om:
-        r = goto(om["bottom"])
-        return result() if r else result(r.reason, om["bottom"])
+        return walk(om["route"])
     lib.find.WHERE = inside([area], prior)
     r = lib.dig.spiral_to(y, FACE)
     if r["ok"]:
         om["bottom"] = pos()
+        om["route"] = [start for start, _ in r["legs"][1:]] + [pos()]
         om["way"] = r["facing"]
         om["guard"] = behind(r["legs"], pos())
     return r
@@ -145,7 +164,7 @@ def down(y, area, om, prior):
 def trip(item, y, areas, om):
     """Goes down and digs the grid of each area of the claim not cleared yet (the first om["cleared"] are), tunnelling
     from each into the next, until it is nearly full (FREE) or its pickaxe would not last a branch (USES), then walks
-    home. Gives result(), with dug where the whole claim is cleared."""
+    home by its waypoints (back). Gives result(), with dug where the whole claim is cleared."""
     prior = lib.find.WHERE
     try:
         r = down(y, areas[0], om, prior)
@@ -166,6 +185,7 @@ def trip(item, y, areas, om):
         return r
     finally:
         lib.find.WHERE = prior
+        back(om.get("route", []))
         go_home()
 
 
@@ -205,7 +225,8 @@ def dig(item, area, om, prior):
 def tunnel(area, to, om, prior):
     """Digs on at the grid's level from the corridor of area, dug, into the area to beside it: from the corridor's end
     where to lies along it, else from the column farthest from the stairs, along its branch. Where the tunnel enters
-    to its grid starts: the corridor through there, square to the tunnel, with no stairs to guard. Gives result()."""
+    to its grid starts: the corridor through there, square to the tunnel, with no stairs to guard; the tunnel's start
+    and end are added to om["route"]. Gives result()."""
     d = ("east" if to[0] > area[0] else "west") if to[0] != area[0] else ("south" if to[1] > area[1] else "north")
     b = om["bottom"]
     along = across(om["way"])
@@ -223,6 +244,7 @@ def tunnel(area, to, om, prior):
     lib.find.WHERE = inside([area, to], prior, [tuple(g) for g in om["guard"]])
     r = lib.dig.branch(n, n + 1, d)
     if r["ok"]:
+        om["route"] = om["route"] + [start, pos()]
         om["bottom"] = pos()
         om["way"] = d
         om["guard"] = []
@@ -283,6 +305,8 @@ def ore_miner(item, y, area, chunks, radius):
     if om is None or om.get("home") != h or om["area"] != list(area) or om["y"] != y:
         om = {"home": h, "area": list(area), "y": y, "cleared": 0, "done": []}
         memory["ore_miner"] = om
+    if "bottom" in om and "route" not in om:
+        om["route"] = [om["bottom"]]  # a claim begun before waypoints (#1007)
     if om["cleared"] >= chunks:
         return finished(item, chunks, h)
     r = lib.bootstrap.kit(MINER, radius)

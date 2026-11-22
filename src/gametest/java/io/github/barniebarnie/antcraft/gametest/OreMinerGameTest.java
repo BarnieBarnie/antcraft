@@ -181,6 +181,65 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A claim of 3 areas, x 2 to 6, x 7 to 11 east of it and z 7 to 11 south of that: once the bot has tunnelled into the
+	 * third it is filled up, so it goes home from there, stores the dirt and walks back by its waypoints (stairs, then
+	 * each tunnel's entry) to the third, two tunnels from the stairs, digs its grid and comes home finished (#1007).
+	 */
+	// Measured: passes at tick 1673 in a class run; green before too (1681): goto found the 2-tunnel route in one go.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 3400)
+	public void aLaterTripReachesAChunkTwoTunnelsFromTheStairsAndComesHome(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 14, -1, 14)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		AntBot bot = miner(helper);
+		ScriptRun run = run(helper, bot, 3, -2, 2, 2, 6, 6);
+		boolean[] filled = {false};
+		helper.onEachTick(() -> {
+			BlockPos at = bot.isRemoved() ? BlockPos.ZERO : TestPositions.relative(helper, bot.blockPosition());
+			if (!filled[0] && at.getX() >= 7 && at.getZ() >= 7) {
+				filled[0] = true;
+				for (int i = 0, free = 0; i < bot.getInventory().getContainerSize(); i++) {
+					if (bot.getInventory().getItem(i).isEmpty() && free++ >= 2) {
+						bot.getInventory().setItem(i, new ItemStack(Items.DIRT, 64));
+					}
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(filled[0], "the bot never reached the third area");
+			ended(helper, run, bot, HOME);
+			helper.assertTrue(stored(helper, Items.DIRT) > 0, "no dirt stored");
+			helper.assertBlockPresent(Blocks.AIR, 7, -2, 7);
+			helper.assertBlockPresent(Blocks.AIR, 11, -2, 7);
+			helper.assertBlockPresent(Blocks.AIR, 11, -2, 11);
+		});
+	}
+
+	/**
+	 * jobs.ore_miner.walk to (5, 1, 6), then (5, 1, 2), bedrock, then (1, 1, 1): it fails at the second waypoint, which its
+	 * result gives as at (#1007).
+	 */
+	// Measured: passes at tick 83 in a class run (red: module 'jobs.ore_miner' has no attribute 'walk').
+	@GameTest(maxTicks = 200)
+	public void aFailedLegGivesTheWaypointItFailedAt(GameTestHelper helper) {
+		helper.setBlock(5, 1, 2, Blocks.BEDROCK);
+		helper.setBlock(5, 2, 2, Blocks.BEDROCK);
+		AntBot bot = miner(helper);
+		BlockPos a = helper.absolutePos(new BlockPos(5, 1, 6));
+		BlockPos b = helper.absolutePos(new BlockPos(5, 1, 2));
+		BlockPos c = helper.absolutePos(new BlockPos(1, 1, 1));
+		ScriptRun run = BotScripts.run(bot, ("import jobs.ore_miner\nb = Pos(%d, %d, %d)\n"
+			+ "r = jobs.ore_miner.walk([Pos(%d, %d, %d), b, Pos(%d, %d, %d)])\nprint(r[\"ok\"], r[\"at\"] == b)\n").formatted(
+			b.getX(), b.getY(), b.getZ(), a.getX(), a.getY(), a.getZ(), c.getX(), c.getY(), c.getZ()));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "the script " + run.state());
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(printed.equals(List.of("False True")), "printed " + printed);
+		});
+	}
+
+	/**
 	 * A claim of the one-column area x 2 to 4, z 2 to 6: once dug the bot is at home and says it is finished; run again,
 	 * it says so once more and stays at home.
 	 */
