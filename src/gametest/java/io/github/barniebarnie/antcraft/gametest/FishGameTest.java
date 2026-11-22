@@ -152,4 +152,42 @@ public class FishGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot.getMainHandItem().is(Items.FISHING_ROD), "the bot does not hold its rod");
 		});
 	}
+
+	/**
+	 * jobs.fish started some 27 blocks from the pool, beyond fish()'s 16, walks to it and stores its catch in the chest
+	 * beside it (#994). The wide area's ground is stone up to y 1; the pool is water at y 1 over x 20 to 22, z 20 to 22.
+	 */
+	// Measured: passes at tick 487 to 640 (red: warned fish: no_water); a bite takes up to some 380 ticks with Lure III.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1400, skyAccess = true)
+	public void theJobWalksToWaterBeyondSixteenBlocks(GameTestHelper helper) {
+		for (int x = 0; x < 24; x++) {
+			for (int z = 0; z < 24; z++) {
+				boolean water = x >= 20 && x <= 22 && z >= 20 && z <= 22;
+				helper.setBlock(x, 1, z, water ? Blocks.WATER : Blocks.STONE);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 2, 1);
+		bot.getInventory().addItem(rod(helper));
+		helper.setBlock(18, 2, 21, Blocks.CHEST);
+		BotScripts.run(bot, "import jobs.fish\njobs.fish.run()\n");
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			ChestBlockEntity chest = helper.getBlockEntity(new BlockPos(18, 2, 21), ChestBlockEntity.class);
+			helper.assertFalse(chest.isEmpty(), "the chest is empty; said " + BotScripts.log(bot, Output.Level.PRINT));
+		});
+	}
+
+	/** jobs.fish with no water within its radius warns and stops (#994). */
+	// Measured: passes at tick 7 (red: warned fish: no_water).
+	@GameTest(maxTicks = 20)
+	public void theJobWithNoWaterWarnsAndStops(GameTestHelper helper) {
+		AntBot bot = ground(helper, false);
+		bot.getInventory().addItem(rod(helper));
+		ScriptRun run = BotScripts.run(bot, "import jobs.fish\njobs.fish.run()\n");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(BotScripts.warnings(bot), List.of("fish: no water"), "warned");
+		});
+	}
 }
