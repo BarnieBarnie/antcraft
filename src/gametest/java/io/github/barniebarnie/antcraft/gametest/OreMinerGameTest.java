@@ -6,7 +6,9 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -24,6 +26,7 @@ import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * {@code jobs/ore_miner.py} (#1002; docs/cookbook/ore-miner.md). The bot's home is where it spawns, (3, 1, 6); stone is
@@ -246,6 +249,56 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.AIR, 7, -2, 7);
 			helper.assertBlockPresent(Blocks.AIR, 11, -2, 7);
 			helper.assertBlockPresent(Blocks.AIR, 11, -2, 11);
+		});
+	}
+
+	/**
+	 * aLaterTripReachesAChunkTwoTunnelsFromTheStairsAndComesHome 15 blocks deeper: home on a stone plateau at (3, 13, 6),
+	 * stairs spiralling down to y -2 in x 2 to 6, z 2 to 6. From when the bot is filled up in the third area, every block
+	 * it breaks or replaces till it is finished lies in the third area's grid (x 7 to 11, z 7 to 11, y -2 to -1): the trip
+	 * home and back down the stairs and through both tunnels breaks nothing off its route (#1013). Blocks put into air,
+	 * such as the depot's chests, are left out.
+	 */
+	// Measured: passes at tick 2243 in a class run; green from the start (2234 alone).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4500)
+	public void aLaterTripDownDeepStairsAndTwoTunnelsBreaksNothingOffItsRoute(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 14, 12, 14)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		BlockPos home = new BlockPos(3, 13, 6);
+		AntBot bot = miner(helper);
+		bot.teleportTo(bot.getX(), helper.absolutePos(home).getY(), bot.getZ());
+		bot.setHome(helper.absolutePos(home));
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_PICKAXE));
+		ScriptRun run = run(helper, bot, 3, -2, 2, 2, 6, 6);
+		Map<BlockPos, BlockState> before = new HashMap<>();
+		helper.onEachTick(() -> {
+			BlockPos at = bot.isRemoved() ? BlockPos.ZERO : TestPositions.relative(helper, bot.blockPosition());
+			if (before.isEmpty() && at.getX() >= 7 && at.getZ() >= 7) {
+				for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 23, 15, 23)) {
+					before.put(pos.immutable(), helper.getBlockState(pos));
+				}
+				for (int i = 0, free = 0; i < bot.getInventory().getContainerSize(); i++) {
+					if (bot.getInventory().getItem(i).isEmpty() && free++ >= 2) {
+						bot.getInventory().setItem(i, new ItemStack(Items.DIRT, 64));
+					}
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(!before.isEmpty(), "the bot never reached the third area");
+			ended(helper, run, bot, home);
+			helper.assertTrue(stored(helper, Items.DIRT, 13) > 0, "no dirt stored");
+			helper.assertBlockPresent(Blocks.AIR, 11, -2, 11);
+			List<String> off = before.entrySet().stream()
+				.filter(e -> !e.getValue().isAir() && !helper.getBlockState(e.getKey()).equals(e.getValue()))
+				.filter(e -> {
+					BlockPos p = e.getKey();
+					return p.getX() < 7 || p.getX() > 11 || p.getZ() < 7 || p.getZ() > 11 || p.getY() < -2 || p.getY() > -1;
+				})
+				.map(e -> e.getKey() + " " + e.getValue() + " -> " + helper.getBlockState(e.getKey()))
+				.toList();
+			helper.assertTrue(off.isEmpty(), "broke off its route: " + off);
 		});
 	}
 
@@ -700,8 +753,13 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 
 	/** How many of item the chests standing in the area at y 1 to 2 hold. */
 	private static int stored(GameTestHelper helper, Item item) {
+		return stored(helper, item, 1);
+	}
+
+	/** How many of item the chests standing in the area at y to y + 1 hold. */
+	private static int stored(GameTestHelper helper, Item item, int y) {
 		int n = 0;
-		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 7)) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, y, 0, 7, y + 1, 7)) {
 			if (helper.getBlockState(pos).is(Blocks.CHEST)) {
 				n += helper.getBlockEntity(pos.immutable(), ChestBlockEntity.class).countItem(item);
 			}
