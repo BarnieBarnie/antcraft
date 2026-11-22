@@ -5,7 +5,8 @@
 # of branches 3 blocks apart, then tunnels at that level into the next chunk of its claim and mines that, and goes home
 # to smelt what it mined and store it in depot "ore" whenever it is nearly full or its pickaxe is low; there it takes a
 # better pickaxe from a chest, storing its old one (#1004), as it also does before the first trip. Raw copper, iron and
-# gold are smelted to ingots, with fuel carried or in its chests only, else stored raw (#1008); coal, diamonds, lapis
+# gold are smelted to ingots, with fuel carried or in its chests only, else stored raw (#1008) till a later visit home
+# with fuel takes them back from its depot to smelt (#1012); coal, diamonds, lapis
 # and redstone are stored as they drop (#1005). It eats food it carries between branches (#1008). With its claim
 # cleared it goes home and says it is finished (docs/cookbook/ore-miner.md). Another script runs it with
 # run(ore, chunks, radius, y, area); imported, this runs nothing.
@@ -291,22 +292,31 @@ def fuel(n, radius):
 
 
 def unload(item, radius, took=False):
-    """Smelts the raw item the bot carries at home (lib.craft.smelt_here), as many as the fuel it carries or takes from
-    the chests smelts (fuel); with none it stores them raw and warns, once until it has fuel again (coal, diamonds,
-    lapis and redstone are stored as they drop). Then it takes a better pickaxe from the chests (better_pickaxe) and
+    """Smelts the raw item the bot carries at home (lib.craft.smelt_here), and that it stored raw in depot NAME before,
+    taken back from there, as many as the fuel it carries or takes from the chests smelts (fuel); the rest it stores raw
+    and warns, once until it has fuel for all again (#1012; coal, diamonds, lapis and redstone are stored as they drop). Then it takes a better pickaxe from the chests (better_pickaxe) and
     stores all but KEEP in depot NAME; with a better pickaxe taken, now or before the trip (took), the pickaxes it held
     before go too. Gives store's result()."""
-    n = count(item) if item.startswith("raw_") else 0
+    depot = lib.depot.chests(NAME)
+    n = 0
+    if item.startswith("raw_"):  # what it carries and what it stored raw before (#1012)
+        n = count(item) + sum([s.count for c in depot for s in container(c) or [] if matches(s, item)])
     if n:
         k = fuel(n, radius)
+        if k > count(item):
+            lib.stock.take_up_to(item, k, radius, depot)
+        k = min(k, count(item))  # ponytail: inventory room may cap it, and is then warned as want of fuel
         if k:
-            memory.pop(NO_FUEL, None)
             r = lib.craft.smelt_here(item, k)
             if not r["ok"]:
                 warn("ore miner: could not smelt", item + ":", r["reason"], r["missing"])
+        if k == n:
+            memory.pop(NO_FUEL, None)
         elif not memory.get(NO_FUEL):
             memory[NO_FUEL] = True
-            warn(f"ore miner: no fuel to smelt {item}, stored raw: put coal, charcoal, logs or planks in a chest")
+            fill = ": put coal, charcoal, logs or planks in a chest"
+            warn(f"ore miner: fuel for {k} of {n} {item}, stored the rest raw" + fill if k else
+                 f"ore miner: no fuel to smelt {item}, stored raw" + fill)
     keep = KEEP
     if better_pickaxe(item, radius) or took:
         keep = [(PICKAXES, 1)] + KEEP[1:]  # the held pickaxe counts first (#1010)

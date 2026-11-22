@@ -521,6 +521,71 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot with 2 raw iron and one oak plank, fuel for one raw iron, mines the iron ore of aDugGridEndsTheJobAtHome's
+	 * area: it smelts one of its 3 raw iron and stores the other 2 raw, warning once (#1012).
+	 */
+	// Measured: passes at tick 456 (red: Expected warnings to be [ore miner: fuel for 1 of 3 ...]: was []).
+	@GameTest(maxTicks = 900)
+	public void withFuelForOneTheRestIsStoredRawWithAWarning(GameTestHelper helper) {
+		helper.setBlock(3, -2, 2, Blocks.IRON_ORE);
+		AntBot bot = miner(helper);
+		noCoal(bot);
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 2));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS));
+		ScriptRun run = BotScripts.run(bot, source(helper, "raw_iron", 1, -2, 2, 2, 4, 6));
+		String warning = "ore miner: fuel for 1 of 3 raw_iron, stored the rest raw: put coal, charcoal, logs or planks in a chest";
+		helper.onEachTick(() -> {
+			List<String> warnings = BotScripts.warnings(bot);
+			if (!warnings.isEmpty() && !warnings.equals(List.of(warning))) {
+				helper.fail("warned " + warnings);
+			}
+		});
+		helper.succeedWhen(() -> {
+			ended(helper, run, bot);
+			helper.assertValueEqual(BotScripts.warnings(bot), List.of(warning), "warnings");
+			helper.assertValueEqual(stored(helper, Items.IRON_INGOT), 1, "iron ingots stored");
+			helper.assertValueEqual(stored(helper, Items.RAW_IRON), 2, "raw iron stored");
+		});
+	}
+
+	/**
+	 * Raw iron stored for want of fuel (as withNoFuelTheRawIronIsStoredWithAWarning), then 2 coal put in a chest near home
+	 * and the bot given a new home (4, 1, 6), so it claims afresh: after that trip it takes the raw iron back from its
+	 * depot and smelts it, the depot holding ingots and no raw iron, with no second warning (#1012).
+	 */
+	// Measured: passes at tick 763 (red: no iron ingots stored).
+	@GameTest(maxTicks = 1500)
+	public void rawOreStoredForWantOfFuelIsSmeltedOnceThereIsFuel(GameTestHelper helper) {
+		helper.setBlock(3, -2, 2, Blocks.IRON_ORE);
+		AntBot bot = miner(helper);
+		noCoal(bot);
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		ScriptRun first = BotScripts.run(bot, source(helper, "raw_iron", 1, -2, 2, 2, 4, 6));
+		BlockPos moved = new BlockPos(4, 1, 6);
+		ScriptRun[] second = {null};
+		boolean[] raw = {false};
+		helper.onEachTick(() -> {
+			if (second[0] == null && first.state() == ScriptRun.State.FINISHED) {
+				raw[0] = stored(helper, Items.RAW_IRON) >= 1;
+				chest(helper, new ItemStack(Items.COAL, 2));
+				bot.setHome(helper.absolutePos(moved));
+				second[0] = BotScripts.run(bot, source(helper, 1, -2, 2, 2, 4, 6));
+			}
+			if (BotScripts.warnings(bot).size() > 1) {
+				helper.fail("warned " + BotScripts.warnings(bot));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(second[0] != null, "the first run " + first.state());
+			helper.assertTrue(raw[0], "the first run stored no raw iron");
+			ended(helper, second[0], bot, moved);
+			helper.assertTrue(stored(helper, Items.IRON_INGOT) >= 1, "no iron ingots stored");
+			helper.assertValueEqual(stored(helper, Items.RAW_IRON), 0, "raw iron stored");
+		});
+	}
+
+	/**
 	 * Has a bot holding pickaxe mine ore with block at (3, -2, 2) in the one-column area of aDugGridEndsTheJobAtHome;
 	 * succeeds once it went down holding a pickaxe of item down and is home with at least n of stored in its depot and,
 	 * for a raw ore, none of it stored. A bot that smelts carries a furnace, as the area gives too little cobblestone.
