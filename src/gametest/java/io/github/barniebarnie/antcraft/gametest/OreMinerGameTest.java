@@ -319,7 +319,7 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * jobs.ore_miner.walk to (5, 1, 6), then (5, 1, 2), bedrock, then (1, 1, 1): it fails at the second waypoint, which its
-	 * result gives as at (#1007).
+	 * result gives as at, with reached 1, the points it got to (#1007, #1016).
 	 */
 	// Measured: passes at tick 83 in a class run (red: module 'jobs.ore_miner' has no attribute 'walk').
 	@GameTest(maxTicks = 200)
@@ -331,13 +331,51 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 		BlockPos b = helper.absolutePos(new BlockPos(5, 1, 2));
 		BlockPos c = helper.absolutePos(new BlockPos(1, 1, 1));
 		ScriptRun run = BotScripts.run(bot, ("import jobs.ore_miner\nb = Pos(%d, %d, %d)\n"
-			+ "r = jobs.ore_miner.walk([Pos(%d, %d, %d), b, Pos(%d, %d, %d)])\nprint(r[\"ok\"], r[\"at\"] == b)\n").formatted(
+			+ "r = jobs.ore_miner.walk([Pos(%d, %d, %d), b, Pos(%d, %d, %d)])\nprint(r[\"ok\"], r[\"at\"] == b, r[\"reached\"])\n").formatted(
 			b.getX(), b.getY(), b.getZ(), a.getX(), a.getY(), a.getZ(), c.getX(), c.getY(), c.getZ()));
 		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "the script " + run.state());
 			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
-			helper.assertTrue(printed.equals(List.of("False True")), "printed " + printed);
+			helper.assertTrue(printed.equals(List.of("False True 1")), "printed " + printed);
+		});
+	}
+
+	/**
+	 * jobs.ore_miner.back by the route (1, -2, 1), (1, -2, 6), (6, -2, 6) of a tunnel in the stone, from (3, -2, 1), where
+	 * the tunnel goes on from (6, -2, 6) by (6, -2, 1), as a branch from the last waypoint: the bot walks it back from the
+	 * last waypoint, though the first lies nearer, behind one block of stone at (2, -2, 1), and breaks nothing (#1016).
+	 */
+	// Measured: passes at tick 95 in a class run (red: broke off its route: the stone at (2, -2, 1) and (2, -1, 1)).
+	@GameTest(maxTicks = 200)
+	public void backWalksFromTheLastWaypointNotTheNearest(GameTestHelper helper) {
+		for (int[] c : new int[][] {{1, 1, 1, 6}, {1, 6, 6, 6}, {6, 1, 6, 6}, {3, 1, 6, 1}}) {
+			for (BlockPos pos : BlockPos.betweenClosed(c[0], -2, c[1], c[2], -1, c[3])) {
+				helper.setBlock(pos, Blocks.AIR);
+			}
+		}
+		Map<BlockPos, BlockState> before = new HashMap<>();
+		for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 7, 7, 7)) {
+			before.put(pos.immutable(), helper.getBlockState(pos));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, -2, 1);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_PICKAXE));
+		BlockPos a = helper.absolutePos(new BlockPos(1, -2, 1));
+		BlockPos b = helper.absolutePos(new BlockPos(1, -2, 6));
+		BlockPos c = helper.absolutePos(new BlockPos(6, -2, 6));
+		ScriptRun run = BotScripts.run(bot, "import jobs.ore_miner\nprint(jobs.ore_miner.back([Pos(%d, %d, %d), Pos(%d, %d, %d), Pos(%d, %d, %d)])[\"ok\"])\n"
+			.formatted(a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ(), c.getX(), c.getY(), c.getZ()));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "the script " + run.state());
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(printed.equals(List.of("True")), "printed " + printed);
+			List<String> broken = before.entrySet().stream()
+				.filter(e -> !helper.getBlockState(e.getKey()).equals(e.getValue()))
+				.map(e -> e.getKey() + " " + e.getValue() + " -> " + helper.getBlockState(e.getKey()))
+				.toList();
+			helper.assertTrue(broken.isEmpty(), "broke off its route: " + broken);
+			helper.assertTrue(bot.blockPosition().equals(a), "the bot is at " + TestPositions.relative(helper, bot.blockPosition()));
 		});
 	}
 

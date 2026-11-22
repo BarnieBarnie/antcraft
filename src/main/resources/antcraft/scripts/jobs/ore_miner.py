@@ -119,21 +119,20 @@ def where(area, om, prior):
 
 def walk(route):
     """Walks to each point of route in turn, so no one goto has to find its way down a long staircase and through
-    tunnels (#1007). Gives result(), with at the point a leg failed at."""
-    for p in route:
+    tunnels (#1007). Gives result(), with at the point a leg failed at and reached the number of points it got to."""
+    for i, p in enumerate(route):
         r = goto(p)
         if not r:
-            return result(r.reason, p)
+            r = result(r.reason, p)
+            r["reached"] = i
+            return r
     return result()
 
 
 def back(route):
-    """Walks route back from its point nearest the bot (walk) towards the first. Gives walk's result()."""
-    if not route:
-        return result()
-    # ponytail: nearest in a straight line; a waypoint behind rock (a tighter spiral of stairs) may be picked over the right one
-    i = min(range(len(route)), key=lambda j: pos().distance(route[j]))
-    return walk(reversed(route[:i + 1]))
+    """Walks route, the waypoints the bot reached, back from the last towards the first (walk), not from the one nearest
+    it, which in a tight spiral of stairs may lie on a higher leg (#1016). Gives walk's result()."""
+    return walk(list(reversed(route)))
 
 
 def down(y, area, om, prior):
@@ -159,8 +158,10 @@ def trip(item, y, areas, om):
     chunks (#1011), until it is nearly full (FREE) or its pickaxe would not last a branch (USES), then walks
     home by its waypoints (back). Gives result(), with dug where the whole claim is cleared."""
     prior = lib.find.WHERE
+    reached = 0  # how many waypoints of om["route"] the bot got to, which back walks (#1016)
     try:
         r = down(y, areas[0], om, prior)
+        reached = r.get("reached", len(om.get("route", [])))
         if not r["ok"]:
             return r
         while om["cleared"] < len(areas):
@@ -170,6 +171,7 @@ def trip(item, y, areas, om):
                 r = tunnel(areas[k - 1], areas[k], om, prior)
                 if not r["ok"]:
                     return r
+                reached = len(om["route"])
             r = dig(item, areas[k], om, prior)
             if not r["ok"] or "dug" not in r:
                 return r
@@ -179,7 +181,7 @@ def trip(item, y, areas, om):
         return r
     finally:
         lib.find.WHERE = prior
-        back(om.get("route", []))
+        back(om.get("route", [])[:reached])
         go_home()
 
 
