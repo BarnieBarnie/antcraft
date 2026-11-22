@@ -14,13 +14,19 @@ from lib.result import result
 # Where the colony store is, a Pos, or None: a job's storage argument sets it (storage_arg), as lib.find.WHERE is set
 # (#1019). Unset, a colony member uses the store its colony published (colony_memory["storage"], lib.depot.publish_store).
 STORAGE = None
+# How long store() reuses its scan around STORAGE, in ticks: a chest placed or broken there is seen this soon (#1027).
+STORE_TICKS = 100
+_scanned = [None, 0, []]  # the STORAGE, game_time() and chests of store()'s last scan
 
 
 def store():
     """The chests of the colony store: where STORAGE is set, the chests, trapped chests and barrels within 8 blocks of
-    it; else those of the depot colony_memory["storage"] names; else none."""
+    it, scanned at most once each STORE_TICKS while STORAGE stays; else those of the depot colony_memory["storage"]
+    names; else none."""
     if STORAGE is not None:
-        return scan(CHESTS, radius=8, around=STORAGE)
+        if _scanned[0] != STORAGE or game_time() - _scanned[1] >= STORE_TICKS:
+            _scanned[0], _scanned[1], _scanned[2] = STORAGE, game_time(), scan(CHESTS, radius=8, around=STORAGE)
+        return list(_scanned[2])
     d = colony_memory.get("depots", {}).get(colony_memory.get("storage")) if colony_memory is not None else None
     return [c[1] for c in d["chests"]] if d else []
 
@@ -102,8 +108,7 @@ def fetch_all(more, chests):
 
 def take_from(chest, item, n):
     """Takes up to n of item from chest: borrowed, but from the colony's core plainly, and from the colony store (store)
-    plainly but tools and weapons (lib.storage.KEEP_KINDS), which it lends.
-    ponytail: store() again each take, a scan of 8 blocks where STORAGE is set."""
+    plainly but tools and weapons (lib.storage.KEEP_KINDS), which it lends."""
     import lib.storage  # here, as lib.storage imports this module
     c = colony()
     if (c and chest == c["core"]) or (chest in store() and not matches(item, lib.storage.KEEP_KINDS)):

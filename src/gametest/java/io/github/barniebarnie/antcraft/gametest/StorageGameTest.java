@@ -96,6 +96,65 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A store given by position (lib.stock.STORAGE): a deposit of three items scans around it once, not once a chest call
+	 * (#1027). lib.stock.scan is wrapped to count the scans with around.
+	 */
+	// Measured: passes at tick 12 (red before #1027: printed True 2, chests() and deposit each scanned).
+	@GameTest(maxTicks = 30)
+	public void depositIntoAStoreGivenByPositionScansAroundItOnce(GameTestHelper helper) {
+		Container store = chest(helper, 6, 1, 6);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 10));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 3));
+		bot.getInventory().addItem(new ItemStack(Items.SAND, 2));
+		ScriptRun job = run(helper, bot, """
+			import lib.stock
+			import lib.storage
+			scans = [0]
+			def counted(what, radius=16, limit=64, around=None):
+			    if around is not None:
+			        scans[0] += 1
+			    return scan(what, radius=radius, limit=limit, around=around)
+			lib.stock.scan = counted
+			lib.stock.STORAGE = %s
+			r = lib.storage.deposit()
+			print(r["ok"], scans[0])
+			""".formatted(printed(helper, 6, 1, 6)));
+		helper.succeedWhen(() -> {
+			finished(helper, job, bot, List.of("True 1"));
+			helper.assertTrue(store.countItem(Items.COBBLESTONE) == 10, "cobblestone in the store: " + store.countItem(Items.COBBLESTONE));
+		});
+	}
+
+	/**
+	 * A chest set beside the store given by STORAGE after the bot listed it is not seen while the scan is cached, but is
+	 * once the cache has expired (lib.stock.STORE_TICKS, #1027).
+	 */
+	// Measured: passes at tick 106.
+	@GameTest(maxTicks = 220)
+	public void aChestAddedToTheStoreIsFoundOnceTheCacheExpires(GameTestHelper helper) {
+		chest(helper, 6, 1, 6);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		ScriptRun job = run(helper, bot, """
+			import lib.stock
+			lib.stock.STORAGE = %s
+			print(len(lib.stock.store()))
+			wait(5)
+			print(len(lib.stock.store()))
+			wait(lib.stock.STORE_TICKS)
+			print(len(lib.stock.store()))
+			""".formatted(printed(helper, 6, 1, 6)));
+		boolean[] added = {false};
+		helper.onEachTick(() -> {
+			if (!added[0] && !BotScripts.log(bot, Output.Level.PRINT).isEmpty()) {
+				added[0] = true;
+				chest(helper, 6, 1, 4);
+			}
+		});
+		helper.succeedWhen(() -> finished(helper, job, bot, List.of("1", "1", "2")));
+	}
+
 	/** The one chest is full of stone: deposit keeps the dirt and names it in missing. */
 	// Measured: passes at tick 1 (12 before room let deposit skip the full chest, #584).
 	@GameTest(maxTicks = 20)

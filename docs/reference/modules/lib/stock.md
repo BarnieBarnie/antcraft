@@ -12,7 +12,7 @@ Where the colony store is: a [`Pos`](../../types/pos.md), or `None` (the default
 
 ## `store()`
 
-The chests of the colony store: where `STORAGE` is set, the chests, trapped chests and barrels within 8 blocks of it (a scan); else the chests of the published depot `colony_memory["storage"]` names; else none, as for a bot in no colony without `STORAGE`.
+The chests of the colony store: where `STORAGE` is set, the chests, trapped chests and barrels within 8 blocks of it (a scan, which it reuses for `STORE_TICKS` ticks, 100, while `STORAGE` stays, so a job step that lists the store at each chest call scans once; a chest placed or broken there is seen once that has run out, #1027); else the chests of the published depot `colony_memory["storage"]` names; else none, as for a bot in no colony without `STORAGE`.
 
 - **Returns** a list of [`Pos`](../../types/pos.md).
 - **Pauses** no.
