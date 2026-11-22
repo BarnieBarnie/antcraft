@@ -16,17 +16,20 @@ CHEST = "minecraft:chest"
 OTHER = "other"
 
 
-def depot(name, origin=None, facing="east", categories=None):
+def depot(name, origin=None, facing="east", categories=None, width=None):
     """The depot name: memory["depots"][name], made the first time with its row of chests starting at origin and going
     towards facing ("north", "south", "east" or "west"), and categories, a dict of category name to a list of item ids
-    or selectors. Given categories replace those of a depot made before; its chests are kept."""
+    or selectors. With width, the row wraps after width chests into a grid (slot, #1021). Given categories or width
+    replace those of a depot made before; its chests are kept."""
     depots = memory.setdefault("depots", {})
     if name not in depots:
         depots[name] = {"origin": Pos(origin), "facing": facing, "categories": {}, "chests": []}
     d = depots[name]
     if categories is not None:
         d["categories"] = categories
-    if colony_memory is not None and (categories is not None or "published" not in d):
+    if width is not None:
+        d["width"] = width
+    if colony_memory is not None and (categories is not None or width is not None or "published" not in d):
         publish(name, d)
     return d
 
@@ -39,10 +42,13 @@ def publish(name, d):
         return
     if "published" not in d:
         d["published"] = colony()["me"] + "/" + name
-    colony_memory.setdefault("depots", {})[d["published"]] = {
+    entry = {
         "origin": d["origin"], "facing": d["facing"], "categories": dict(d["categories"]),
         "chests": [list(c) for c in d["chests"]], "bot": d["published"].split("/")[0], "name": name,
         "kind": d.get("kind", "source")}
+    if "width" in d:
+        entry["width"] = d["width"]
+    colony_memory.setdefault("depots", {})[d["published"]] = entry
 
 
 def publish_store(name):
@@ -63,6 +69,19 @@ def published(kind=None):
     if colony_memory is None:
         return []
     return [p for p in colony_memory.get("depots", {}).values() if kind is None or p["kind"] == kind]
+
+
+def slot(origin, facing, width, n):
+    """Slot n (from 0) of a depot at origin towards facing: without width, n blocks along facing; with it, a grid of rows
+    of width chests, row n // width two blocks to the right of facing per row (east's right is south), a walkway of one
+    block between rows, so every chest has a free side (#1021)."""
+    step = FACING[facing]
+    row = 0
+    if width:
+        row = n // width
+        n = n % width
+    # Right of facing: (x, z) turned clockwise seen from above, (-z, x).
+    return Pos(origin) + (step[0] * n - 2 * row * step[2], 0, step[2] * n + 2 * row * step[0])
 
 
 def chests(name, category=None):
@@ -154,13 +173,12 @@ def add_chest(name, cat, radius=32):
     chest got ends the backoff (#787). Gives result(): ok with at, the chest, or the reason getting or placing it failed
     with."""
     d = depot(name)
-    step = FACING[d["facing"]]
     # ponytail: at most SKIPS slots skipped a call, so a wall along the row ends it with blocked, not a walk down it.
     found = False
     start = d.get("next", len(d["chests"]))
     for _ in range(SKIPS + 1):
         n = d.get("next", len(d["chests"]))
-        p = d["origin"] + (step[0] * n, 0, step[2] * n)
+        p = slot(d["origin"], d["facing"], d.get("width"), n)
         b = block(p)
         if b is not None and b.id == CHEST:
             if all([category(name, s.item) == cat for s in container(p)]):

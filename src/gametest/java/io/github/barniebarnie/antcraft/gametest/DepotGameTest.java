@@ -9,10 +9,14 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
@@ -321,7 +325,7 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A depot made in a colony is published to colony_memory["depots"] (#1018): bot B reads bot A's depot there, first
 	 * without chests, then, after A stored logs and sticks and made it the colony store, with both chests (add_chest keeps
-	 * the entry current), as kind "store" and colony_memory["storage"].
+	 * the entry current), as kind "store" and colony_memory["storage"]. A width given later is published too (#1021).
 	 */
 	// Measured: passes at tick 5 in a class run.
 	@GameTest(maxTicks = 20)
@@ -337,6 +341,7 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		a.getInventory().addItem(new ItemStack(Items.STICK, 4));
 		a.getInventory().addItem(new ItemStack(Items.CHEST, 2));
 		ScriptRun ja = run(helper, a, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+			lib.depot.depot("wood", width=8)
 			colony_memory["step"] = 1
 			while colony_memory.get("seen") != 1:
 			    wait(1)
@@ -349,7 +354,7 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 			while colony_memory.get("step") != 1:
 			    wait(1)
 			p = lib.depot.published()
-			print(len(p), p[0]["bot"] == ME, p[0]["name"], p[0]["kind"], p[0]["origin"] == ORIGIN, p[0]["facing"], len(p[0]["chests"]))
+			print(len(p), p[0]["bot"] == ME, p[0]["name"], p[0]["kind"], p[0]["origin"] == ORIGIN, p[0]["facing"], len(p[0]["chests"]), p[0].get("width"))
 			colony_memory["seen"] = 1
 			while colony_memory.get("step") != 2:
 			    wait(1)
@@ -359,15 +364,62 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 			""".replace("ME", "'" + a.getStringUUID() + "'").replace("ORIGIN", printed(helper, 1, 1, 1)));
 		helper.succeedWhen(() -> {
 			finished(helper, ja, a, List.of());
-			finished(helper, jb, b, List.of("1 True wood source True east 0",
+			finished(helper, jb, b, List.of("1 True wood source True east 0 8",
 				"1 0 True ['apples', 'logs', 'saplings', 'sticks']", "['logs', 'sticks'] True True"));
+		});
+	}
+
+	/**
+	 * A depot of width 8 from (1, 1, 1) east and nine kinds carried, a category each, with nine chests: store places
+	 * eight chests at (1..8, 1, 1) and the ninth at the start of the second row, (1, 1, 3), two blocks to the right of
+	 * east with a walkway between (#1021), and the bot reaches every chest to fill it.
+	 */
+	// Measured: passes at tick 35 in a class run (red: depot() takes from 1 to 4 positional arguments).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 70)
+	public void aDepotOfWidthEightStartsASecondRowAtItsNinthChest(GameTestHelper helper) {
+		List<Item> kinds = List.of(Items.DIRT, Items.COBBLESTONE, Items.SAND, Items.GRAVEL, Items.STICK, Items.OAK_LOG,
+			Items.OAK_SAPLING, Items.APPLE, Items.WHEAT_SEEDS);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		StringBuilder cats = new StringBuilder();
+		for (Item kind : kinds) {
+			bot.getInventory().addItem(new ItemStack(kind, 3));
+			String id = BuiltInRegistries.ITEM.getKey(kind).toString();
+			cats.append('"').append(id).append("\": [\"").append(id).append("\"], ");
+		}
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 9));
+		ScriptRun job = run(helper, bot, """
+			import lib.depot
+			lib.depot.depot("grid", %s, "east", {%s}, 8)
+			r = lib.depot.store("grid")
+			print(r["ok"], len(lib.depot.chests("grid")), lib.depot.chests("grid")[8] == %s)
+			""".formatted(printed(helper, 1, 1, 1), cats, printed(helper, 1, 1, 3)));
+		helper.succeedWhen(() -> {
+			finished(helper, job, bot, List.of("True 9 True"));
+			helper.assertBlockNotPresent(Blocks.CHEST, 9, 1, 1);
+			List<BlockPos> slots = new ArrayList<>();
+			for (int x = 1; x <= 8; x++) {
+				slots.add(new BlockPos(x, 1, 1));
+			}
+			slots.add(new BlockPos(1, 1, 3));
+			Set<Item> stored = new HashSet<>();
+			for (BlockPos slot : slots) {
+				Container c = chest(helper, slot);
+				Item kind = kinds.stream().filter(k -> c.countItem(k) == 3).findFirst().orElse(null);
+				helper.assertTrue(kind != null, "chest " + slot + " holds none of the kinds");
+				stored.add(kind);
+			}
+			helper.assertTrue(stored.size() == 9, "stored " + stored);
 		});
 	}
 
 	/** The chest at (x, 1, 1). */
 	private static Container chest(GameTestHelper helper, int x) {
-		helper.assertBlockPresent(Blocks.CHEST, x, 1, 1);
-		return (Container) helper.getLevel().getBlockEntity(helper.absolutePos(new BlockPos(x, 1, 1)));
+		return chest(helper, new BlockPos(x, 1, 1));
+	}
+
+	private static Container chest(GameTestHelper helper, BlockPos pos) {
+		helper.assertBlockPresent(Blocks.CHEST, pos);
+		return (Container) helper.getLevel().getBlockEntity(helper.absolutePos(pos));
 	}
 
 	private static ScriptRun run(GameTestHelper helper, AntBot bot, String source) {
