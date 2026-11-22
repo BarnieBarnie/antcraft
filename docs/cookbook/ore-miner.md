@@ -22,7 +22,10 @@ The bot starts with the miner's kit of `jobs.strip_mine`, a stone pickaxe, a cra
 | next chunk | with every branch of a chunk dug, it tunnels on at the same level into the next chunk of its claim (below) and digs that one's grid from a corridor through the tunnel's end |
 | home | when it has fewer than 3 empty slots, when its pickaxe would not last another branch, or when its claim is mined out, it walks back up the stairs and home |
 | smelt | it smelts the ore it carries with [`lib.craft.smelt_here`](../reference/modules/lib/craft.md), in the furnace it carries or one it crafts from the cobblestone it dug, burning coal; where it carries too little coal (one smelts 8), it gets more with [`lib.get`](../reference/modules/lib/get.md), from its chests first |
-| store | all it carries goes into its depot (below) but its pickaxe, crafting table, furnace and torches |
+| better pickaxe | where a chest within the radius, its depot's or any other, holds a better pickaxe than its own (below), it takes that one and holds it |
+| store | all it carries goes into its depot (below) but its pickaxe, crafting table, furnace and torches; after taking a better pickaxe, its old ones go too |
+
+On each trip home it looks for a better pickaxe with [`lib.enchant.best_pickaxe`](../reference/modules/lib/enchant.md): a higher tier first, then better enchantments (Fortune counts most, then Efficiency and Mending, then Unbreaking), then more uses left. A pickaxe below the tier the ore needs, such as a golden one for iron, is never taken, nor one no better than its own. So an owner, or another bot, that puts a Fortune III pickaxe in one of its chests has it mining with that one from its next trip; it takes only that pickaxe, leaving the other ones in the chest, and its old pickaxe goes into the depot.
 
 Branches 3 blocks apart leave no block of the level unseen: each branch's walls are the blocks beside it, so the blocks between two branches are in the wall of one or the other. The columns of the last two steps of the stairs are left, as a branch through them would dig out those steps.
 
@@ -48,6 +51,7 @@ The bot keeps what it brings home in a [`lib.depot`](../reference/modules/lib/de
 |---|---|
 | `ingots` | `#c:ingots`: what it smelted |
 | `ores` | `#c:raw_materials` and `#c:ores`: raw items it could not smelt, ore blocks |
+| `pickaxes` | `#minecraft:pickaxes`: the pickaxes it held before taking a better one |
 | `other` | the rest: cobblestone, coal, and whatever else it dug |
 
 A chest comes from [`lib.get`](../reference/modules/lib/get.md): carried, from a chest within the radius, or crafted from planks or logs.

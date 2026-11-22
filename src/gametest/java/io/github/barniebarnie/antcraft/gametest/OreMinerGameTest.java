@@ -10,11 +10,15 @@ import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
@@ -196,6 +200,64 @@ public class OreMinerGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.AIR, 4, -2, 3);
 			helper.assertBlockPresent(Blocks.AIR, 3, -2, 6);
 		});
+	}
+
+	/**
+	 * A Fortune III iron pickaxe in a chest at (0, 1, 4), near home: after its trip, in the one-column area of
+	 * aDugGridEndsTheJobAtHome, the bot holds it and its old stone pickaxe is in its depot.
+	 */
+	// Measured: passes at tick 214 (red: the bot holds 1 minecraft:stone_pickaxe).
+	@GameTest(maxTicks = 450)
+	public void aBetterPickaxeInAHomeChestIsHeldAfterTheTrip(GameTestHelper helper) {
+		ItemStack fortune = new ItemStack(Items.IRON_PICKAXE);
+		enchant(helper, fortune, Enchantments.FORTUNE, 3);
+		ChestBlockEntity chest = chest(helper, fortune);
+		AntBot bot = miner(helper);
+		ScriptRun run = run(helper, bot, 2, 2, 4, 6);
+		helper.succeedWhen(() -> {
+			ended(helper, run, bot);
+			ItemStack hand = bot.getMainHandItem();
+			helper.assertTrue(hand.is(Items.IRON_PICKAXE) && hand.isEnchanted(), "the bot holds " + hand);
+			helper.assertValueEqual(chest.countItem(Items.IRON_PICKAXE), 0, "iron pickaxes left in the chest");
+			helper.assertValueEqual(stored(helper, Items.STONE_PICKAXE), 1, "stone pickaxes stored");
+		});
+	}
+
+	/**
+	 * A worn plain stone pickaxe and a Fortune III golden one, below the stone that iron needs, in a chest near home:
+	 * both are left there and the bot keeps its own stone pickaxe.
+	 */
+	// Measured: passes at tick 214 (green before #1004 too, as nothing took a pickaxe from a chest).
+	@GameTest(maxTicks = 450)
+	public void aWorsePickaxeInAHomeChestIsLeftThere(GameTestHelper helper) {
+		ItemStack worn = new ItemStack(Items.STONE_PICKAXE);
+		worn.setDamageValue(120);
+		ItemStack golden = new ItemStack(Items.GOLDEN_PICKAXE);
+		enchant(helper, golden, Enchantments.FORTUNE, 3);
+		ChestBlockEntity chest = chest(helper, worn, golden);
+		AntBot bot = miner(helper);
+		ScriptRun run = run(helper, bot, 2, 2, 4, 6);
+		helper.succeedWhen(() -> {
+			ended(helper, run, bot);
+			ItemStack hand = bot.getMainHandItem();
+			helper.assertTrue(hand.is(Items.STONE_PICKAXE) && hand.getDamageValue() < 120, "the bot holds " + hand);
+			helper.assertValueEqual(chest.countItem(Items.STONE_PICKAXE), 1, "stone pickaxes left in the chest");
+			helper.assertValueEqual(chest.countItem(Items.GOLDEN_PICKAXE), 1, "golden pickaxes left in the chest");
+		});
+	}
+
+	/** A chest at (0, 1, 4), away from the stairs and the depot's row, holding stacks. */
+	private static ChestBlockEntity chest(GameTestHelper helper, ItemStack... stacks) {
+		helper.setBlock(0, 1, 4, Blocks.CHEST);
+		ChestBlockEntity chest = helper.getBlockEntity(new BlockPos(0, 1, 4), ChestBlockEntity.class);
+		for (int i = 0; i < stacks.length; i++) {
+			chest.setItem(i, stacks[i]);
+		}
+		return chest;
+	}
+
+	private static void enchant(GameTestHelper helper, ItemStack stack, ResourceKey<Enchantment> key, int level) {
+		stack.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(key), level);
 	}
 
 	private static String home(GameTestHelper helper, BlockPos home) {

@@ -3,7 +3,8 @@
 # claims, 9, in a spiral out from the home chunk (#1003), radius how far it looks for chests and the kit, 32. It digs
 # stairs from home down to lib.dig.best_y(ore), spiralling within the home chunk, branch-mines the chunk there in a grid
 # of branches 3 blocks apart, then tunnels at that level into the next chunk of its claim and mines that, and goes home
-# to smelt what it mined and store it in depot "ore" whenever it is nearly full or its pickaxe is low. With its claim
+# to smelt what it mined and store it in depot "ore" whenever it is nearly full or its pickaxe is low; there it takes a
+# better pickaxe from a chest, storing its old one (#1004). With its claim
 # cleared it goes home and says it is finished (docs/cookbook/ore-miner.md). Another script runs it with
 # run(ore, chunks, radius, y, area); imported, this runs nothing.
 #
@@ -14,20 +15,25 @@ import lib.bootstrap
 import lib.craft
 import lib.depot
 import lib.dig
+import lib.enchant
 import lib.find
 import lib.food
 import lib.get
+import lib.stock
 from jobs.strip_mine import MINER, USES, tier
 from lib.borrow import borrowed, give_back
 from lib.dig import FACING, turn
 from lib.home import go_home
+from lib.tools import rank
 from lib.result import result
 
 NAME = "ore"  # the depot, memory["depots"]["ore"]
-CATEGORIES = {"ingots": ["#c:ingots"], "ores": ["#c:raw_materials", "#c:ores"]}
+PICKAXES = "#minecraft:pickaxes"
+# pickaxes: the old one after a better one from a chest (#1004); tools are never stored as other (lib.storage.KEEP_KINDS).
+CATEGORIES = {"ingots": ["#c:ingots"], "ores": ["#c:raw_materials", "#c:ores"], "pickaxes": [PICKAXES]}
 # What store leaves the bot: its pickaxe, the crafting table to make the next with and the furnace it smelts in; torches
 # are kept as lib.storage.KEEP_KINDS.
-KEEP = ["#minecraft:pickaxes", "minecraft:crafting_table", "minecraft:furnace"]
+KEEP = [PICKAXES, "minecraft:crafting_table", "minecraft:furnace"]
 FREE = 3  # empty slots below which it goes home: a branch fills one with cobblestone, one with ore and one with coal
 SPACING = 3  # blocks between branches, so their walls uncover every block of the level
 LENGTH = 16  # the longest branch: across a chunk
@@ -228,9 +234,26 @@ def tunnel(area, to, om, prior):
     return r
 
 
+def better_pickaxe(item, radius):
+    """Holds the best pickaxe of the tier item needs or above (lib.enchant.best_pickaxe) of the chests within radius,
+    taking only that Stack from a chest (take, #997), where it beats the bot's best. Gives whether it took one."""
+    need = tier(item)
+    took = False
+    for chest in lib.stock.where(PICKAXES, radius):
+        mine = lib.enchant.best_pickaxe(inventory(), need)
+        there = lib.enchant.best_pickaxe(container(chest) or [], need)
+        if there is not None and (mine is None or rank(there) < rank(mine)
+                                  or (rank(there) == rank(mine) and lib.enchant.better(there, mine, lib.enchant.PICKAXE))):
+            took = bool(take(chest, there)) or took
+    if took:
+        equip(lib.enchant.best_pickaxe(inventory(), need))
+    return took
+
+
 def unload(item, radius):
     """Smelts the item the bot carries at home (lib.craft.smelt_here), with coal it gets (lib.get) where it carries too
-    little, then stores all but KEEP in depot NAME. Gives store's result()."""
+    little, takes a better pickaxe from the chests (better_pickaxe), then stores all but KEEP in depot NAME; with a
+    better pickaxe taken, the pickaxes it held before go too. Gives store's result()."""
     n = count(item)
     if n:
         fuel = -(-n // SMELTS)
@@ -239,7 +262,10 @@ def unload(item, radius):
         r = lib.craft.smelt_here(item, n)
         if not r["ok"]:
             warn("ore miner: could not smelt", item + ":", r["reason"], r["missing"])
-    s = lib.depot.store(NAME, KEEP, radius)
+    keep = KEEP
+    if better_pickaxe(item, radius):
+        keep = [(held().item, 1)] + KEEP[1:]  # the held pickaxe: put takes from the hand last
+    s = lib.depot.store(NAME, keep, radius)
     if not s["ok"]:
         warn("ore miner: no chest has room for", sorted(s["missing"].keys()), "and none to get:", s["reason"])
     return s
