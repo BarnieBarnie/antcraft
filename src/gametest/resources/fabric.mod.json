@@ -49,6 +49,7 @@
 			"io.github.barniebarnie.antcraft.gametest.BerryFarmGameTest",
 			"io.github.barniebarnie.antcraft.gametest.KelpFarmGameTest",
 			"io.github.barniebarnie.antcraft.gametest.FishGameTest",
+			"io.github.barniebarnie.antcraft.gametest.OreMinerGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ForesterGameTest",
 			"io.github.barniebarnie.antcraft.gametest.SettleGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ToolsGameTest",

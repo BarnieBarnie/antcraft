@@ -113,6 +113,7 @@ nav = [
     "cookbook/guard.md",
     "cookbook/ranch.md",
     "cookbook/fish.md",
+    "cookbook/ore-miner.md",
   ] },
   { "Development" = ["development/index.md"] },
   { "Design" = ["design/index.md", "design/library.md"] },
