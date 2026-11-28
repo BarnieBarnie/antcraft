@@ -22,12 +22,19 @@ from lib.stock import take_up_to
 
 
 def farm_spots():
-    """The soil blocks of every farm in the colony, in rows back and forth (lib.farm.rows)."""
+    """The soil blocks of every farm in the colony, in rows back and forth (lib.farm.rows). Keeps each farm's floor, its
+    soil and the water among it, from the bot's walks (keep_blocks, as lib.cellfarm keeps a cell's, #1039): one box from
+    its lowest to its highest work spot."""
     spots = []
+    kept = []
     for b in (colony_memory or {}).get("buildings", []):
         plan = blueprint(b["blueprint"], b["at"], b.get("turn", 0), b.get("mirror", False))
-        if plan is not None and plan["role"] == "farm":
-            spots.extend(plan["work_spots"])
+        if plan is not None and plan["role"] == "farm" and plan["work_spots"]:
+            s = plan["work_spots"]
+            spots.extend(s)
+            kept.append((Pos(min([p.x for p in s]), min([p.y for p in s]), min([p.z for p in s])),
+                         Pos(max([p.x for p in s]), max([p.y for p in s]), max([p.z for p in s]))))
+    keep_blocks(kept)
     return rows(spots)
 
 

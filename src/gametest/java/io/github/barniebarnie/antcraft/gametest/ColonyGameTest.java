@@ -1075,6 +1075,38 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A farm raised a block, its soil and water at y 1, between two pockets two blocks high under stone: the farmer's in
+	 * the west (x 0), the core's in the east (x 6 and 7), stone everywhere else up to the roof. Digging through the farm's
+	 * soil is the cheapest way between them; the farmer keeps its farm's soil and water from its walks (keep_blocks, #1039),
+	 * so it digs the stone over a pocket's edge and climbs over the farm instead, and farms it.
+	 */
+	// Measured: passes at tick 431, alone and in its class (red, no keep_blocks: dug the soil at 1, 1, 5 on tick 40).
+	@GameTest(maxTicks = 900)
+	public void aFarmerKeepsItsFarmFromItsWalks(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				boolean farm = x >= 1 && x <= 5 && z >= 1 && z <= 5;
+				boolean pocket = (x == 0 || x >= 6) && z >= 1;
+				for (int y = farm ? 2 : pocket ? 3 : 1; y < 8; y++) {
+					helper.setBlock(x, y, z, farm ? Blocks.AIR : Blocks.STONE);
+				}
+			}
+		}
+		List<BlockPos> spots = farm(helper, 1, true, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7), 2,
+				new ItemStack(Items.WHEAT_SEEDS, 24));
+		Container core = container(helper, 7, 1, 7);
+		AntBot farmer = helper.getLevel().getEntitiesOfClass(AntBot.class, helper.getBounds()).getFirst();
+		failOnFarmDug(helper, spots, farmer.getUUID());
+		helper.succeedWhen(() -> {
+			for (BlockPos spot : spots) {
+				helper.assertBlockPresent(Blocks.FARMLAND, spot);
+				helper.assertBlockPresent(Blocks.WHEAT, spot.above());
+			}
+			helper.assertTrue(core.countItem(Items.WHEAT) == 2, "wheat in the core: " + core.countItem(Items.WHEAT));
+		});
+	}
+
+	/**
 	 * The miner of {@link #aMinerDigsTheShaftMinesTheHallAndBringsTheIronToTheCore}, killed in the hall once it carries raw iron: it respawns
 	 * beside the core, goes back down for what it dropped, takes its mine job up again and brings the iron to the core
 	 * (#689).
@@ -1496,7 +1528,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 */
 	private static void failOnFarmDug(GameTestHelper helper, List<BlockPos> spots, UUID farmer) {
 		helper.onEachTick(() -> {
-			BlockPos water = new BlockPos(3, 0, 3);
+			BlockPos water = spots.getFirst().offset(2, 0, 2);
 			for (BlockPos spot : spots) {
 				BlockState s = helper.getBlockState(spot);
 				if (!s.is(Blocks.DIRT) && !s.is(Blocks.FARMLAND) || !helper.getBlockState(water).is(Blocks.WATER)) {
@@ -1686,14 +1718,19 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * the work spots.
 	 */
 	private static List<BlockPos> farm(GameTestHelper helper, boolean hoe, BlockState ripe, int ripeSpots, ItemStack... items) {
+		return farm(helper, 0, hoe, ripe, ripeSpots, items);
+	}
+
+	/** As {@link #farm(GameTestHelper, boolean, BlockState, int, ItemStack...)}, with the farm's soil and water at {@code y}. */
+	private static List<BlockPos> farm(GameTestHelper helper, int y, boolean hoe, BlockState ripe, int ripeSpots, ItemStack... items) {
 		List<BlockPos> spots = new ArrayList<>();
 		for (int z = 1; z <= 5; z++) {
 			for (int x = 1; x <= 5; x++) {
 				if (x == 3 && z == 3) {
-					helper.setBlock(x, 0, z, Blocks.WATER);
+					helper.setBlock(x, y, z, Blocks.WATER);
 				} else {
-					spots.add(new BlockPos(x, 0, z));
-					helper.setBlock(x, 0, z, Blocks.DIRT);
+					spots.add(new BlockPos(x, y, z));
+					helper.setBlock(x, y, z, Blocks.DIRT);
 				}
 			}
 		}
@@ -1705,7 +1742,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		colony.setRadius(8);
 		PyDict farm = new PyDict();
 		farm.put("blueprint", "antcraft:farm");
-		farm.put("at", pos(helper, 1, 0, 1));
+		farm.put("at", pos(helper, 1, y, 1));
 		PyList buildings = new PyList();
 		buildings.items.add(farm);
 		colony.memory().put("buildings", buildings);
