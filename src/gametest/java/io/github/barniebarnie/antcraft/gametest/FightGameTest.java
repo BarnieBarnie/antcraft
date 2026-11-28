@@ -1107,6 +1107,16 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
+	/**
+	 * Gives the bot {@code target} at once and fails the test on a tick it targets anything else (#991): its target goal
+	 * takes a mob on 1 check in 5, every other tick (NearestAttackableTargetGoal's randomInterval), so about 1 run in 1000
+	 * not within 60 ticks. Not once the test ends and removes the target with its other entities.
+	 */
+	private static void holdsTarget(GameTestHelper helper, AntBot bot, LivingEntity target) {
+		bot.setTarget(target);
+		helper.onEachTick(() -> helper.assertTrue(target.isRemoved() || bot.getTarget() == target, "target " + bot.getTarget()));
+	}
+
 	/** Fails the test at once when {@code target} is hurt other than by an arrow, such as by the bot's blow. */
 	private static void failOnAnythingButArrows(GameTestHelper helper, LivingEntity target) {
 		helper.onEachTick(() -> {
@@ -1205,6 +1215,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 21);
 		zombie.setNoAi(true);
 		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		holdsTarget(helper, bot, zombie);
 		double z = bot.getZ();
 		// Kept at 10, under ShootGoal's 12 (#750): a fed bot heals a health in 10 ticks.
 		helper.onEachTick(() -> bot.setHealth(Math.min(bot.getHealth(), 10)));
@@ -1273,6 +1284,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 21);
 		zombie.setNoAi(true);
 		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		holdsTarget(helper, bot, zombie);
 		double z = bot.getZ();
 		// Kept at 18: a fed bot heals to full in a few ticks, and closes in then anyway.
 		helper.onEachTick(() -> bot.setHealth(Math.min(bot.getHealth(), 18)));
