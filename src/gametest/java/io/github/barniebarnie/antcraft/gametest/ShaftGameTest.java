@@ -534,7 +534,8 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	 * test spends the tick's block search budget until the search runs, so it cannot finish at once, then lights fire on
 	 * netherrack under the bot. Stone runs east of the area along the hall at level 3, so terrain there cannot move the site.
 	 * The budget is the server's, so the test runs in an environment of its own ({@code alone}), which puts it in a batch
-	 * of its own: in a shared batch it starved the block searches of the tests beside it.
+	 * of its own: in a shared batch it starved the block searches of the tests beside it. No other test may share
+	 * {@code alone}: the stone east of this area lies in the area beside it (#987).
 	 */
 	// Measured: passes at tick 7 alone, 11 in a full run.
 	@GameTest(environment = "antcraft-gametest:alone", maxTicks = 25)

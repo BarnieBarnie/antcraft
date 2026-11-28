@@ -1942,10 +1942,12 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * A reflex that takes over while the miner's {@code mineshaft} search runs over several ticks pauses it (#410, #419):
 	 * the miner still gets its site and digs the shaft, rather than stopping on an {@code interrupted} result. As
 	 * ShaftGameTest.aReflexDuringTheSearchDoesNotStopShaft, the test spends the tick's block search budget until the
-	 * search runs, then lights fire on netherrack under the bot; the budget is the server's, so it runs {@code alone}.
+	 * search runs, then lights fire on netherrack under the bot; the budget is the server's, so it runs in an environment
+	 * of its own, {@code alone_miner}: in {@code alone}, the batch of that Shaft test, it stood beside it, whose stone east
+	 * of its area filled this area before it started (#987).
 	 */
 	// Measured: passes at tick 242 alone.
-	@GameTest(environment = "antcraft-gametest:alone", maxTicks = 500)
+	@GameTest(environment = "antcraft-gametest:alone_miner", maxTicks = 500)
 	public void aReflexDuringTheMinersSiteSearchDoesNotStopTheShaft(GameTestHelper helper) {
 		Colony colony = mineColony(helper);
 		helper.setBlock(1, 5, 1, Blocks.NETHERRACK);
