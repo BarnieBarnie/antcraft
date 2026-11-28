@@ -39,6 +39,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
@@ -182,10 +183,25 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private List<Pos> portals = List.of();
 	/**
 	 * Where the walks of the script the bot died running placed scaffold that still stands, which the run it respawns with
-	 * gets from {@code placed_scaffold()} to take back (#679). Saved, as the bot waits to respawn.
-	 * ponytail: a block changed while it waits is not seen, as no run owns it then; take_back would mine it.
+	 * gets from {@code placed_scaffold()} to take back (#679), with the block each held then: the run gets back only those
+	 * that still hold it, so a block someone put there while the bot waited is left alone (#1038). Saved, as the bot waits
+	 * to respawn.
+	 * ponytail: the same block mined and put back while it waits counts as unchanged.
 	 */
-	private List<Pos> scaffoldLeft = List.of();
+	private List<ScaffoldLeft> scaffoldLeft = List.of();
+
+	/** A block of {@link #scaffoldLeft}: where, and the block there when the bot died. */
+	private record ScaffoldLeft(GlobalPos pos, BlockState block) {
+		static final Codec<ScaffoldLeft> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+			GlobalPos.CODEC.fieldOf("Pos").forGetter(ScaffoldLeft::pos),
+			BlockState.CODEC.fieldOf("Block").forGetter(ScaffoldLeft::block)).apply(instance, ScaffoldLeft::new));
+
+		/** The block at {@code pos} now, or null where its dimension is gone. */
+		static @Nullable BlockState at(MinecraftServer server, GlobalPos pos) {
+			ServerLevel level = server.getLevel(pos.dimension());
+			return level == null ? null : level.getBlockState(pos.pos());
+		}
+	}
 	/** Whether the bot came through a nether portal and has yet to remember where it came out, on its first tick. Not saved. */
 	private boolean arriving;
 	/** The bot's food, saturation and exhaustion, a player's (#702, docs/features/bots.md, Hunger). Saved; full again on respawn. */
@@ -1056,7 +1072,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		ScriptRun last = this.idling ? null : this.script;
 		boolean library = this.scriptSource != null;
 		Code code = this.scriptCode;
-		this.scaffoldLeft = last != null ? last.peekPlaced() : List.of();
+		this.scaffoldLeft = last == null ? List.of() : globalPositions(last.peekPlaced()).stream()
+			.map(pos -> new ScaffoldLeft(pos, ScaffoldLeft.at(level.getServer(), pos))).filter(left -> left.block() != null).toList();
 		this.stopScriptKeepingJobs();
 		respawnTime.ifPresent(time -> {
 			TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
@@ -1139,7 +1156,10 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			}
 		});
 		if (bot.isRunningScript()) {
-			bot.scaffoldLeft.forEach(bot.script::notePlaced);
+			// Only what is still the block it placed: another block put there while it waited is not its own (#1038).
+			List<GlobalPos> standing = bot.scaffoldLeft.stream()
+				.filter(left -> left.block().equals(ScaffoldLeft.at(level.getServer(), left.pos()))).map(ScaffoldLeft::pos).toList();
+			positions(standing).forEach(bot.script::notePlaced);
 		}
 		bot.scaffoldLeft = List.of();
 		return true;
@@ -1278,7 +1298,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			output.putBoolean("ScriptIdling", this.isRunningScript() ? this.idling : this.savedIdling);
 		}
 		if (!this.scaffoldLeft.isEmpty()) {
-			output.store("ScaffoldLeft", GlobalPos.CODEC.listOf(), globalPositions(this.scaffoldLeft));
+			output.store("ScaffoldLeftBlocks", ScaffoldLeft.CODEC.listOf(), this.scaffoldLeft);
 		}
 		if (!this.portals.isEmpty()) {
 			output.store("Portals", GlobalPos.CODEC.listOf(), globalPositions(this.portals));
@@ -1308,7 +1328,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/**
 	 * Fields older versions saved and this one ignores: a role ({@code Role}, {@code RoleSetByPlayer}, {@code ScaffoldRole}),
-	 * the walk target ({@code WalkTarget}) and the goal-driven colony's scaffold to take down ({@code Scaffold}).
+	 * the walk target ({@code WalkTarget}), the goal-driven colony's scaffold to take down ({@code Scaffold}) and the
+	 * dead run's scaffold without its blocks ({@code ScaffoldLeft}, #1038).
 	 */
 	@Override
 	protected void readAdditionalSaveData(ValueInput input) {
@@ -1329,7 +1350,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.memory = Memory.load(input, this.savedScript == null ? null : this.savedScript.vm());
 		this.savedIdling = input.getBooleanOr("ScriptIdling", false);
 		this.portals = positions(input.read("Portals", GlobalPos.CODEC.listOf()).orElse(List.of()));
-		this.scaffoldLeft = positions(input.read("ScaffoldLeft", GlobalPos.CODEC.listOf()).orElse(List.of()));
+		this.scaffoldLeft = input.read("ScaffoldLeftBlocks", ScaffoldLeft.CODEC.listOf()).orElse(List.of());
 		this.opened.clear();
 		// Walked through long ago, as far as a loaded bot knows: shut once it is clear of them.
 		input.read("Opened", BlockPos.CODEC.listOf()).ifPresent(doors -> doors.forEach(pos -> this.opened.put(pos, Long.MIN_VALUE)));

@@ -114,6 +114,36 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot that dies with scaffold standing gets it back from placed_scaffold() once it respawns (#679), but only the
+	 * blocks that are still what it placed: one replaced with another block while it waited is no longer its own, so
+	 * take_back leaves it (#1038).
+	 */
+	@GameTest(maxTicks = 440)
+	public void aRespawnedBotGetsBackOnlyTheScaffoldThatIsStillWhatItPlaced(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		BotScripts.run(bot, "print('scaffold', deaths(), placed_scaffold(False))\nwhile True:\n    wait(5)\n");
+		BlockPos kept = helper.absolutePos(new BlockPos(3, 1, 3));
+		BlockPos replaced = helper.absolutePos(new BlockPos(4, 1, 3));
+		helper.runAfterDelay(5, () -> {
+			helper.setBlock(new BlockPos(3, 1, 3), Blocks.DIRT);
+			helper.setBlock(new BlockPos(4, 1, 3), Blocks.DIRT);
+			bot.addPathScaffold(kept);
+			bot.addPathScaffold(replaced);
+			bot.kill(helper.getLevel());
+			helper.setBlock(new BlockPos(4, 1, 3), Blocks.COBBLESTONE);
+		});
+		helper.succeedWhen(() -> {
+			AntBot again = bot(helper, id);
+			helper.assertTrue(again != null && again.getDeaths() == 1, "not respawned");
+			List<String> printed = BotScripts.log(Objects.requireNonNull(again), Output.Level.PRINT);
+			String expected = "scaffold 1 [Pos(" + kept.getX() + ", " + kept.getY() + ", " + kept.getZ() + ")]";
+			helper.assertTrue(printed.contains(expected), "printed " + printed + ", expected " + expected);
+		});
+	}
+
+	/**
 	 * A bot whose script had already finished, so it idles, and that then dies respawns idle (#929): death is no player's
 	 * choice, so a one-off script such as a build is not run again; picking the bot up does run it again (#922).
 	 */
