@@ -1323,10 +1323,13 @@ public final class WorkApi {
 		/** Where the item was when the bot last set out to it. */
 		private @Nullable BlockPos walkedTo;
 		/**
-		 * Whether it walks beside the current goal rather than to it: an item in a liquid it found no way into, such as cane
-		 * fallen into a cane farm cell's water, which the farm keeps from scaffold (#869), so it reaches in (#904).
+		 * Whether it walks beside the current goal rather than to it: an item in a liquid, which it reaches into from beside
+		 * (#904), such as cane fallen into a cane farm cell's water, which the farm keeps from scaffold (#869), or wheat in a
+		 * farm's water, where a walk to within a block of it dug the soil beside it (#1029).
 		 */
 		private boolean beside;
+		/** Whether it walks to the current goal in a liquid after all: from beside, it did not get it (#1029). */
+		private boolean into;
 		/** How many ticks it has waited for the current goal to land. */
 		private int falling;
 		/** How many ticks it has waited beside the current goal, for it to land or for its pickup delay to end. */
@@ -1456,6 +1459,7 @@ public final class WorkApi {
 				this.goal = fitting.getFirst();
 				this.arrivals = 0;
 				this.beside = false;
+				this.into = false;
 				this.falling = 0;
 				this.waiting = 0;
 			}
@@ -1492,12 +1496,21 @@ public final class WorkApi {
 						BotHands.collect(this.bot, dropped);
 						return false;
 					}
+					if (this.beside && !this.into) {
+						this.into = true; // out of reach from beside, as far out in a lake: it walks to it after all
+						this.beside = false;
+						this.arrivals = 0;
+						return false;
+					}
 					this.arrivals = 2;
 				}
 				if (this.arrivals >= 2) {
 					this.unreachable.add(this.goal.getId());
 					this.goal = null;
 					return false;
+				}
+				if (this.arrivals == 0 && !this.into && this.goal.isInLiquid()) {
+					this.beside = true;
 				}
 				this.walkedTo = this.goal.blockPosition();
 				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(this.walkedTo), this.arrivals > 0 ? 0 : this.beside ? 2 : 1);
@@ -1509,8 +1522,9 @@ public final class WorkApi {
 			this.walk = null;
 			if (walked.ok()) {
 				this.arrivals++;
-			} else if (Result.UNREACHABLE.equals(walked.reason()) && !this.beside && this.goal.isInLiquid()) {
-				this.beside = true; // no way into the liquid: it walks to a block beside it and reaches in
+			} else if (Result.UNREACHABLE.equals(walked.reason()) && this.beside && !this.into) {
+				this.into = true; // no way beside it: it walks to it after all
+				this.beside = false;
 			} else if (Result.UNREACHABLE.equals(walked.reason())) {
 				this.unreachable.add(this.goal.getId());
 				this.goal = null;

@@ -1037,6 +1037,33 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertBlockPresent(Blocks.WATER, 4, y, 4));
 	}
 
+	/**
+	 * Wheat floating in a hole of water in a field of dirt, as a farm's: the bot takes it from beside the hole, reaching in,
+	 * and digs no dirt (#1029). Its walk to within a block of the item dug the dirt beside the hole, at the bot's level and
+	 * under it, so a colony farmer killed by its farm's water dug a work spot and never finished the farm.
+	 */
+	// Measured: passes at tick 26, 14 in a full run (red: dug 5, 0, 3 on tick 24).
+	@GameTest(maxTicks = 60)
+	public void pickUpTakesAnItemFloatingInAHoleWithoutDiggingBesideIt(GameTestHelper helper) {
+		for (int x = 1; x <= 5; x++) {
+			for (int z = 1; z <= 5; z++) {
+				helper.setBlock(x, 0, z, x == 3 && z == 3 ? Blocks.WATER : Blocks.DIRT);
+			}
+		}
+		helper.spawnItem(Items.WHEAT, new BlockPos(3, 0, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 3);
+		helper.onEachTick(() -> {
+			for (int x = 1; x <= 5; x++) {
+				for (int z = 1; z <= 5; z++) {
+					if (!helper.getBlockState(new BlockPos(x, 0, z)).is(x == 3 && z == 3 ? Blocks.WATER : Blocks.DIRT)) {
+						helper.fail("dug " + x + ", 0, " + z + ", the bot at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+					}
+				}
+			}
+		});
+		expect(helper, bot, "r = pick_up('wheat', radius=8)\nprint(r.ok, count('wheat'))\n", List.of("True 1"));
+	}
+
 	// equip
 
 	@GameTest(maxTicks = 20)

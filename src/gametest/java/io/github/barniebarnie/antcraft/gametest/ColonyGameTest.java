@@ -1054,7 +1054,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * The farmer of {@link #aFarmerTillsPlantsAndHarvestsAFarm}, killed once it carries harvested wheat: it respawns beside
 	 * the core, picks up what it dropped and farms on, every spot planted and the wheat in the core (#689).
 	 */
-	// Measured: passes at tick 403 (red: respawned where first spawned).
+	// Measured: passes at tick 403 (red: respawned where first spawned). Full run with 40 copies: 348 to 394 (#1029: 1 in 41
+	// failed before at tick 303, its walk to wheat in the farm's water dug the spot at (5, 0, 3); failOnFarmDug now says so at once).
 	@GameTest(maxTicks = 800)
 	public void aFarmerKilledMidHarvestComesBackAndFarmsOn(GameTestHelper helper) {
 		List<BlockPos> spots = farm(helper, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7), 2,
@@ -1062,6 +1063,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		Container core = container(helper, 7, 1, 7);
 		AntBot farmer = helper.getLevel().getEntitiesOfClass(AntBot.class, helper.getBounds()).getFirst();
 		Runnable recovered = killedOnce(helper, farmer, new BlockPos(7, 1, 7), b -> GameTests.carried(b, Items.WHEAT) > 0);
+		failOnFarmDug(helper, spots, farmer.getUUID());
 		helper.succeedWhen(() -> {
 			recovered.run();
 			for (BlockPos spot : spots) {
@@ -1485,6 +1487,25 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.WHEAT, spot.above());
 			}
 			helper.assertTrue(core.countItem(Items.WHEAT) == 2, "wheat in the core: " + core.countItem(Items.WHEAT));
+		});
+	}
+
+	/**
+	 * Fails the test at once when one of the farm's {@code spots} is no longer dirt or farmland, or its water (at (3, 0, 3))
+	 * is gone, with where the farmer ({@code farmer}, found by its UUID, so also once respawned) is and what it did (#1029).
+	 */
+	private static void failOnFarmDug(GameTestHelper helper, List<BlockPos> spots, UUID farmer) {
+		helper.onEachTick(() -> {
+			BlockPos water = new BlockPos(3, 0, 3);
+			for (BlockPos spot : spots) {
+				BlockState s = helper.getBlockState(spot);
+				if (!s.is(Blocks.DIRT) && !s.is(Blocks.FARMLAND) || !helper.getBlockState(water).is(Blocks.WATER)) {
+					AntBot now = helper.getLevel().getEntity(farmer) instanceof AntBot b ? b : null;
+					helper.fail("farm dug: " + spot.toShortString() + " is " + s.getBlock().getName().getString() + ", water "
+						+ helper.getBlockState(water).getBlock().getName().getString() + "; farmer " + (now == null ? "dead"
+						: "at " + TestPositions.relative(helper, now.blockPosition()).toShortString() + " " + BotScripts.log(now, Output.Level.DEBUG)));
+				}
+			}
 		});
 	}
 
