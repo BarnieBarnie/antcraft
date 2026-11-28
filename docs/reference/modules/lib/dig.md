@@ -34,7 +34,7 @@ The height where the ore of the raw item `item` is most common: coal 96, raw iro
 
 ## `branches(item, blocks)`
 
-How many branches of 32 `ore` digs on average at `best_y(item)` to find `blocks` blocks of the ore of `item`, with no limit, so a trip that gives `no_ore` counts too, as the next one digs on for the rest. From `BRANCHES`, the branches for 1, 4, 8, 16 and 32 blocks, measured with `scripts/ore_sim.py`, a Monte Carlo of the game's ore features through a branch whose walls and ceiling are mined as `ore` mines them (#985, #989):
+How many branches of 32 `ore` digs on average at `best_y(item)` to find `blocks` blocks of the ore of `item`, with no limit, so a trip that gives `no_ore` counts too, as the next one digs on for the rest. From `BRANCHES`, the branches for 1, 4, 8, 16 and 32 blocks, measured with `scripts/ore_sim.py`, a Monte Carlo of the game's ore features through a branch whose walls and ceiling are mined as `ore` mines them (#985, #989). Coal is measured at sea level (64), not at its `best_y` of 96: `ore` digs no stairs up, so a bot on the surface branches where it stands, and at 96 a branch finds 15.3 coal ore, 2.1 branches for one (#1037):
 
 | item | ore a branch finds | none in a branch | 1 block | 4 | 8 | 16 | 32 |
 |---|---|---|---|---|---|---|---|
@@ -44,7 +44,7 @@ How many branches of 32 `ore` digs on average at `best_y(item)` to find `blocks`
 | `redstone` | 2.33 | 64% | 3.0 | 3.2 | 5.3 | 8.9 | 16.1 |
 | `lapis_lazuli` | 0.71 | 85% | 7.6 | 9.0 | 16.6 | 30.8 | 56.6 |
 | `raw_copper` | 4.00 | 61% | 2.5 | 2.5 | 3.1 | 5.3 | 9.3 |
-| `coal` | 15.31 | 52% | 2.1 | 2.1 | 2.1 | 2.1 | 3.5 |
+| `coal` | 11.00 | 63% | 2.7 | 2.7 | 2.7 | 2.7 | 4.8 |
 
 In between it goes along the line between two counts, within a tenth of the simulation, and past 32 along the line from 16 to 32. A vein holds several blocks, so a few cost about as many branches as one: gold finds 4 in 7.7 branches, where the line through 1 and 12 blocks it had before #989 gave 9.5. One for any other (emerald: not measured). Ponytail: through solid rock; with a tenth of it caves (`--air 0.1`, caves as small balls) the rarer ores take some 10 to 20% more branches, as no ore is in a cave and some ores are left out next to air, but caves also expose veins `ore` mines first. [`lib.get`](get.md) costs an ore's trip with it. Done at once.
 

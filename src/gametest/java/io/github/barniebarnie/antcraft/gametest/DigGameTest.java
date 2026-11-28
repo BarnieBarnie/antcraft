@@ -605,7 +605,7 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	 * ore digs more branches for a rarer ore and for more of it before it gives no_ore (#985): more than twice the
 	 * branches it digs on average for them (lib.dig.branches, scripts/ore_sim.py), at least 4. With 4 for any (before),
 	 * it fell short of one diamond some 4 times in 10 and of six some 7 in 10. Six diamonds are 19 branches (20 on the
-	 * line of #985), coal 5 (#989: 2.1 on average, 1 before it was measured).
+	 * line of #985), coal 6 (2.7 on average at sea level, #1037; 5 with #989's 2.1 at y 96, 4 before it was measured).
 	 */
 	@GameTest(maxTicks = 20)
 	public void oreDigsMoreBranchesForARarerOreAndMoreOfIt(GameTestHelper helper) {
@@ -613,14 +613,15 @@ public class DigGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, """
 			import lib.dig
 			print(lib.dig.rounds("diamond", 1), lib.dig.rounds("diamond", 6), lib.dig.rounds("coal", 1))
-			""", List.of("11 19 5"));
+			""", List.of("11 19 6"));
 	}
 
 	/**
 	 * lib.dig.branches follows the table of BRANCHES by block count (#989), not a line through 1 and 12 blocks, which
 	 * cost up to a quarter too much in between: gold finds 4 blocks in 7.7 branches as it finds 1 (one vein of 9 holds
 	 * them, 9.5 on the line), 6 blocks are halfway to 8's 12.2, and past 32 it goes on as from 16 to 32. Coal and copper
-	 * are measured too (2.1 and 2.5 for one, scripts/ore_sim.py); emerald, not measured, stays 1.
+	 * are measured too (2.7 and 2.5 for one, scripts/ore_sim.py), coal at sea level, where ore branches, as it digs no
+	 * stairs up to coal's best_y of 96 (#1037; 2.1 there); emerald, not measured, stays 1.
 	 */
 	@GameTest(maxTicks = 20)
 	public void branchesFollowTheMeasuredTable(GameTestHelper helper) {
@@ -630,7 +631,7 @@ public class DigGameTest implements CustomTestMethodInvoker {
 			b = lib.dig.branches
 			print(b("raw_gold", 1), b("raw_gold", 4), round(b("raw_gold", 6), 2), round(b("raw_gold", 48), 2))
 			print(b("coal", 1), b("raw_copper", 1), b("emerald", 5))
-			""", List.of("7.5 7.7 9.95 51.6", "2.1 2.5 1.0"));
+			""", List.of("7.5 7.7 9.95 51.6", "2.7 2.5 1.0"));
 	}
 
 	/**

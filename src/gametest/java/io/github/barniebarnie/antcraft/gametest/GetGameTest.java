@@ -1716,7 +1716,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	/**
 	 * Where no ore is exposed, a source's cost counts the trip to its lib.dig.best_y from the bot's height (#564): stairs
 	 * down, branches and back up, so diamond (-59) costs more trip than coal (96, no stairs) from the same height, and coal
-	 * the 2.1 branches lib.dig.branches gives for one (#989): 37 ticks a block of lib.dig.LENGTH.
+	 * the 2.7 branches lib.dig.branches gives for one, measured at sea level (#989, #1037): 37 ticks a block of lib.dig.LENGTH.
 	 */
 	@GameTest(maxTicks = 20)
 	public void aDeeperOreCostsMoreTrip(GameTestHelper helper) {
@@ -1727,7 +1727,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			def trip(item):
 			    s = SOURCES["minecraft:" + item]
 			    return s.cost(1, 1)[0] - s.estimate
-			print(trip("diamond") > trip("coal"), trip("coal") == int(37 * lib.dig.LENGTH * 2.1))
+			print(trip("diamond") > trip("coal"), trip("coal") == int(37 * lib.dig.LENGTH * 2.7))
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True True"));
 	}

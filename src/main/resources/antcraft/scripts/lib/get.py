@@ -33,9 +33,9 @@ ESTIMATE = 100
 # lib.dig.best_y, branches and climbs back: once for the trip, however many it gets (deep). Measured (#555, DigGameTest
 # aTripDownABranchAndBackUp, stone pickaxe through stone): some 48 ticks a step down, 37 a block of branch and 10 a step
 # back up. With the branches of lib.dig.LENGTH (32) lib.dig.branches gives for one, from sea level (64) that is about
-# 2500 for coal (BEST_Y 96: no stairs, 2.1 branches), 5900 for iron (16) and 13,100 for diamond (-59) (#564, #985,
-# #989). A few coal cost less as charcoal from logs (wood_for_coal), so a bot with no coal ore in sight burns wood for
-# them.
+# 3200 for coal (BEST_Y 96: no stairs, 2.7 branches at sea level), 5900 for iron (16) and 13,100 for diamond (-59)
+# (#564, #985, #989, #1037). A few coal cost less as charcoal from logs (wood_for_coal), so a bot with no coal ore in
+# sight burns wood for them.
 STEP_DOWN = 48
 BRANCH = 37
 STEP_UP = 10

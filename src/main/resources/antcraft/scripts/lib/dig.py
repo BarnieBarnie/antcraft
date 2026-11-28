@@ -33,10 +33,11 @@ CLOCKWISE = {"north": "east", "east": "south", "south": "west", "west": "north"}
 # How many branches ore digs at its depth at least (rounds), and how long.
 ROUNDS = 4
 LENGTH = 32
-# The branches of LENGTH ore digs on average at best_y for blocks of an ore, ((blocks, branches), ...):
+# The branches of LENGTH ore digs on average at best_y for blocks of an ore, ((blocks, branches), ...), coal at sea
+# level (64): ore digs no stairs up, so a bot on the surface branches there, not at coal's best_y of 96 (#1037):
 # scripts/ore_sim.py, a Monte Carlo of the 26.3 ore features through a branch whose walls and ceiling are mined as
 # lib.mine.veins (#985, #989): a branch finds 1.01 diamond, 3.16 iron, 1.07 gold, 2.33 redstone, 0.71 lapis, 4.00
-# copper and 15.3 coal ore on average. Interpolated in between, within a tenth of the simulation. ponytail: through
+# copper and 11.0 coal ore on average. Interpolated in between, within a tenth of the simulation. ponytail: through
 # solid rock; with a tenth of it caves the rarer ores take some 10 to 20% more (--air 0.1), but caves also expose veins
 # ore mines first. 1 for emerald (not measured).
 BRANCHES = {"diamond": ((1, 5.0), (4, 7.2), (8, 11.7), (16, 20.4), (32, 37.9)),
@@ -45,7 +46,7 @@ BRANCHES = {"diamond": ((1, 5.0), (4, 7.2), (8, 11.7), (16, 20.4), (32, 37.9)),
             "redstone": ((1, 3.0), (4, 3.2), (8, 5.3), (16, 8.9), (32, 16.1)),
             "lapis_lazuli": ((1, 7.6), (4, 9.0), (8, 16.6), (16, 30.8), (32, 56.6)),
             "raw_copper": ((1, 2.5), (4, 2.5), (8, 3.1), (16, 5.3), (32, 9.3)),
-            "coal": ((1, 2.1), (4, 2.1), (8, 2.1), (16, 2.1), (32, 3.5))}
+            "coal": ((1, 2.7), (4, 2.7), (8, 2.7), (16, 2.7), (32, 4.8))}
 
 
 def short(item):

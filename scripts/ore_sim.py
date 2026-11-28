@@ -38,7 +38,8 @@ ORES = {
     "raw_gold": (-16, [(9, 4, trapezoid(-64, 32), 0.5), (9, 0.5, uniform(-64, -48), 0.5)]),  # not the badlands' extra
     "redstone": (-59, [(8, 4, uniform(-64, 15), 0), (8, 8, trapezoid(-96, -32), 0)]),
     "lapis_lazuli": (0, [(7, 2, trapezoid(-32, 32), 0), (7, 4, uniform(-64, 64), 1)]),
-    "coal": (96, [(17, 30, uniform(136, 320), 0), (17, 20, trapezoid(0, 192), 0.5)]),  # ore_coal_upper and _lower
+    # Coal at sea level, not its best_y of 96: lib.dig.ore digs no stairs up, so a bot branches there (#1037).
+    "coal": (64, [(17, 30, uniform(136, 320), 0), (17, 20, trapezoid(0, 192), 0.5)]),  # ore_coal_upper and _lower
     "raw_copper": (48, [(10, 16, trapezoid(-16, 112), 0)]),  # not ore_copper_large, dripstone caves only
 }
 LENGTH = 32
