@@ -51,6 +51,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BambooStalkBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.damagesource.DamageTypes;
@@ -945,12 +946,19 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	 * A bamboo stalk cut at the bottom breaks one block a tick from the bottom up, and its top pieces drop from high up
 	 * well after: pick_up right after the cut takes every piece (#978).
 	 */
-	// Measured: passes at tick 78 to 109 (not red: on main too, as a piece still falling within the radius keeps it on).
+	// Measured: passes at tick 78 to 109 (not red: on main too, as a piece still falling within the radius keeps it on);
+	// with the 30 random ticks on stage 0, red: printed [True 12 13] on tick 100 (#990).
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 220)
 	public void pickUpRightAfterCuttingTallBambooTakesEveryPiece(GameTestHelper helper) {
 		helper.setBlock(12, 1, 12, Blocks.DIRT);
+		// A stalk of stage 0 grows a block on about a third of its top's random ticks, which made a 13th piece now and then
+		// (#990): stage 1 never grows, so 30 random ticks, more than a long run gives it, must leave it at 12.
 		for (int y = 2; y <= 13; y++) {
-			helper.setBlock(12, y, 12, Blocks.BAMBOO);
+			helper.setBlock(12, y, 12, Blocks.BAMBOO.defaultBlockState().setValue(BambooStalkBlock.STAGE, 1));
+		}
+		BlockPos top = helper.absolutePos(new BlockPos(12, 13, 12));
+		for (int i = 0; i < 30; i++) {
+			helper.getLevel().getBlockState(top).randomTick(helper.getLevel(), top, helper.getLevel().getRandom());
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 10, 1, 12);
 		expect(helper, bot, "mine(" + at(helper, 12, 2, 12) + ")\nr = pick_up('bamboo')\nprint(r.ok, r.value, count('bamboo'))\n",
