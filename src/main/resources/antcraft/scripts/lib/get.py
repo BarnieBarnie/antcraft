@@ -169,21 +169,10 @@ def breaking(item, what, reason, hand=False, keep=None):
     return do
 
 
-FORTUNE = "minecraft:fortune"
-
-
-def ore_drops(level):
-    """The mean bonus of the game's ore_drops loot function at a Fortune level (#754): 1, 1.33, 1.75, 2.2 for 0 to 3."""
-    return 1 + level * (level + 1) / 2 / (level + 2)
-
-
-# The mean drops of an ore at a Fortune level where it is not one item times ore_drops (the 26.3 loot tables, #770):
-# copper 2 to 5 and lapis 4 to 9 times ore_drops, redstone 4 to 5 and a uniform 0 to level more.
-ORE_DROPS = {
-    "raw_copper": lambda level: 3.5 * ore_drops(level),
-    "lapis_lazuli": lambda level: 6.5 * ore_drops(level),
-    "redstone": lambda level: 4.5 + level / 2,
-}
+# The ore drop table lives in lib.dig, whose rounds counts blocks too (#988).
+FORTUNE = lib.dig.FORTUNE
+ore_drops = lib.dig.ore_drops
+ORE_DROPS = lib.dig.ORE_DROPS
 # The height a trip is costed to for an ore lib.dig.best_y has none of (#796): emerald, most common at 236 in mountains.
 # ponytail: costed as if a mountain were near; lib.dig.ore still digs no stairs for it.
 TRIP_Y = {"emerald": 236}

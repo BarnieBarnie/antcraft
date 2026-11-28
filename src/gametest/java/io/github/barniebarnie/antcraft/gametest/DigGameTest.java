@@ -19,11 +19,13 @@ import java.util.function.BiConsumer;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -611,6 +613,32 @@ public class DigGameTest implements CustomTestMethodInvoker {
 			import lib.dig
 			print(lib.dig.rounds("diamond", 1), lib.dig.rounds("diamond", 6), lib.dig.rounds("coal", 1))
 			""", List.of("10 20 4"));
+	}
+
+	/**
+	 * rounds counts the blocks that drop n, as lib.get's Source.blocks does (#988): a redstone ore drops 4.5 without
+	 * Fortune, so 20 redstone are 5 blocks, 10 branches (21 when it counted 20 blocks).
+	 */
+	@GameTest(maxTicks = 20)
+	public void roundsCountTheBlocksThatDropTheItems(GameTestHelper helper) {
+		AntBot bot = miner(helper, 1, 1, 1);
+		expect(helper, bot, """
+			import lib.dig
+			print(lib.dig.rounds("redstone", 20), lib.dig.blocks("redstone", 20))
+			""", List.of("10 5"));
+	}
+
+	/** With a Fortune III pickaxe a redstone ore drops 6 (#988): 20 redstone are 4 blocks, 9 branches. */
+	@GameTest(maxTicks = 20)
+	public void roundsCountTheFortuneOfThePickaxeCarried(GameTestHelper helper) {
+		AntBot bot = miner(helper, 1, 1, 1);
+		ItemStack pickaxe = new ItemStack(Items.IRON_PICKAXE);
+		pickaxe.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.FORTUNE), 3);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, pickaxe);
+		expect(helper, bot, """
+			import lib.dig
+			print(lib.dig.rounds("redstone", 20), lib.dig.blocks("redstone", 20))
+			""", List.of("9 4"));
 	}
 
 	/** Emerald has no best_y (it is only in mountains): without y, and no exposed vein, ore gives no_ore at once. */

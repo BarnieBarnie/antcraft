@@ -59,11 +59,36 @@ def branches(item, blocks):
     return first + max(0, blocks - 1) * more
 
 
+FORTUNE = "minecraft:fortune"
+
+
+def ore_drops(level):
+    """The mean bonus of the game's ore_drops loot function at a Fortune level (#754): 1, 1.33, 1.75, 2.2 for 0 to 3."""
+    return 1 + level * (level + 1) / 2 / (level + 2)
+
+
+# The mean drops of an ore at a Fortune level where it is not one item times ore_drops (the 26.3 loot tables, #770):
+# copper 2 to 5 and lapis 4 to 9 times ore_drops, redstone 4 to 5 and a uniform 0 to level more.
+ORE_DROPS = {
+    "raw_copper": lambda level: 3.5 * ore_drops(level),
+    "lapis_lazuli": lambda level: 6.5 * ore_drops(level),
+    "redstone": lambda level: 4.5 + level / 2,
+}
+
+
+def blocks(item, n):
+    """How many ore blocks drop n of item, by the mean drops (ORE_DROPS, else ore_drops) with the Fortune of the best
+    pickaxe carried, as lib.get's Source.blocks counts them (#988)."""
+    best = lib.tools.best("pickaxe")
+    level = 0 if best is None else best.enchantments.get(FORTUNE, 0)
+    return int(n / ORE_DROPS.get(short(item), ore_drops)(level) + 0.99)
+
+
 def rounds(item, n):
-    """How many branches ore digs at most for n more of item: more than twice branches(item, n), at least ROUNDS. So it
-    falls short of 1 or 6 diamonds some 10 and 7 times in 100 (scripts/ore_sim.py; 39 and 70 with 4, #985). ponytail: n
-    items as n blocks, more than redstone and lapis need, whose blocks drop several."""
-    return max(ROUNDS, int(2 * branches(item, n)) + 1)
+    """How many branches ore digs at most for n more of item: more than twice branches(item, blocks(item, n)), at least
+    ROUNDS. So it falls short of 1 or 6 diamonds some 10 and 7 times in 100 (scripts/ore_sim.py; 39 and 70 with 4,
+    #985)."""
+    return max(ROUNDS, int(2 * branches(item, blocks(item, n))) + 1)
 
 
 def stone(n, radius=32):

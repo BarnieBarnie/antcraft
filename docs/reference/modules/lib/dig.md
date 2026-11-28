@@ -48,7 +48,11 @@ One for any other (coal, copper, emerald: not measured). Ponytail: a line throug
 
 ## `rounds(item, n)`
 
-How many branches `ore` digs at most for `n` more of `item` before it gives `no_ore`: more than twice `branches(item, n)`, at least 4 (`ROUNDS`). So it falls short of one diamond some 10 times in 100 and of six some 7 (39 and 70 with the 4 it dug before #985), 10 and 20 branches. `n` counts as blocks, more than redstone and lapis need, whose blocks drop several. Done at once.
+How many branches `ore` digs at most for `n` more of `item` before it gives `no_ore`: more than twice `branches(item, blocks(item, n))`, at least 4 (`ROUNDS`). So it falls short of one diamond some 10 times in 100 and of six some 7 (39 and 70 with the 4 it dug before #985), 10 and 20 branches. 20 redstone are 5 blocks, 10 branches, and with a Fortune III pickaxe 4 blocks, 9 branches (#988). Done at once.
+
+## `blocks(item, n)`
+
+How many ore blocks drop `n` of `item`, by the mean drops of its ore with the Fortune of the best pickaxe carried, as [`lib.get`](get.md)'s `Source.blocks` counts them: `ORE_DROPS` for copper (3.5 times `ore_drops`), lapis (6.5 times) and redstone (4.5 and half the Fortune level more), else `ore_drops(level)`, the mean of the game's ore bonus (1, 1.33, 1.75 and 2.2 for Fortune 0 to 3). `lib.get` takes `FORTUNE`, `ore_drops` and `ORE_DROPS` from here (#988). Done at once.
 
 ## `stairs_to(y, facing="north")`
 
