@@ -1110,11 +1110,12 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	/**
 	 * Gives the bot {@code target} at once and fails the test on a tick it targets anything else (#991): its target goal
 	 * takes a mob on 1 check in 5, every other tick (NearestAttackableTargetGoal's randomInterval), so about 1 run in 1000
-	 * not within 60 ticks. Not once the test ends and removes the target with its other entities.
+	 * not within 60 ticks, and a mob that comes at the bot meanwhile gets a blow rather than an arrow (#1035). Not once the
+	 * target dies, or the test ends and removes it with its other entities. Tests of the target goal itself leave it be.
 	 */
 	private static void holdsTarget(GameTestHelper helper, AntBot bot, LivingEntity target) {
 		bot.setTarget(target);
-		helper.onEachTick(() -> helper.assertTrue(target.isRemoved() || bot.getTarget() == target, "target " + bot.getTarget()));
+		helper.onEachTick(() -> helper.assertTrue(!target.isAlive() || bot.getTarget() == target, "target " + bot.getTarget()));
 	}
 
 	/** Fails the test at once when {@code target} is hurt other than by an arrow, such as by the bot's blow. */
@@ -1181,6 +1182,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
 		Creeper creeper = helper.spawn(EntityTypes.CREEPER, 12, 1, 18);
 		creeper.setTarget(bot);
+		holdsTarget(helper, bot, creeper);
 		failOnExplosion(helper, bot, creeper);
 		failOnAnythingButArrows(helper, creeper);
 		helper.succeedWhen(() -> helper.assertTrue(creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health"));
@@ -1198,6 +1200,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 18);
 		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
 		zombie.setTarget(bot);
+		holdsTarget(helper, bot, zombie);
 		failOnAnythingButArrows(helper, zombie);
 		helper.succeedWhen(() -> helper.assertTrue(zombie.isDeadOrDying(), "zombie alive with " + zombie.getHealth() + " health"));
 	}
@@ -1246,8 +1249,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 21);
 		zombie.setNoAi(true);
 		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		holdsTarget(helper, bot, zombie);
 		helper.runAtTickTime(60, () -> {
-			helper.assertTrue(bot.getTarget() == zombie, "target " + bot.getTarget());
 			int plans = PathCounts.plans(bot);
 			helper.assertTrue(plans <= 8, plans + " plans in 60 ticks");
 			helper.succeed();
