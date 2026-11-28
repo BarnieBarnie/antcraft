@@ -33,8 +33,9 @@ ESTIMATE = 100
 # lib.dig.best_y, branches and climbs back: once for the trip, however many it gets (deep). Measured (#555, DigGameTest
 # aTripDownABranchAndBackUp, stone pickaxe through stone): some 48 ticks a step down, 37 a block of branch and 10 a step
 # back up. With the branches of lib.dig.LENGTH (32) lib.dig.branches gives for one, from sea level (64) that is about
-# 1200 for coal (BEST_Y 96: no stairs, one branch), 5600 for iron (16) and 12,900 for diamond (-59) (#564, #985). Up to 4 coal (16 torches) cost less as charcoal from
-# logs (wood_for_coal), so a bot with no coal ore in sight burns wood for them.
+# 2500 for coal (BEST_Y 96: no stairs, 2.1 branches), 5900 for iron (16) and 13,100 for diamond (-59) (#564, #985,
+# #989). A few coal cost less as charcoal from logs (wood_for_coal), so a bot with no coal ore in sight burns wood for
+# them.
 STEP_DOWN = 48
 BRANCH = 37
 STEP_UP = 10
@@ -130,7 +131,9 @@ class Source:
 
 def deep(y, branches=1):
     """The ticks of lib.dig.ore's trip from the bot's height down to y, branches of lib.dig.LENGTH (lib.dig.branches)
-    and back up; DEEP where y is None. ponytail: from the bot's feet; a vein found sooner is not costed."""
+    and back up; DEEP where y is None. ponytail: from the bot's feet; a vein found sooner is not costed, nor the walk of
+    the second trip get makes after a no_ore: lib.dig.rounds falls short at most some 11 times in 100
+    (scripts/ore_sim.py), so it adds at most about a tenth of the walk (#989)."""
     if y is None:
         return DEEP
     down = max(0, pos().y - y)

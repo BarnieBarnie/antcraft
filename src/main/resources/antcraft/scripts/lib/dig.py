@@ -33,13 +33,19 @@ CLOCKWISE = {"north": "east", "east": "south", "south": "west", "west": "north"}
 # How many branches ore digs at its depth at least (rounds), and how long.
 ROUNDS = 4
 LENGTH = 32
-# The branches of LENGTH ore digs on average at best_y for blocks of an ore, (to the first block, for each block more):
+# The branches of LENGTH ore digs on average at best_y for blocks of an ore, ((blocks, branches), ...):
 # scripts/ore_sim.py, a Monte Carlo of the 26.3 ore features through a branch whose walls and ceiling are mined as
-# lib.mine.veins (#985): a branch finds 1.07 diamond, 3.28 iron, 1.00 gold, 2.25 redstone and 0.69 lapis ore on
-# average, and none of them 78, 58, 86, 66 and 86 times in 100. ponytail: the line through 1 and 12 blocks, up to a
-# quarter over in between; 1 where not listed (coal, copper, emerald: not measured).
-BRANCHES = {"diamond": (4.9, 0.99), "raw_iron": (2.4, 0.25), "raw_gold": (7.3, 0.72), "redstone": (3.0, 0.38),
-            "lapis_lazuli": (7.5, 1.44)}
+# lib.mine.veins (#985, #989): a branch finds 1.01 diamond, 3.16 iron, 1.07 gold, 2.33 redstone, 0.71 lapis, 4.00
+# copper and 15.3 coal ore on average. Interpolated in between, within a tenth of the simulation. ponytail: through
+# solid rock; with a tenth of it caves the rarer ores take some 10 to 20% more (--air 0.1), but caves also expose veins
+# ore mines first. 1 for emerald (not measured).
+BRANCHES = {"diamond": ((1, 5.0), (4, 7.2), (8, 11.7), (16, 20.4), (32, 37.9)),
+            "raw_iron": ((1, 2.6), (4, 2.9), (8, 3.9), (16, 6.5), (32, 11.4)),
+            "raw_gold": ((1, 7.5), (4, 7.7), (8, 12.2), (16, 20.2), (32, 35.9)),
+            "redstone": ((1, 3.0), (4, 3.2), (8, 5.3), (16, 8.9), (32, 16.1)),
+            "lapis_lazuli": ((1, 7.6), (4, 9.0), (8, 16.6), (16, 30.8), (32, 56.6)),
+            "raw_copper": ((1, 2.5), (4, 2.5), (8, 3.1), (16, 5.3), (32, 9.3)),
+            "coal": ((1, 2.1), (4, 2.1), (8, 2.1), (16, 2.1), (32, 3.5))}
 
 
 def short(item):
@@ -54,9 +60,12 @@ def best_y(item):
 
 def branches(item, blocks):
     """The branches of LENGTH ore digs on average at best_y(item) to find blocks of its ore (BRANCHES), with no limit,
-    so a trip that gives no_ore counts too: the next one digs on for the rest (#985)."""
-    first, more = BRANCHES.get(short(item), (1, 0))
-    return first + max(0, blocks - 1) * more
+    so a trip that gives no_ore counts too: the next one digs on for the rest (#985). Between two block counts of its
+    table it goes along the line between them, past the last along the last stretch (#989); 1 for an ore not listed."""
+    table = BRANCHES.get(short(item), ((1, 1), (2, 1)))
+    for (n0, b0), (n1, b1) in zip(table, table[1:]):
+        if blocks <= n1 or n1 == table[-1][0]:
+            return b0 + (b1 - b0) * (max(blocks, n0) - n0) / (n1 - n0)
 
 
 FORTUNE = "minecraft:fortune"
@@ -86,7 +95,7 @@ def blocks(item, n):
 
 def rounds(item, n):
     """How many branches ore digs at most for n more of item: more than twice branches(item, blocks(item, n)), at least
-    ROUNDS. So it falls short of 1 or 6 diamonds some 10 and 7 times in 100 (scripts/ore_sim.py; 39 and 70 with 4,
+    ROUNDS. So it falls short of 1 or 6 diamonds some 9 and 10 times in 100 (scripts/ore_sim.py; 39 and 70 with 4,
     #985)."""
     return max(ROUNDS, int(2 * branches(item, blocks(item, n))) + 1)
 

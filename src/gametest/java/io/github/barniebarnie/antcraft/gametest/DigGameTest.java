@@ -604,7 +604,8 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	/**
 	 * ore digs more branches for a rarer ore and for more of it before it gives no_ore (#985): more than twice the
 	 * branches it digs on average for them (lib.dig.branches, scripts/ore_sim.py), at least 4. With 4 for any (before),
-	 * it fell short of one diamond some 4 times in 10 and of six some 7 in 10.
+	 * it fell short of one diamond some 4 times in 10 and of six some 7 in 10. Six diamonds are 19 branches (20 on the
+	 * line of #985), coal 5 (#989: 2.1 on average, 1 before it was measured).
 	 */
 	@GameTest(maxTicks = 20)
 	public void oreDigsMoreBranchesForARarerOreAndMoreOfIt(GameTestHelper helper) {
@@ -612,12 +613,29 @@ public class DigGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, """
 			import lib.dig
 			print(lib.dig.rounds("diamond", 1), lib.dig.rounds("diamond", 6), lib.dig.rounds("coal", 1))
-			""", List.of("10 20 4"));
+			""", List.of("11 19 5"));
+	}
+
+	/**
+	 * lib.dig.branches follows the table of BRANCHES by block count (#989), not a line through 1 and 12 blocks, which
+	 * cost up to a quarter too much in between: gold finds 4 blocks in 7.7 branches as it finds 1 (one vein of 9 holds
+	 * them, 9.5 on the line), 6 blocks are halfway to 8's 12.2, and past 32 it goes on as from 16 to 32. Coal and copper
+	 * are measured too (2.1 and 2.5 for one, scripts/ore_sim.py); emerald, not measured, stays 1.
+	 */
+	@GameTest(maxTicks = 20)
+	public void branchesFollowTheMeasuredTable(GameTestHelper helper) {
+		AntBot bot = miner(helper, 1, 1, 1);
+		expect(helper, bot, """
+			import lib.dig
+			b = lib.dig.branches
+			print(b("raw_gold", 1), b("raw_gold", 4), round(b("raw_gold", 6), 2), round(b("raw_gold", 48), 2))
+			print(b("coal", 1), b("raw_copper", 1), b("emerald", 5))
+			""", List.of("7.5 7.7 9.95 51.6", "2.1 2.5 1.0"));
 	}
 
 	/**
 	 * rounds counts the blocks that drop n, as lib.get's Source.blocks does (#988): a redstone ore drops 4.5 without
-	 * Fortune, so 20 redstone are 5 blocks, 10 branches (21 when it counted 20 blocks).
+	 * Fortune, so 20 redstone are 5 blocks, 8 branches (21 when it counted 20 blocks, 10 on the line of #985).
 	 */
 	@GameTest(maxTicks = 20)
 	public void roundsCountTheBlocksThatDropTheItems(GameTestHelper helper) {
@@ -625,10 +643,10 @@ public class DigGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, """
 			import lib.dig
 			print(lib.dig.rounds("redstone", 20), lib.dig.blocks("redstone", 20))
-			""", List.of("10 5"));
+			""", List.of("8 5"));
 	}
 
-	/** With a Fortune III pickaxe a redstone ore drops 6 (#988): 20 redstone are 4 blocks, 9 branches. */
+	/** With a Fortune III pickaxe a redstone ore drops 6 (#988): 20 redstone are 4 blocks, 7 branches. */
 	@GameTest(maxTicks = 20)
 	public void roundsCountTheFortuneOfThePickaxeCarried(GameTestHelper helper) {
 		AntBot bot = miner(helper, 1, 1, 1);
@@ -638,7 +656,7 @@ public class DigGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, """
 			import lib.dig
 			print(lib.dig.rounds("redstone", 20), lib.dig.blocks("redstone", 20))
-			""", List.of("9 4"));
+			""", List.of("7 4"));
 	}
 
 	/** Emerald has no best_y (it is only in mountains): without y, and no exposed vein, ore gives no_ore at once. */

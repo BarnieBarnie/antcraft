@@ -34,21 +34,23 @@ The height where the ore of the raw item `item` is most common: coal 96, raw iro
 
 ## `branches(item, blocks)`
 
-How many branches of 32 `ore` digs on average at `best_y(item)` to find `blocks` blocks of the ore of `item`, with no limit, so a trip that gives `no_ore` counts too, as the next one digs on for the rest. From `BRANCHES`, the branches to the first block and those for each block more, measured with `scripts/ore_sim.py`, a Monte Carlo of the game's ore features through a branch whose walls and ceiling are mined as `ore` mines them (#985):
+How many branches of 32 `ore` digs on average at `best_y(item)` to find `blocks` blocks of the ore of `item`, with no limit, so a trip that gives `no_ore` counts too, as the next one digs on for the rest. From `BRANCHES`, the branches for 1, 4, 8, 16 and 32 blocks, measured with `scripts/ore_sim.py`, a Monte Carlo of the game's ore features through a branch whose walls and ceiling are mined as `ore` mines them (#985, #989):
 
-| item | ore a branch finds | none in a branch | first block | each more |
-|---|---|---|---|---|
-| `diamond` | 1.07 | 78% | 4.9 | 0.99 |
-| `raw_iron` | 3.28 | 58% | 2.4 | 0.25 |
-| `raw_gold` | 1.00 | 86% | 7.3 | 0.72 |
-| `redstone` | 2.25 | 66% | 3.0 | 0.38 |
-| `lapis_lazuli` | 0.69 | 86% | 7.5 | 1.44 |
+| item | ore a branch finds | none in a branch | 1 block | 4 | 8 | 16 | 32 |
+|---|---|---|---|---|---|---|---|
+| `diamond` | 1.01 | 79% | 5.0 | 7.2 | 11.7 | 20.4 | 37.9 |
+| `raw_iron` | 3.16 | 62% | 2.6 | 2.9 | 3.9 | 6.5 | 11.4 |
+| `raw_gold` | 1.07 | 85% | 7.5 | 7.7 | 12.2 | 20.2 | 35.9 |
+| `redstone` | 2.33 | 64% | 3.0 | 3.2 | 5.3 | 8.9 | 16.1 |
+| `lapis_lazuli` | 0.71 | 85% | 7.6 | 9.0 | 16.6 | 30.8 | 56.6 |
+| `raw_copper` | 4.00 | 61% | 2.5 | 2.5 | 3.1 | 5.3 | 9.3 |
+| `coal` | 15.31 | 52% | 2.1 | 2.1 | 2.1 | 2.1 | 3.5 |
 
-One for any other (coal, copper, emerald: not measured). Ponytail: a line through 1 and 12 blocks, up to a quarter over in between. [`lib.get`](get.md) costs an ore's trip with it. Done at once.
+In between it goes along the line between two counts, within a tenth of the simulation, and past 32 along the line from 16 to 32. A vein holds several blocks, so a few cost about as many branches as one: gold finds 4 in 7.7 branches, where the line through 1 and 12 blocks it had before #989 gave 9.5. One for any other (emerald: not measured). Ponytail: through solid rock; with a tenth of it caves (`--air 0.1`, caves as small balls) the rarer ores take some 10 to 20% more branches, as no ore is in a cave and some ores are left out next to air, but caves also expose veins `ore` mines first. [`lib.get`](get.md) costs an ore's trip with it. Done at once.
 
 ## `rounds(item, n)`
 
-How many branches `ore` digs at most for `n` more of `item` before it gives `no_ore`: more than twice `branches(item, blocks(item, n))`, at least 4 (`ROUNDS`). So it falls short of one diamond some 10 times in 100 and of six some 7 (39 and 70 with the 4 it dug before #985), 10 and 20 branches. 20 redstone are 5 blocks, 10 branches, and with a Fortune III pickaxe 4 blocks, 9 branches (#988). Done at once.
+How many branches `ore` digs at most for `n` more of `item` before it gives `no_ore`: more than twice `branches(item, blocks(item, n))`, at least 4 (`ROUNDS`). So it falls short of one diamond some 9 times in 100 and of six some 10 (39 and 70 with the 4 it dug before #985), 11 and 19 branches, and of any ore at most some 11 times in 100. 20 redstone are 5 blocks, 8 branches, and with a Fortune III pickaxe 4 blocks, 7 branches (#988, #989). Done at once.
 
 ## `blocks(item, n)`
 
