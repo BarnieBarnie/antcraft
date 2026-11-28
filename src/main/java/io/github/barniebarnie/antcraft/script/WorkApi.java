@@ -1320,6 +1320,8 @@ public final class WorkApi {
 		private ScriptRun.@Nullable Action walk;
 		/** How often the bot got to the current goal without taking it: it walks right onto it the second time. */
 		private int arrivals;
+		/** Where the item was when the bot last set out to it. */
+		private @Nullable BlockPos walkedTo;
 		/**
 		 * Whether it walks beside the current goal rather than to it: an item in a liquid it found no way into, such as cane
 		 * fallen into a cane farm cell's water, which the farm keeps from scaffold (#869), so it reaches in (#904).
@@ -1458,6 +1460,11 @@ public final class WorkApi {
 				this.waiting = 0;
 			}
 			if (this.walk == null) {
+				if (this.arrivals > 0 && !this.goal.blockPosition().closerThan(this.walkedTo, 2)) {
+					// It drifted off since the bot got to it, as a torch a current washed off did (#1031): it goes after it.
+					// ponytail: an item a stream carries round for ever is followed for ever.
+					this.arrivals = 0;
+				}
 				if (this.arrivals == 0 && this.goal instanceof ItemEntity dropped && !dropped.onGround() && !dropped.isInLiquid()) {
 					// Still falling: a walk to where it is now heads for a block in the air, which a path pillars up to, as
 					// it did over cane just cut, putting scaffold in place of the cane under it (#853). It lands first.
@@ -1492,7 +1499,8 @@ public final class WorkApi {
 					this.goal = null;
 					return false;
 				}
-				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(this.goal.blockPosition()), this.arrivals > 0 ? 0 : this.beside ? 2 : 1);
+				this.walkedTo = this.goal.blockPosition();
+				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(this.walkedTo), this.arrivals > 0 ? 0 : this.beside ? 2 : 1);
 			}
 			if (!this.walk.tick()) {
 				return false;

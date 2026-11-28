@@ -984,6 +984,30 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * An item the bot got to drifts off in the water while its pickup delay runs, as the torch a current washed off did
+	 * (#1031): pick_up goes after it rather than giving it up as out of reach.
+	 */
+	// Measured: passes at tick 42 alone, 58 in a run of several classes (red: printed [False out_of_reach 0] on tick 43).
+	@GameTest(maxTicks = 120)
+	public void pickUpFollowsAnItemThatDriftsOffInWater(GameTestHelper helper) {
+		// A channel of still water along x at z 4, x 1 to 6, between stone walls.
+		for (int x = 0; x <= 7; x++) {
+			helper.setBlock(x, 1, 3, Blocks.STONE);
+			helper.setBlock(x, 1, 5, Blocks.STONE);
+			helper.setBlock(x, 1, 4, x == 0 || x == 7 ? Blocks.STONE : Blocks.WATER);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 2, 3);
+		ItemEntity torch = helper.spawnItem(Items.TORCH, new BlockPos(5, 1, 4));
+		torch.setPickUpDelay(40);
+		// By tick 25 the bot has got to the torch and waits out its delay: the torch drifts three blocks down the channel.
+		helper.runAtTickTime(25, () -> {
+			Vec3 off = helper.absoluteVec(new Vec3(2.5, 1.5, 4.5));
+			torch.setPos(off.x, off.y, off.z);
+		});
+		expect(helper, bot, "r = pick_up('torch', radius=6)\nprint(r.ok, r.reason, count('torch'))\n", List.of("True None 1"));
+	}
+
+	/**
 	 * Fire keeps a tick scheduled for ever, but drops nothing: pick_up finding nothing beside it ends within a few ticks
 	 * rather than waiting out the world settling (#981).
 	 */
