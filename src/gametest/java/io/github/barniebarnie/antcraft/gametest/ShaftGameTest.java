@@ -532,15 +532,15 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	 * A reflex that takes over while {@code mineshaft} searches, over several ticks, does not end the search (#410):
 	 * {@code shaft()} gets its site once the reflex lets go, rather than stopping with an error on {@code interrupted}. The
 	 * test spends the tick's block search budget until the search runs, so it cannot finish at once, then lights fire on
-	 * netherrack under the bot. Stone runs east of the area along the hall at level 3, so terrain there cannot move the site.
+	 * netherrack under the bot. Stone runs east along the hall at level 3, to the east edge of the wide area, so the
+	 * stone lies inside this test's own area (#1034) and nothing else can move the site.
 	 * The budget is the server's, so the test runs in an environment of its own ({@code alone}), which puts it in a batch
-	 * of its own: in a shared batch it starved the block searches of the tests beside it. No other test may share
-	 * {@code alone}: the stone east of this area lies in the area beside it (#987).
+	 * of its own: in a shared batch it starved the block searches of the tests beside it.
 	 */
 	// Measured: passes at tick 7 alone, 11 in a full run.
-	@GameTest(environment = "antcraft-gametest:alone", maxTicks = 25)
+	@GameTest(environment = "antcraft-gametest:alone", structure = "antcraft-gametest:wide", maxTicks = 25)
 	public void aReflexDuringTheSearchDoesNotStopShaft(GameTestHelper helper) {
-		for (BlockPos pos : BlockPos.betweenClosed(8, 1, 3, 24, 5, 5)) {
+		for (BlockPos pos : BlockPos.betweenClosed(8, 1, 3, 23, 5, 5)) {
 			helper.setBlock(pos, Blocks.STONE);
 		}
 		helper.setBlock(1, 5, 1, Blocks.NETHERRACK);
